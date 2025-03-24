@@ -1,0 +1,17 @@
+[
+    {
+        "document number": 1,
+        "text": "My name is Betty",
+        "Category": "General"
+    },
+    {
+        "document number": 2,
+        "text": "I am married to a handsome guy called Fiifi",
+        "Category": "Finance"
+    },
+    {
+        "document number": 3,
+        "text": "He will be rich in Jesus' name",
+        "Category": "Health"
+    }
+]
