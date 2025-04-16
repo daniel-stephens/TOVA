@@ -1,10 +1,18 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const uploadButton = document.querySelector(".btn-container button"); // Upload button
+    const uploadButton = document.getElementById("upload");
     const fileInput = document.getElementById("file-upload");
     const fileList = document.getElementById("file-list");
 
+    // Ensure pdf.js library initialization
+    if (!window.pdfjsLib) {
+        console.error("PDF.js library not loaded. Ensure it's correctly imported.");
+        return;
+    }
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
+
     uploadButton.addEventListener("click", async function (event) {
-        event.preventDefault(); // Prevent default form submission
+        event.preventDefault();
 
         if (fileInput.files.length === 0) {
             alert("❌ No files selected!");
@@ -13,87 +21,64 @@ document.addEventListener("DOMContentLoaded", function () {
 
         let selectedFileType = document.querySelector('input[name="fileType"]:checked').value;
         let files = Array.from(fileInput.files);
-        let invalidFiles = [];
 
-        let validationPromises = files.map(file => validateFile(file, selectedFileType));
+        let invalidFiles = files.filter(file => !validateFile(file, selectedFileType));
 
-        Promise.all(validationPromises).then(async results => {
-            invalidFiles = results.filter(result => !result.valid).map(result => result.file.name);
+        if (invalidFiles.length > 0) {
+            alert(`❌ Invalid files for selected type (${selectedFileType}):\n${invalidFiles.map(f => f.name).join(", ")}`);
+            return;
+        }
 
-            if (invalidFiles.length > 0) {
-                alert(`❌ The following files do not match the required structure:\n${invalidFiles.join(", ")}`);
-            } else {
-                if (selectedFileType === "pdf") {
-                    let extractedJSON = await processPDFs(files);
-                    console.log("Extracted PDF JSON:", extractedJSON);
-                    alert("✅ PDF parsed successfully! Ready to upload.");
-                    uploadExtractedPDFJSON(extractedJSON);
-                } else {
-                    uploadFiles(files);
-                }
+        if (selectedFileType === "pdf") {
+            try {
+                let extractedJSON = await processPDFs(files);
+                console.log("Extracted PDF JSON:", extractedJSON);
+                uploadExtractedPDFJSON(extractedJSON);
+            } catch (err) {
+                alert(`❌ PDF parsing failed: ${err}`);
             }
-        });
+        } else {
+            uploadFiles(files);
+        }
     });
 
     function validateFile(file, selectedFileType) {
-        return new Promise(resolve => {
-            let fileType = file.name.split('.').pop().toLowerCase();
-
-            if (selectedFileType === "csv" && fileType !== "csv") {
-                return resolve({ file, valid: false });
-            }
-            if (selectedFileType === "json" && fileType !== "json") {
-                return resolve({ file, valid: false });
-            }
-            if (selectedFileType === "jsonl" && fileType !== "jsonl") {
-                return resolve({ file, valid: false });
-            }
-            if (selectedFileType === "excel" && !["xls", "xlsx"].includes(fileType)) {
-                return resolve({ file, valid: false });
-            }
-            if (selectedFileType === "pdf" && fileType !== "pdf") {
-                return resolve({ file, valid: false });
-            }
-
-            resolve({ file, valid: true });
-        });
+        const ext = file.name.split('.').pop().toLowerCase();
+        const allowedTypes = {
+            csv: ['csv'],
+            json: ['json'],
+            jsonl: ['jsonl'],
+            excel: ['xls', 'xlsx'],
+            pdf: ['pdf']
+        };
+        return allowedTypes[selectedFileType].includes(ext);
     }
 
     async function processPDFs(files) {
         let pdfJSON = [];
         for (let i = 0; i < files.length; i++) {
-            let file = files[i];
-            let text = await extractTextFromPDF(file);
+            let text = await extractTextFromPDF(files[i]);
             pdfJSON.push({
-                "document_number": i + 1,
-                "text": text,
-                "category": "PDF"
+                document_number: i + 1,
+                text: text,
             });
         }
         return pdfJSON;
     }
 
     async function extractTextFromPDF(file) {
-        return new Promise((resolve, reject) => {
-            let reader = new FileReader();
-            reader.onload = async function () {
-                const pdfData = new Uint8Array(reader.result);
-                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-                let textContent = "";
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let textContent = "";
 
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    let page = await pdf.getPage(i);
-                    let text = await page.getTextContent();
-                    let pageText = text.items.map(item => item.str).join(" ");
-                    textContent += `Page ${i}: ${pageText} \n`;
-                }
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const content = await page.getTextContent();
+            const strings = content.items.map(item => item.str).join(" ");
+            textContent += strings + "\n";
+        }
 
-                resolve(textContent.trim());
-            };
-
-            reader.onerror = () => reject("Error reading PDF file.");
-            reader.readAsArrayBuffer(file);
-        });
+        return textContent.trim();
     }
 
     function uploadFiles(files) {
@@ -116,7 +101,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 fileInput.value = "";
             }
         })
-        .catch(error => {
+        .catch(() => {
             alert("❌ Error uploading files. Please try again.");
         });
     }
@@ -135,7 +120,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 alert(`✅ PDF text successfully uploaded and processed.`);
             }
         })
-        .catch(error => {
+        .catch(() => {
             alert("❌ Error uploading extracted PDF text.");
         });
     }
@@ -144,7 +129,7 @@ document.addEventListener("DOMContentLoaded", function () {
         fileList.innerHTML = "";
         files.forEach(file => {
             let li = document.createElement("li");
-            li.className = "file-item d-flex align-items-center";
+            li.className = "list-group-item d-flex align-items-center";
             li.innerHTML = `<i class="bi bi-file-earmark-text"></i> <span>${file.name}</span>`;
             fileList.appendChild(li);
         });

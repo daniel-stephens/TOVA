@@ -6,197 +6,113 @@
     <title>Load Files - TOVA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-        .container-custom {
-            padding: 40px 10%;
-            background: #FFFFFF;
-        }
-        .content-wrapper {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
-            gap: 30px;
-        }
-        .section-box {
-            flex: 1;
-            padding: 30px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .file-list {
-            list-style: none;
-            padding: 0;
-            max-height: 250px;
-            overflow-y: auto;
-        }
-        .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            background-color: #f9f9f9;
-            transition: all 0.3s ease-in-out;
-        }
-        .file-item i {
-            color: #007bff;
-            font-size: 1.5rem;
-            margin-right: 10px;
-        }
-        .btn-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        @media (max-width: 992px) {
-            .content-wrapper {
-                flex-direction: column;
-                text-align: center;
-            }
-        }
-    </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">TOVA</a>
-        </div>
-    </nav>
+<body class="d-flex flex-column min-vh-100">
 
-    <div class="container container-custom">
-        <h2 class="mb-4 text-primary text-center">Load Your Data</h2>
-        <div class="content-wrapper">
-            <div class="section-box">
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/">TOVA</a>
+    </div>
+</nav>
+
+<div class="container py-5">
+    <h2 class="mb-4 text-primary text-center">Load Your Data</h2>
+    <div class="row g-4">
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm p-4">
                 <h4 class="mt-3">Instructions</h4>
                 <p>Follow these guidelines before uploading your files:</p>
                 <ul>
-                    <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel</strong></li>
-                    <li>Ensure files contain:</li>
-                    <ul>
-                        <li><strong>Document Number:</strong> Unique identifier</li>
-                        <li><strong>Content:</strong> Text to be analyzed</li>
-                    </ul>
+                    <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel, PDF</strong></li>
+                    <li>Ensure files contain:
+                        <ul>
+                            <li><strong>Document Number:</strong> Unique identifier</li>
+                            <li><strong>Content:</strong> Text to be analyzed</li>
+                        </ul>
+                    </li>
                     <li>Optional field: <strong>Category</strong> for better organization</li>
                     <li>Files must meet these requirements to proceed.</li>
                 </ul>
-                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#exampleModal">View Example</button>
+                <button class="btn btn-outline-primary mt-3" data-bs-toggle="modal" data-bs-target="#exampleModal">View Example</button>
             </div>
+        </div>
 
-            <!-- <form method="POST" enctype="multipart/form-data" action="">    
-                <div class="section-box">
-                    <h4 class="mt-3">Upload Files</h4>
-                    <input type="file" name="file" id="file-upload" class="form-control" accept=".csv" multiple>
-                    
-                    <h5 class="mt-4">Uploaded Files</h5>
-                    <div class="card card-scrollable p-2">
-                        <ul class="file-list" id="file-list"></ul>
-                    </div>
-                    
-                    <div class="btn-container">
-                        <button class="btn btn-secondary" type="submit">Upload</button>
-                    </div>
-                </div>
-            </form> -->
+        <div class="col-lg-6">
             <form method="POST" enctype="multipart/form-data" action="">
-                <div class="section-box">
+                <div class="card shadow-sm p-4">
                     <h4 class="mt-3">Upload Files</h4>
-            
-                    <!-- File Type Selection -->
+
                     <div class="mb-3">
                         <label class="form-label"><strong>Select File Type:</strong></label>
-                        <div>
-                            <input type="radio" id="csv-option" name="fileType" value="csv" checked>
-                            <label for="csv-option">CSV</label>
-            
-                            <input type="radio" id="json-option" name="fileType" value="json">
-                            <label for="json-option">JSON</label>
-            
-                            <input type="radio" id="jsonl-option" name="fileType" value="jsonl">
-                            <label for="jsonl-option">JSONL</label>
-            
-                            <input type="radio" id="excel-option" name="fileType" value="excel">
-                            <label for="excel-option">Excel</label>
-            
-                            <input type="radio" id="pdf-option" name="fileType" value="pdf">
-                            <label for="pdf-option">PDF</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" id="csv-option" name="fileType" value="csv" checked>
+                            <label class="form-check-label" for="csv-option">CSV</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" id="json-option" name="fileType" value="json">
+                            <label class="form-check-label" for="json-option">JSON</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" id="jsonl-option" name="fileType" value="jsonl">
+                            <label class="form-check-label" for="jsonl-option">JSONL</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" id="excel-option" name="fileType" value="excel">
+                            <label class="form-check-label" for="excel-option">Excel</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" id="pdf-option" name="fileType" value="pdf">
+                            <label class="form-check-label" for="pdf-option">PDF</label>
                         </div>
                     </div>
-            
-                    <!-- Accept multiple formats -->
+
                     <input type="file" name="file" id="file-upload" class="form-control" accept=".csv,.json,.jsonl,.xls,.xlsx,.pdf" multiple>
-            
+
                     <h5 class="mt-4">Uploaded Files</h5>
-                    <div class="card card-scrollable p-2">
-                        <ul class="file-list" id="file-list"></ul>
-                    </div>
-            
-                    <div class="btn-container">
-                        <button class="btn btn-secondary" type="submit">Upload</button>
+                    <ul class="list-group" id="file-list" style="max-height:250px; overflow:auto;"></ul>
+
+                    <div class="d-flex justify-content-end gap-3 mt-3">
+                        <button id="upload" class="btn btn-secondary" type="submit">Upload</button>
+                        <button id="continue" class="btn btn-success" type="submit">Continue</button>
                     </div>
                 </div>
             </form>
-            
-            
-            
         </div>
-    </div>
 
-    <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Example File Structure</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img src="static/example_structure.png" alt="Example File Structure" class="img-fluid">
-                </div>
+    </div>
+</div>
+
+<div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Example File Structure</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="static/example_structure.png" alt="Example File Structure" class="img-fluid">
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.getElementById('file-upload').addEventListener('change', handleFileUpload);
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.getElementById('file-upload').addEventListener('change', (event) => {
+        let fileList = document.getElementById('file-list');
+        fileList.innerHTML = '';
+        Array.from(event.target.files).forEach((file) => {
+            let li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.innerHTML = `<i class="bi bi-file-earmark-text text-primary me-2"></i>${file.name}<small>${file.size} bytes</small>`;
+            fileList.appendChild(li);
+        });
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+<script src="static/upload.js"></script>
 
-        function handleFileUpload(event) {
-            let fileList = document.getElementById('file-list');
-            let preprocessBtn = document.getElementById('preprocess-btn');
-            let continueBtn = document.getElementById('continue-btn');
-            fileList.innerHTML = '';
-
-            if (event.target.files.length > 0) {
-                Array.from(event.target.files).forEach((file) => {
-                    let li = document.createElement('li');
-                    li.className = 'file-item d-flex align-items-center';
-                    li.innerHTML = `<i class="bi bi-file-earmark-text"></i> <span>${file.name}</span> <small>${file.size} bytes</small>`;
-                    fileList.appendChild(li);
-                });
-                preprocessBtn.disabled = false;
-                continueBtn.disabled = true;  // Ensure continue is disabled initially
-            } else {
-                preprocessBtn.disabled = true;
-                continueBtn.disabled = true;
-            }
-        }
-        
-        </script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
-        <script src="/static/upload.js"></script>
-        
 
 </body>
 </html>

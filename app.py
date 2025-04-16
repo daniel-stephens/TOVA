@@ -1,222 +1,221 @@
-from flask import Flask, request, jsonify, redirect, url_for, render_template
+from flask import Flask, request, jsonify, render_template, redirect
 import os
-from werkzeug.utils import secure_filename
+import chromadb
+from sentence_transformers import SentenceTransformer
+from datetime import datetime
+import tempfile
+# from .util import *
+from .adapters.lda_adapter import LDAAdapter
+import dash_table
+import plotly.express as px
 import pandas as pd
-import json
-import fitz
+import requests
+from collections import Counter
+from dash import Dash, html, dcc, dash_table, Input, Output
+from .dashboard import init_dash_app
+from .util import *
 
-from werkzeug.utils import secure_filename
-# Define allowed files
-ALLOWED_EXTENSIONS = {'csv'}
 
-app = Flask(__name__)
 
-# Configure Upload Folder
+
+server = Flask(__name__)
+
+# Optional model registry
+model_registry = {
+    "lda": LDAAdapter,
+    # "bertopic": BERTopicAdapter,
+    # "top2vec": Top2VecAdapter
+}
+
+client = chromadb.PersistentClient(path="database/myDB")
+collection = client.get_or_create_collection(name="documents")
+collect = client.get_or_create_collection(name="doc")
+
 UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+@server.route('/validate', methods=['POST'])
+def validate_route():
+    file = request.files.get('files')
+    text_column = request.form.get('text_column')
+    label_column = request.form.get('label_column')
 
-# Ensure the upload directory exists
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+    if not file:
+        return jsonify({
+            "status": "error",
+            "message": "No file uploaded."
+        }), 400
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file0' not in request.files and not request.is_json:
-        return jsonify({"error": "No files uploaded"}), 400
+    if not file.filename.endswith(('.xls', '.xlsx')):
+        return jsonify({
+            "status": "error",
+            "message": "Only Excel files are supported for validation here."
+        }), 400
 
-    uploaded_files = request.files.to_dict()
-    saved_files = []
-
-    # Handle extracted PDF text JSON separately
-    if request.is_json:
-        try:
-            pdf_data = request.json.get("pdf_data", [])
-            if not pdf_data:
-                return jsonify({"error": "No extracted PDF text received"}), 400
-
-            pdf_json_filename = os.path.join(app.config['UPLOAD_FOLDER'], "extracted_pdfs.json")
-
-            # Save the extracted PDF text JSON
-            with open(pdf_json_filename, 'w', encoding='utf-8') as json_file:
-                json.dump(pdf_data, json_file, indent=2, ensure_ascii=False)
-
-            return jsonify({"message": "PDF text successfully saved as JSON.", "file": pdf_json_filename}), 200
-        except Exception as e:
-            return jsonify({"error": f"Failed to save extracted PDF text: {str(e)}"}), 500
-
-    # Process file uploads
-    for key, f in uploaded_files.items():
-        if f.filename == '':
-            continue  # Skip empty file inputs
-
-        filename = secure_filename(f.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        f.save(file_path)
-        saved_files.append(file_path)
-
-        try:
-            file_ext = filename.split('.')[-1].lower()
-
-            if file_ext == "csv":
-                df = pd.read_csv(file_path)
-                print(f"\nUploaded CSV: {filename}")
-                print(df.head())  # Print first 5 rows
-
-            elif file_ext == "json":
-                with open(file_path, 'r', encoding='utf-8') as json_file:
-                    data = json.load(json_file)
-                    print(f"\nUploaded JSON: {filename}")
-                    print(json.dumps(data[:3], indent=2))  # Print first 3 items
-
-            elif file_ext == "jsonl":
-                with open(file_path, 'r', encoding='utf-8') as jsonl_file:
-                    data = [json.loads(line) for line in jsonl_file]
-                    print(f"\nUploaded JSONL: {filename}")
-                    print(json.dumps(data[:3], indent=2))  # Print first 3 lines
-
-            elif file_ext in ["xls", "xlsx"]:
-                df = pd.read_excel(file_path)
-                print(f"\nUploaded Excel File: {filename}")
-                print(df.head())  # Print first 5 rows
-
-            elif file_ext == "pdf":
-                extracted_text = extract_text_from_pdf(file_path)
-                pdf_json_filename = file_path.replace(".pdf", ".json")
-
-                # Save extracted PDF text to JSON
-                pdf_data = [{"document_number": i+1, "text": text, "category": "PDF"} for i, text in enumerate(extracted_text)]
-                with open(pdf_json_filename, 'w', encoding='utf-8') as json_file:
-                    json.dump(pdf_data, json_file, indent=2, ensure_ascii=False)
-
-                print(f"\nExtracted text saved to JSON: {pdf_json_filename}")
-
-        except Exception as e:
-            return jsonify({"error": f"Failed to process {filename}: {str(e)}"}), 500
-
-    if not saved_files:
-        return jsonify({"error": "No valid files uploaded"}), 400
-
-    return jsonify({"message": f"{len(saved_files)} file(s) uploaded successfully!", "files": saved_files}), 200
-
-def extract_text_from_pdf(pdf_path):
-    """Extracts text from a PDF file using PyMuPDF (fitz)."""
-    text_content = []
     try:
-        with fitz.open(pdf_path) as doc:
-            for page_num, page in enumerate(doc, start=1):
-                text = page.get_text("text")
-                text_content.append(f"Page {page_num}: {text}")
-
-        return text_content  # Return list of text per page
+        # Call your validation utility and pass column names
+        result = excel_confirmation(file, text_column, label_column)
+        status_code = 200 if result["status"] == "success" else 400
+        return jsonify(result), status_code
     except Exception as e:
-        return [f"Error extracting text from PDF: {str(e)}"]
-# @app.route('/upload', methods=['POST'])
-# def upload_file():
-#     if 'file' not in request.files:
-#         return jsonify({"error": "No file uploaded"}), 400
-
-#     f = request.files['file']
-    
-#     if f.filename == '':
-#         return jsonify({"error": "No file selected"}), 400
-
-#     # Secure the filename
-#     data_filename = secure_filename(f.filename)
-
-#     # Save file to uploads folder
-#     file_path = os.path.join(app.config['UPLOAD_FOLDER'], data_filename)
-#     f.save(file_path)
-
-#     # Load the CSV file using pandas
-#     try:
-#         df = pd.read_csv(file_path)
-#         print(f"\nUploaded CSV: {data_filename}")
-#         print(df.head())  # Print first 5 rows to terminal
-#     except Exception as e:
-#         return jsonify({"error": f"Failed to read CSV: {str(e)}"}), 500
-
-#     return jsonify({"message": "File uploaded and loaded successfully!", "filename": data_filename}), 200
-
- 
-
-    # if 'files' not in request.files:
-    #     return jsonify({"error": "No file uploaded"}), 400
-    
-    # files = request.files.getlist('files')  # Get multiple files
-
-    # if not files:
-    #     return jsonify({"error": "No file selected"}), 400
-    
-    # uploaded_files = []
-    
-    # for file in files:
-    #     if file.filename != '':
-    #         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    #         file.save(file_path)
-    #         uploaded_files.append(file.filename)
-            
-    #         # Print uploaded file names and content in Flask terminal
-    #         print(f"Uploaded: {file.filename}")
-    #         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-    #             print(f.read())  # Print file content to terminal
-
-    # return jsonify({"message": "Files uploaded successfully!", "files": "My file"}), 200
+        return jsonify({
+            "status": "error",
+            "message": f"Validation failed: {str(e)}"
+        }), 500
 
 
 
-@app.route('/')
-def home():
-    return render_template('homepage.html')
+@server.route('/upload', methods=['POST'])
+def upload_route():
+    # for eachFile in finalFiles:
+    #     print(eachFile)
 
-@app.route('/load-files')
-def load_files():
-    return render_template('loadFiles.html')
+    return jsonify({
+            "status": "Success",
+            "message": "This code worked"
+        }), 200
 
-    
 
-@app.route('/preprocess', methods=['POST'])
-def preprocess():
+@server.route('/loadDB', methods=['POST'])
+def loadDB_route():
     files = request.files.getlist('files')
+    textColumn = request.form.get('text_column')
+    labelColumn = request.form.get('label_column')
+
     if not files:
-        return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+        return jsonify({"status": "error", "message": "No files received."}), 400
 
-    # Simulate file preprocessing
+    inserted = 0
+    for file in files:
+        print("📥", file.filename)
+        ext = os.path.splitext(file.filename)[1].lower().replace('.', '')  # get extension without the dot
+
+        # Save temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+            tmp.write(file.read())
+            tmp_path = tmp.name
+
+        try:
+            # ✅ Preprocess & Embed directly
+            df = preprocess_and_embed(
+            file_path=tmp_path,
+            file_type=ext,
+            text_columns=[textColumn],
+            label_column=labelColumn
+        )
+
+            # 🧹 Delete previous entries for this file (if any)
+            collection.delete(where={"file_name": file.filename})
+
+            # 🆕 Insert new entries
+            for i, row in df.iterrows():
+                collection.add(
+                documents=[row["processed_text"]],
+                metadatas=[{
+                    "original_content": row["calculate_on"],
+                    "file_name": file.filename,
+                    "label": row.get(labelColumn) or ""  # ✅ Convert None to empty string
+                }],
+                # embeddings=[row["embedding"]],
+                ids=[f"{file.filename}_{i}"]
+)
+
+                inserted += 1
+
+        except Exception as e:
+            print(f"❌ Error processing {file.filename}: {e}")
+
+        finally:
+            os.remove(tmp_path)
+
+    return jsonify({
+        "status": "success",
+        "message": f"{inserted} document(s) processed and added."
+    }), 200
+
+
+
+@server.route('/preview')
+def preview():
+    results = collection.get(include=['documents', 'metadatas'])
+    data = []
+
+    for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
+        data.append({
+            "id": id_,
+            "processed_text": doc,
+            "content": meta.get("original_content", ""),
+        })
+
+    return jsonify(data)
+
+
+@server.route('/run_model', methods=['POST'])
+def run_model():
     try:
-        for file in files:
-            print(f"Processing {file.filename}...")  # Replace with actual preprocessing logic
-        return jsonify({'success': True})
+        # === 1. Parse input ===
+        data = request.get_json()
+        model_name = data.get("model_name")
+        num_topics = int(data.get("num_topics", 10))
+        save_name = data.get("save_name")
+
+        print(model_name)
+
+        if not model_name or model_name.lower() not in model_registry:
+            return jsonify({"status": "error", "message": "Invalid model name"}), 400
+
+        # === 2. Load data from ChromaDB ===
+        
+        chroma_data = collection.get(include=["documents", "metadatas"])
+        # print(chroma_data)
+        documents = chroma_data["documents"]
+        metadatas = chroma_data["metadatas"]
+        ids = chroma_data["ids"]
+
+        # print(documents)
+
+        if not documents or len(documents) == 0:
+            return jsonify({"status": "error", "message": "No documents found in the database."}), 404
+
+        # === 3. Initialize and fit model ===
+        ModelClass = model_registry[model_name.lower()]
+        model = ModelClass(num_topics=num_topics)
+        print("fitting the data in the model")
+        model.fit(documents)
+        print("fit complete")
+
+        print("==== SAVING THE MODEL ===")
+
+        model.save(f"model/{save_name}")
+
+
+
+        # === 4. Get topic assignments ===
+        # doc_topics = model.get_document_topics()
+
+        
+
+        return jsonify({
+            "status": "success",
+            "message": f"{model.get_model_name()} is ready to use."
+        }), 200
+
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": f"Model run failed: {str(e)}"
+        }), 500
 
 
-# @app.route('/upload', methods=['POST'])
-# def upload_file():
-#     if 'file' not in request.files:
-#         return "No file part"
-    
-#     files = request.files.getlist('file')  # Get multiple files
-#     if not files:
-#         return "No file selected"
+@server.route('/')
+def home():
+    return render_template('index.html')
 
-#     for file in files:
-#         if file.filename != '':
-#             file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
-    
-#     return redirect(url_for('index'))
-
-@app.route('/show_data')
-def show_data():
-    files = os.listdir(UPLOAD_FOLDER)
-    return f"Uploaded Files: {', '.join(files)}"
+@server.route('/model')
+def loadModel():
+    return render_template('loadModel.html')
 
 
+dash_app = init_dash_app(server)
 if __name__ == '__main__':
-    app.run(debug=True)
-
-
-
-
-
+    server.run(debug=True)

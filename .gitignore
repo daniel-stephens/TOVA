@@ -1,2 +1,9 @@
 environ
 __pycache__
+data
+database
+myData
+model
+savedModel
+uploads
+topic
