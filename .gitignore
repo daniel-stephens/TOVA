@@ -7,3 +7,6 @@ model
 savedModel
 uploads
 topic
+data
+.vscode
+.venv
