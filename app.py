@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from datetime import datetime
 import tempfile
 # from .util import *
+from .util import *
 from .adapters.lda_adapter import LDAAdapter
 import dash_table
 import plotly.express as px
@@ -13,23 +14,22 @@ import requests
 from collections import Counter
 from dash import Dash, html, dcc, dash_table, Input, Output
 from .dashboard import init_dash_app
-from .util import *
-
+# from .src.commands.train import run
 
 
 
 server = Flask(__name__)
 
-# Optional model registry
-model_registry = {
-    "lda": LDAAdapter,
-    # "bertopic": BERTopicAdapter,
-    # "top2vec": Top2VecAdapter
-}
+# Open and load the file
+with open("static/config/modelRegistry.json", "r") as f:
+    model_registry = json.load(f)
+
+modelurl = "http://localhost:8000"
+
 
 client = chromadb.PersistentClient(path="database/myDB")
 collection = client.get_or_create_collection(name="documents")
-collect = client.get_or_create_collection(name="doc")
+# collect = client.get_or_create_collection(name="doc")
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -80,7 +80,7 @@ def upload_route():
 def loadDB_route():
     files = request.files.getlist('files')
     textColumn = request.form.get('text_column')
-    labelColumn = request.form.get('label_column')
+    corpusName = request.form.get('corpusName')
 
     if not files:
         return jsonify({"status": "error", "message": "No files received."}), 400
@@ -101,26 +101,30 @@ def loadDB_route():
             file_path=tmp_path,
             file_type=ext,
             text_columns=[textColumn],
-            label_column=labelColumn
+            # label_column=labelColumn
         )
 
             # 🧹 Delete previous entries for this file (if any)
-            collection.delete(where={"file_name": file.filename})
+            # collection.delete(where={"file_name": file.filename})
 
-            # 🆕 Insert new entries
-            for i, row in df.iterrows():
-                collection.add(
-                documents=[row["processed_text"]],
-                metadatas=[{
-                    "original_content": row["calculate_on"],
-                    "file_name": file.filename,
-                    "label": row.get(labelColumn) or ""  # ✅ Convert None to empty string
-                }],
-                # embeddings=[row["embedding"]],
-                ids=[f"{file.filename}_{i}"]
-)
+            documents = df["processed_text"].tolist()
 
-                inserted += 1
+            metadatas = [{
+                "original_content": row["calculate_on"],
+                "file_name": file.filename,
+                "corpus_name": corpusName  # ✅ Key line to enable filtering/grouping by corpus
+            } for _, row in df.iterrows()]
+
+            ids = [f"{file.filename}_{i}" for i in range(len(df))]
+
+            collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                # embeddings=df["embedding"].tolist(),  # Uncomment if embeddings are used
+                ids=ids
+            )
+
+            inserted += len(df)
 
         except Exception as e:
             print(f"❌ Error processing {file.filename}: {e}")
@@ -150,43 +154,82 @@ def preview():
     return jsonify(data)
 
 
-@server.route('/run_model', methods=['POST'])
+@server.route('/train_model', methods=['POST'])
 def run_model():
     try:
-        # === 1. Parse input ===
         data = request.get_json()
-        model_name = data.get("model_name")
-        num_topics = int(data.get("num_topics", 10))
+
+        model_name = data.get("model")
         save_name = data.get("save_name")
+        num_topics = data.get("num_topics", 10)  # Default to 10 if missing
+        corpus = data.get("corpus")
 
-        print(model_name)
+        # Advanced settings (optional)
+        advanced_settings = data.get("advanced_settings", {})
 
-        if not model_name or model_name.lower() not in model_registry:
-            return jsonify({"status": "error", "message": "Invalid model name"}), 400
+        # Basic validations
+        if not model_name:
+            return jsonify({"status": "error", "message": "Missing 'model_name' in request."}), 400
 
+        if model_name not in model_registry:
+            return jsonify({"status": "error", "message": f"Model '{model_name}' not found in registry."}), 400
+
+        if not save_name:
+            return jsonify({"status": "error", "message": "Missing 'save_name' (name to save the model)."}), 400
+
+        # Try to ensure num_topics is a valid number
+        try:
+            num_topics = int(num_topics)
+            if num_topics < 2:
+                return jsonify({"status": "error", "message": "'num_topics' must be greater than or equal to 2."}), 400
+        except ValueError:
+            return jsonify({"status": "error", "message": "'num_topics' must be an integer."}), 400
+
+        # If all validations pass, you can print or continue processing
+        # print("Parsed Model Name:", model_name)
+        # print("Save Name:", save_name)
+        # print("Number of Topics:", num_topics)
+        # print("Advanced Settings:", advanced_settings)
         # === 2. Load data from ChromaDB ===
         
-        chroma_data = collection.get(include=["documents", "metadatas"])
-        # print(chroma_data)
-        documents = chroma_data["documents"]
-        metadatas = chroma_data["metadatas"]
-        ids = chroma_data["ids"]
+        # chroma_data = collection.get(include=["documents", "metadatas"])
+        # # print(chroma_data)
 
-        # print(documents)
+        print(corpus)
+        
+        documents, metadatas, ids = get_corpus_data(corpus, collection)
 
-        if not documents or len(documents) == 0:
-            return jsonify({"status": "error", "message": "No documents found in the database."}), 404
+        print(f"Found {len(documents)} documents in corpus '{corpus}'.")
+        # # print(documents)
 
-        # === 3. Initialize and fit model ===
-        ModelClass = model_registry[model_name.lower()]
-        model = ModelClass(num_topics=num_topics)
-        print("fitting the data in the model")
-        model.fit(documents)
-        print("fit complete")
+        # if not documents or len(documents) == 0:
+        #     return jsonify({"status": "error", "message": "No documents found in the database."}), 404
 
-        print("==== SAVING THE MODEL ===")
+        # # === 3. Initialize and fit model ===
+        
 
-        model.save(f"model/{save_name}")
+        payload = {
+            "model": model_name,
+            "data": "/Users/danielstephens/Desktop/TOVA/data/dat/bills_sample_100.csv",
+            "text_col": "tokenized_text",
+            "output": "models/tomotopy"
+        }
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(modelurl+"/train/", json=payload, headers=headers)
+
+        # Print result
+        print("Status Code:", response.status_code)
+        print("Response JSON:", response.json())
+
+        # model = run(model=model, data=documents, text_col="text_col", output="models/tomotopy")
+
+        # print("==== SAVING THE MODEL ===")
+
+        # model.save(f"model/{save_name}")
 
 
 
@@ -197,7 +240,7 @@ def run_model():
 
         return jsonify({
             "status": "success",
-            "message": f"{model.get_model_name()} is ready to use."
+            "message": "The system works is ready to use."
         }), 200
 
     except Exception as e:
@@ -205,6 +248,8 @@ def run_model():
             "status": "error",
             "message": f"Model run failed: {str(e)}"
         }), 500
+    
+
 
 
 @server.route('/')
@@ -214,6 +259,32 @@ def home():
 @server.route('/model')
 def loadModel():
     return render_template('loadModel.html')
+
+@server.route('/corpora')
+def get_corpus_names():
+    print("Looking for corpus names...")
+    results = collection.get(include=["metadatas"], limit=10000)
+    all_corpora = [
+        meta.get("corpus_name", "").strip()
+        for meta in results["metadatas"]
+        if meta.get("corpus_name") and isinstance(meta.get("corpus_name"), str)
+    ]
+    unique_corpora = sorted(set(all_corpora))
+    
+    print("Found:", unique_corpora)
+    return jsonify(unique_corpora)
+
+@server.route("/model-config")
+def get_model_config():
+    with open("static/config/model_config.json") as f:
+        
+        return jsonify(json.load(f))
+    
+@server.route("/model-registry")
+def get_model_registry():
+    with open("static/config/modelRegistry.json") as f:
+        return jsonify(json.load(f))
+
 
 
 dash_app = init_dash_app(server)

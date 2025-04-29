@@ -16,7 +16,7 @@ class TomotopyLDATMmodel(TradTMmodel):
         self,
         model_path: str = None,
         logger: logging.Logger = None,
-        config_path: pathlib.Path = pathlib.Path("config/config.yaml"),
+        config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
         **kwargs
     ) -> None:
         """
@@ -53,7 +53,7 @@ class TomotopyLDATMmodel(TradTMmodel):
         
         # Add 
 
-    def train_model(self, path_to_data: str, text_col: str = "tokenized_text") -> float:
+    def train_model(self, path_to_data, text_col: str = "tokenized_text") -> float:
         """
         Train the topic model and save the data to the specified path.
 
