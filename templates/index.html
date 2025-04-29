@@ -103,12 +103,11 @@
                                 </select>
                               </div>
                               
-                              <!-- <div class="mb-3">
-                                <label for="labelColumn" class="form-label">Label/Category Column Name (Optional)</label>
-                                <select class="form-select" id="labelColumn" name="label_column">
-                                  <option value="" disabled selected>Select label column (optional)</option>
-                                </select>
-                              </div> -->
+                              <div class="mb-3">
+                                <label for="corpusName" class="form-label">Corpus Name</label>
+                                <input type="text" class="form-control" id="corpusName" name="corpusName" placeholder="Enter corpus name">
+                              </div>
+                              
                               
                             
                               
@@ -492,6 +491,7 @@
                 const feedback = document.getElementById('file-feedback');
                 const tbody = document.getElementById('selected-files-body');
                 const textColumn = document.getElementById("textColumn").value;
+                const corpusName = document.getElementById("corpusName").value;
 
                 feedback.textContent = '';
                 feedback.classList.remove('text-success', 'text-danger');
@@ -581,6 +581,8 @@
                     const formData = new FormData();
                     validFiles.forEach(file => formData.append('files', file));
                     formData.append('text_column', textColumn);
+                    formData.append('corpusName', corpusName);
+
 
                     await sendData(formData); // 🔁 Your upload function
                     enableContinueButton();
