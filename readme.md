@@ -93,8 +93,8 @@ python -m uvicorn src.api.main:app --reload --port 8000
 curl -X POST http://localhost:8000/train/ \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "tomotopy",
-    "data": "data/bills_sample_100.csv",
+    "model": "tomotopyLDA",
+    "data": "data/dat/bills_sample_100.csv",
     "text_col": "tokenized_text",
     "output": "data/models/tomotopy"
   }'
