@@ -1,11 +1,19 @@
 import typer
-from src.topic_models.traditional.tomotopy_lda_tm_model import TomotopyLDATMmodel
+import os
+import sys
 from pathlib import Path
 import time
+import json
+from src.topic_models.traditional.tomotopy_lda_tm_model import TomotopyLDATMmodel
 
-# Temporary registry for future extension
+
+with open("static/config/modelRegistry.json", "r") as f:
+    model_display_names = json.load(f)
+
+# 2. Create a Python-side real MODEL_REGISTRY
 MODEL_REGISTRY = {
-    "tomotopy": TomotopyLDATMmodel
+    "tomotopyLDA": TomotopyLDATMmodel,
+ 
 }
 
 def run(
@@ -16,6 +24,7 @@ def run(
 ):
     typer.echo(f"Running training with model: {model}")
     model_cls = MODEL_REGISTRY.get(model)
+
     if model_cls is None:
         raise typer.BadParameter(f"Unknown model: {model}")
 

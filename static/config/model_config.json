@@ -1,0 +1,93 @@
+{
+    "LDA": {
+      "num_topics": {
+        "label": "Number of Topics",
+        "type": "number",
+        "default": 10
+      },
+      "passes": {
+        "label": "Training Passes",
+        "type": "number",
+        "default": 5
+      },
+      "iterations": {
+        "label": "Iterations",
+        "type": "number",
+        "default": 400
+      },
+      "alpha": {
+        "label": "Alpha",
+        "type": "text",
+        "default": "auto"
+      },
+      "random_state": {
+        "label": "Random State",
+        "type": "number",
+        "default": 42
+      }
+    },
+    "BERTopic": {
+      "language": {
+        "label": "Language",
+        "type": "text",
+        "default": "english"
+      },
+      "embedding_model": {
+        "label": "Embedding Model",
+        "type": "text",
+        "default": "all-MiniLM-L6-v2"
+      },
+      "min_topic_size": {
+        "label": "Minimum Topic Size",
+        "type": "number",
+        "default": 15
+      },
+      "top_n_words": {
+        "label": "Top N Words per Topic",
+        "type": "number",
+        "default": 10
+      },
+      "calculate_probabilities": {
+        "label": "Calculate Probabilities",
+        "type": "checkbox",
+        "default": true
+      }
+    },
+    "Top2Vec": {
+      "embedding_model": {
+        "label": "Embedding Model",
+        "type": "select",
+        "options": ["doc2vec", "universal-sentence-encoder", "bert"],
+        "default": "doc2vec"
+      },
+      "speed": {
+        "label": "Training Speed",
+        "type": "select",
+        "options": ["deep-learn", "learn", "fast-learn"],
+        "default": "learn"
+      },
+      "min_count": {
+        "label": "Minimum Word Count",
+        "type": "number",
+        "default": 50
+      },
+      "workers": {
+        "label": "Number of Workers",
+        "type": "number",
+        "default": 4
+      }
+    },
+    "External": {
+      "repo_url": {
+        "label": "GitHub Repo URL",
+        "type": "text",
+        "default": ""
+      },
+      "entry_point": {
+        "label": "Entry Point Function",
+        "type": "text",
+        "default": "train_model"
+      }
+    }
+  }
+  

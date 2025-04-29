@@ -170,7 +170,6 @@ def preprocess_and_embed(
     file_path: str,
     file_type: str,
     text_columns: list,
-    label_column: str,
     sbert_model: str = "paraphrase-distilroberta-base-v2",
     tfidf_threshold: float = 3,
     batch_size: int = 32,
@@ -256,10 +255,23 @@ def preprocess_and_embed(
     df["processed_text"] = processed_texts
     # df["embedding"] = [embedding.tolist() for embedding in embeddings]
 
-    if label_column and label_column in df.columns:
-        df["label"] = df[label_column]
-    else:
-        df["label"] = None
-
     print("✅ Preprocessing completed!")
     return df.reset_index(drop=True)
+
+def get_corpus_data(corpus_name, coll):
+    """
+    Retrieve all documents, metadata, and ids for a given corpus name.
+    """
+    results = coll.get(
+        where={"corpus_name": corpus_name},  # 👈 Filter by corpus name
+        include=["documents", "metadatas"],  # 👈 Only need documents and metadatas
+        limit=10000  # Adjust if you expect very large corpora
+    )
+
+    documents = results.get("documents", [])
+    metadatas = results.get("metadatas", [])
+    ids = results.get("ids", [])  # ✅ ids are automatically returned even without include
+
+    return documents, metadatas, ids
+
+
