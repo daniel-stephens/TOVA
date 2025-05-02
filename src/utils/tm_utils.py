@@ -1,17 +1,19 @@
+import json
 import logging
 from typing import Optional
 from .common import log_or_print
 import numpy as np
-import pathlib
-import pandas as pd
+from pathlib import Path
+import pandas as pd # type: ignore
+from typing import List, Dict, Any, Optional
 
-def file_lines(fname: pathlib.Path) -> int:
+def file_lines(fname: Path) -> int:
     """
     Count number of lines in file
 
     Parameters
     ----------
-    fname: pathlib.Path
+    fname: Path
         The file whose number of lines is calculated.
 
     Returns
@@ -25,7 +27,7 @@ def file_lines(fname: pathlib.Path) -> int:
     return i + 1
 
 def read_dataframe(
-    path_to_data: pathlib.Path,
+    path_to_data: Path,
     logger: Optional[logging.Logger] = None
 ) -> pd.DataFrame:
     """
@@ -34,7 +36,7 @@ def read_dataframe(
 
     Parameters
     ----------
-    path_to_data : pathlib.Path
+    path_to_data : Path
         Path to the file containing the data.
     logger : logging.Logger, optional
         Logger for logging messages. Defaults to None.
@@ -127,3 +129,71 @@ def get_embeddings_from_str(
         raise ValueError(err_msg)
 
     return np.array(embeddings)
+
+def prepare_training_data(
+    path: str,
+    logger,
+    text_col: str = "tokenized_text",
+    id_col: Optional[str] = "id",
+    get_embeddings: bool = False,
+) -> List[Dict[str, Any]]:
+    path = Path(path)
+    df = read_dataframe(path, logger)
+
+    if get_embeddings:
+        if "embeddings" in df.columns:
+            df["embeddings"] = get_embeddings_from_str(df, logger)
+            logger.info("Embeddings loaded from DataFrame.")
+        else:
+            logger.warning("Embeddings column not found — embeddings will be omitted.")
+            df["embeddings"] = None
+
+    if id_col:
+        if id_col in df.columns:
+            df.rename(columns={id_col: "id"}, inplace=True)
+        else:
+            df["id"] = range(1, len(df) + 1)
+
+    if text_col in df.columns:
+        df.rename(columns={text_col: "raw_text"}, inplace=True)
+    else:
+        logger.warning(f"Text column '{text_col}' not found in DataFrame.")
+        raise ValueError(f"Text column '{text_col}' not found in DataFrame.")
+
+    allowed_columns = ["id", "raw_text", "embeddings"]
+    df = df[[col for col in df.columns if col in allowed_columns]]
+
+    return df.to_dict(orient="records")
+
+def normalize_json_data(
+    raw_data: str,
+    logger: logging.Logger,
+    id_col: Optional[str] = "id",
+    text_col: str = "tokenized_text",
+) -> list[dict]:
+    """
+    Normalize raw JSON input to match prepare_training_data() output.
+    Ensures 'id' and 'raw_text' fields are set.
+    """
+    data = json.loads(raw_data)
+
+    logger.info(f"Normalizing JSON data: {len(data)} records found.")
+    logger.info(f"Converting {id_col} to 'id' and {text_col} to 'raw_text'.")
+    
+    if not isinstance(data, list):
+        raise ValueError("Expected a JSON list of records.")
+
+    for i, row in enumerate(data):
+        if id_col and id_col in row:
+            row["id"] = row[id_col]
+        elif "id" not in row:
+            row["id"] = i + 1
+
+        if text_col not in row:
+            raise ValueError(f"Missing expected text column '{text_col}' in row {i}")
+
+        row["raw_text"] = row[text_col]
+    
+    logger.info(f"Normalization complete: {len(data)} records processed.")
+
+    return data

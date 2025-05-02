@@ -6,7 +6,7 @@ logger:
   console_log: True
   file_log: True
   log_level: INFO
-  logger_name: theta-eval
+  logger_name: tova
   N_log_keep: 5 #maximum number of log files to keep
 
 ################################
@@ -14,9 +14,14 @@ logger:
 ################################
 topic_modeling:
   general:
-    topn: 15
-    num_topics: 50
     not_include: ['train_data', 'df', 'embeddings', 'ids_corpus', '_logger', '_embedding_model', '_umap_model', '_hdbscan_model', '_vectorizer_model', '_ctfidf_model', '_representation_model', '_model']
+  traditional:
+    num_topics: 15
+    thetas_thr: 3e-3
+    topn: 15
+    do_labeller: True
+    labeller_model_type: "qwen:32b"
+    labeller_prompt: "src/prompter/prompts/labelling_dft.txt"
   mallet:
     alpha: 5.0
     optimize_interval: 10
@@ -47,3 +52,49 @@ topic_modeling:
     repr_model_diversity: 0.3
     repr_model_topnwords: 15
     word_min_len: 0
+
+################################
+#          PROMPTER            #
+################################
+llm:
+  parameters:
+    temperature: 0
+    top_p: 0.1
+    frequency_penalty: 0.0
+    random_seed: 1234
+    seed: 1234
+  gpt:
+    available_models:
+      {
+        "gpt-4o-2024-08-06",
+        "gpt-4o-mini-2024-07-18",
+        "chatgpt-4o-latest",
+        "gpt-4-turbo",
+        "gpt-4-turbo-2024-04-09",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-32k",
+        "gpt-4-0125-preview",
+        "gpt-4-1106-preview",
+        "gpt-4-vision-preview",
+        "gpt-3.5-turbo-0125",
+        "gpt-3.5-turbo-instruct",
+        "gpt-3.5-turbo-1106",
+        "gpt-3.5-turbo-0613",
+        "gpt-3.5-turbo-16k-0613",
+        "gpt-3.5-turbo-0301",
+      }
+    path_api_key: .env
+  ollama:
+    available_models: {
+      "llama3.2",
+      "llama3.1:8b-instruct-q8_0",
+      "qwen:32b",
+      "llama3.3:70b",
+      "qwen2.5:32b"
+    }
+    host: http://kumo01.tsc.uc3m.es:11434
+  llama_cpp:
+    host: http://kumo01:11435/v1/chat/completions

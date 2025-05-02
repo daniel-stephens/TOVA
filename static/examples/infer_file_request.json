@@ -1,0 +1,7 @@
+{
+    "model_path": "data/models/tomotopy",
+    "data_path": "data/bills_sample_100.csv",
+    "id_col": "id",
+    "text_col": "tokenized_text",
+    "config_path": "static/config/config.yaml"
+}
