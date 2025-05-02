@@ -1,9 +1,0 @@
-{
-  "num_topics": 50,
-  "topn": 15,
-  "num_iters": 2000,
-  "alpha": 5.0,
-  "eta": 0.01,
-  "iter_interval": 10,
-  "text_col": "tokenized_text"
-}
