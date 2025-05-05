@@ -44,21 +44,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Collect advanced settings
-    const advancedSettings = {};
-    const inputs = document.querySelectorAll("#modelParamsArea input");
-    inputs.forEach(input => {
-        const key = input.id;
-        const value = input.value.trim();
-        advancedSettings[key] = input.type === "number" ? Number(value) : value;
-    });
+      const training_param = {};
+      const inputs = document.querySelectorAll("#modelParamsArea input");
+      inputs.forEach(input => {
+          const key = input.id;
+          const value = input.value.trim();
+          training_param[key] = input.type === "number" ? Number(value) : value;
+      });
 
-    const requestData = {
-        model: modelSelect.value,           // Model selected
-        save_name: modelName,               // Model name
-        num_topics: Number(numTopics),      // Basic num_topics
-        advanced_settings: advancedSettings, // 🔥 Advanced parameters
-        corpus: corpus.value
-    };
+      // Move num_topics into advanced settings
+      training_param["num_topics"] = Number(document.getElementById("numTopics").value);
+
+      const requestData = {
+          model: modelSelect.value,               // Model selected
+          save_name: modelName,                   // Model name
+          training_params: training_param,    // ✅ Unified training params
+          corpus: corpus.value
+      };
+
     console.log(requestData)
     fullscreenLoader.style.display = 'flex';
 
