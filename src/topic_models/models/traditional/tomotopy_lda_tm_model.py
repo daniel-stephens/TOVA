@@ -1,10 +1,12 @@
 import logging
 import pathlib
 import time
-from typing import List
+
 import numpy as np
-from tqdm import tqdm # type: ignore
-import tomotopy as tp # type: ignore
+import tomotopy as tp  # type: ignore
+from sklearn.preprocessing import normalize  # type: ignore
+from tqdm import tqdm  # type: ignore
+
 from .base import TradTMmodel
 
 class TomotopyLDATMmodel(TradTMmodel):
@@ -17,6 +19,7 @@ class TomotopyLDATMmodel(TradTMmodel):
         model_path: str = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
+        load_model: bool = False,
         **kwargs
     ) -> None:
         """
@@ -34,7 +37,7 @@ class TomotopyLDATMmodel(TradTMmodel):
             Override configuration parameters with explicit arguments.
         """
 
-        super().__init__(model_path, logger, config_path)
+        super().__init__(model_path, logger, config_path, load_model)
 
         # Load parameters from config
         tomotopy_config = self.config.get("tomotopy", {})
@@ -51,18 +54,10 @@ class TomotopyLDATMmodel(TradTMmodel):
         self._logger.info(
             f"{self.__class__.__name__} initialized with num_topics={self.num_topics}, num_iters={self.num_iters}, alpha={self.alpha}, eta={self.eta}.")
         
-        # Add 
 
-    def train_model(self, path_to_data, text_col: str = "tokenized_text") -> float:
+    def train_core(self) -> float:
         """
         Train the topic model and save the data to the specified path.
-
-        Parameters
-        ----------
-        path_to_data : str
-            Path to the training data.
-        text_col : str, default='tokenized_text'
-            Column name containing the text data.
 
         Returns
         -------
@@ -70,13 +65,15 @@ class TomotopyLDATMmodel(TradTMmodel):
             Time taken to train the model.
         """
 
-        self._load_train_data(
-            path_to_data, get_embeddings=False, text_data=text_col)
+        if not hasattr(self, "train_data"):
+            raise RuntimeError("Training data not set. Call train_model(data) with normalized input first.")
+
         t_start = time.perf_counter()
 
         self._logger.info("Creating TomotopyLDA object and adding docs...")
         self.model = tp.LDAModel(
             k=self.num_topics, tw=tp.TermWeight.ONE, alpha=self.alpha, eta=self.eta)
+        
         [self.model.add_doc(doc) for doc in self.train_data]
 
         self._logger.info(f"Training TomotopyLDA model with {self.num_topics} topics...")
@@ -100,15 +97,15 @@ class TomotopyLDATMmodel(TradTMmodel):
         self._logger.info(f"Betas shape: {betas.shape}")
 
         keys = self.print_topics(verbose=False)
+        with self.model_path.joinpath('orig_tpc_descriptions.txt').open('w', encoding='utf8') as fout:
+            fout.write('\n'.join([' '.join(topic) for topic in keys]))
         self.maked_docs = [self.model.make_doc(doc) for doc in self.train_data]
         vocab = [word for word in self.model.used_vocabs]
-
+        
         t_end = time.perf_counter() - t_start
-
-        self._save_model_results(thetas, betas, vocab, keys)
-        self.save_to_json()
-
-        return t_end
+        
+        return t_end, thetas, betas, vocab
+        
 
     def print_topics(self, verbose: bool = False) -> list:
         """
@@ -134,7 +131,7 @@ class TomotopyLDATMmodel(TradTMmodel):
 
         return keys
 
-    def infer(self, path_to_data: str, text_col: str) -> np.ndarray:
+    def infer_core(self, infer_data, df_infer, embeddings_infer) -> np.ndarray:
         """
         Perform inference on unseen documents.
 
@@ -148,29 +145,52 @@ class TomotopyLDATMmodel(TradTMmodel):
         np.ndarray
             Array of inferred thetas.
         """
+        _ = df_infer, embeddings_infer
 
-        # docs, _ = super().infer(docs)
+        time_start = time.perf_counter()
+        self._logger.info("Performing inference on unseen documents...")
 
-        # self._logger.info("Performing inference on unseen documents...")
-        # docs_tokens = [doc.split() for doc in docs]
+        self._logger.info("Adding docs to TomotopyLDA...")
+        doc_inst = [self.model.make_doc(text) for text in infer_data]
 
-        # self._logger.info("Adding docs to TomotopyLDA...")
-        # doc_inst = [self.model.make_doc(text) for text in docs_tokens]
+        self._logger.info("Inferring thetas...")
+        topic_prob, _ = self.model.infer(doc_inst)
+        thetas = np.array(topic_prob)
+        self._logger.info(f"Inferred thetas shape {thetas.shape}")
 
-        # self._logger.info("Inferring thetas...")
-        # topic_prob, _ = self.model.infer(doc_inst)
-        # thetas = np.array(topic_prob)
-        # self._logger.info(f"Inferred thetas shape {thetas.shape}")
+        # sparsify thetas
+        thetas[thetas < self.thetas_thr] = 0
+        thetas = normalize(thetas, axis=1, norm='l1')
         
-        # TODO: Implement the inference logic
+        t_end = time.perf_counter() - time_start
+        
+        return thetas, t_end
 
-        return
-    
+    def save_model(self):
+        # save model object for later use
+        save_path = self.model_path.joinpath('model.bin').as_posix()
+        self._logger.info(f"Saving model to {save_path}")
+        self.model.save(save_path)
+        self._logger.info("Model saved successfully!")
 
-    def save_model(self, path: str):
-        # @TODO: @lcalvobartolome
-        print("TO DO: Implement save_model")
-
-    def load_model(self, path: str):
-        # @TODO: @lcalvobartolome
-        print("TO DO: Implement load_model")
+    @classmethod
+    def from_saved_model(cls, model_path: str):
+        """
+        Load a previously saved TomotopyLDATMmodel from disk.
+        
+        Parameters
+        ----------
+        model_path : str
+            Path where the model is stored (directory containing model.bin).
+        
+        Returns
+        -------
+        TomotopyLDATMmodel
+            An instance with the model loaded in `.model`.
+        """
+        obj = cls(model_path=model_path, load_model=True)
+        load_path = pathlib.Path(model_path).joinpath('model.bin').as_posix()
+        obj._logger.info(f"Loading Tomotopy model from {load_path}")
+        obj.model = tp.LDAModel.load(load_path)
+        obj._logger.info("Model loaded successfully!")
+        return obj

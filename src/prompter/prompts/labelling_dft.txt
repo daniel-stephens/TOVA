@@ -1,0 +1,15 @@
+You are an expert model in content classification and labeling. You are given a set of keywords and three representative documents related to that set.
+
+Your task is to analyze the keywords and the content of the documents to generate a single clear and concise label that accurately reflects the general topic related to the keywords.
+
+The label must:  
+- Be specific enough to distinguish itself from other labels, but without including unnecessarily detailed terms that make it too long or inflexible for future documents.  
+- Avoid overly broad or generic terms that could result in redundant or uninformative labels.  
+- Not be or include the word "LABEL".  
+- Match the language of the keywords.  
+
+Your response must be only the generated label, with no additional text.  
+
+Keywords: {keywords}  
+Documents: {docs}  
+Label:

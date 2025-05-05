@@ -10,3 +10,5 @@ topic
 data
 .vscode
 .venv
+cache
+.env
