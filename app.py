@@ -14,6 +14,7 @@ import requests
 from collections import Counter
 from dash import Dash, html, dcc, dash_table, Input, Output
 from .dashboard import init_dash_app
+import traceback
 # from .src.commands.train import run
 
 
@@ -24,7 +25,7 @@ server = Flask(__name__)
 with open("static/config/modelRegistry.json", "r") as f:
     model_registry = json.load(f)
 
-modelurl = "http://localhost:8000"
+modelurl = "http://localhost:8989"
 
 
 client = chromadb.PersistentClient(path="database/myDB")
@@ -161,11 +162,9 @@ def run_model():
 
         model_name = data.get("model")
         save_name = data.get("save_name")
-        num_topics = data.get("num_topics", 10)  # Default to 10 if missing
         corpus = data.get("corpus")
-
-        # Advanced settings (optional)
-        advanced_settings = data.get("advanced_settings", {})
+        training_params = data.get("training_params")
+        num_topics = training_params["num_topics"]
 
         # Basic validations
         if not model_name:
@@ -185,11 +184,6 @@ def run_model():
         except ValueError:
             return jsonify({"status": "error", "message": "'num_topics' must be an integer."}), 400
 
-        # If all validations pass, you can print or continue processing
-        # print("Parsed Model Name:", model_name)
-        # print("Save Name:", save_name)
-        # print("Number of Topics:", num_topics)
-        # print("Advanced Settings:", advanced_settings)
         # === 2. Load data from ChromaDB ===
         
         # chroma_data = collection.get(include=["documents", "metadatas"])
@@ -200,26 +194,28 @@ def run_model():
         documents, metadatas, ids = get_corpus_data(corpus, collection)
 
         print(f"Found {len(documents)} documents in corpus '{corpus}'.")
-        # # print(documents)
-
-        # if not documents or len(documents) == 0:
-        #     return jsonify({"status": "error", "message": "No documents found in the database."}), 404
-
+        
         # # === 3. Initialize and fit model ===
         
 
         payload = {
+            # "config_path": "static/config/config.yaml",
+            # "data_path": "data/dat/bills_sample_100.csv",
+            # "do_preprocess": True,
+            # "id_col": "id",
             "model": model_name,
-            "data": "/Users/danielstephens/Desktop/TOVA/data/dat/bills_sample_100.csv",
+            "output": "data/models/"+ save_name,
             "text_col": "tokenized_text",
-            "output": "models/tomotopy"
+            "data": "data/dat/bills_sample_100.csv",
+            # "training_params": training_params
         }
 
         headers = {
+            "accept": "application/json",
             "Content-Type": "application/json"
         }
 
-        response = requests.post(modelurl+"/train/", json=payload, headers=headers)
+        response = requests.post(modelurl+"/train", json=payload, headers=headers)
 
         # Print result
         print("Status Code:", response.status_code)
@@ -285,6 +281,34 @@ def get_model_registry():
     with open("static/config/modelRegistry.json") as f:
         return jsonify(json.load(f))
 
+@server.route('/infer', methods=['POST'])  # ✅ POST supports JSON
+def infer_topic():
+    try:
+        data = request.get_json()
+        text = data.get("text", "").strip()
+        print(text)
+        if not text:
+            return jsonify({"error": "Text input is required."}), 400
+
+
+        return jsonify({
+                    "topics": [
+                        {"label": "Urban Mobility", "score": 0.42, "keywords": ["transit", "commute", "city"]},
+                        {"label": "Policy", "score": 0.25, "keywords": ["regulation", "planning"]},
+                        {"label": "Sustainability", "score": 0.18, "keywords": ["climate", "green", "emissions"]},
+                    ]
+                })
+
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route("/infer-page")
+def infer_page():
+    return render_template("inference.html")
 
 
 dash_app = init_dash_app(server)
