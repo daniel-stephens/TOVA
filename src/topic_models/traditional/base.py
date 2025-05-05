@@ -32,7 +32,7 @@ class TradTMmodel(BaseTMModel, ABC):
             The top words for each topic.
         """
 
-        # self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
+        self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
         thetas = sparse.csr_matrix(thetas, copy=True)
 
         alphas = np.asarray(np.mean(thetas, axis=0)).ravel()
