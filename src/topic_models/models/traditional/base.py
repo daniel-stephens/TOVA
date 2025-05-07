@@ -11,6 +11,8 @@ from sklearn.preprocessing import normalize  # type: ignore
 
 from ..base_model import BaseTMModel
 from ...tm_model import TMmodel
+import matplotlib
+ # option 1
 
 
 class TradTMmodel(BaseTMModel, ABC):
@@ -81,7 +83,7 @@ class TradTMmodel(BaseTMModel, ABC):
 
         """
         # Sparsification of thetas matrix
-        self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
+        # self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
         
         # Set to zeros all thetas below threshold, and renormalize
         thetas[thetas < self.thetas_thr] = 0

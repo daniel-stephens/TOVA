@@ -25,8 +25,9 @@ server = Flask(__name__)
 with open("static/config/modelRegistry.json", "r") as f:
     model_registry = json.load(f)
 
-modelurl = "http://localhost:8989"
-
+modelurl = "http://127.0.0.1:8989/train/json"
+inferurl = "http://127.0.0.1:8989/infer/json"
+topicinfourl = "http://127.0.0.1:8989//queries/model-info"
 
 client = chromadb.PersistentClient(path="database/myDB")
 collection = client.get_or_create_collection(name="documents")
@@ -192,6 +193,7 @@ def run_model():
         print(corpus)
         
         documents, metadatas, ids = get_corpus_data(corpus, collection)
+        formatted_data = format_corpus(documents, metadatas, ids)
 
         print(f"Found {len(documents)} documents in corpus '{corpus}'.")
         
@@ -199,40 +201,27 @@ def run_model():
         
 
         payload = {
-            # "config_path": "static/config/config.yaml",
-            # "data_path": "data/dat/bills_sample_100.csv",
-            # "do_preprocess": True,
-            # "id_col": "id",
+            "config_path": "static/config/config.yaml",
+            "do_preprocess": True,
+            "id_col": "id",
             "model": model_name,
             "output": "data/models/"+ save_name,
-            "text_col": "tokenized_text",
-            "data": "data/dat/bills_sample_100.csv",
-            # "training_params": training_params
+            "text_col": "raw_text",
+            "data": formatted_data,
+            "training_params": training_params
         }
 
         headers = {
             "accept": "application/json",
             "Content-Type": "application/json"
         }
+       
 
-        response = requests.post(modelurl+"/train", json=payload, headers=headers)
+        response = requests.post(modelurl, json=payload, headers=headers)
 
         # Print result
         print("Status Code:", response.status_code)
         print("Response JSON:", response.json())
-
-        # model = run(model=model, data=documents, text_col="text_col", output="models/tomotopy")
-
-        # print("==== SAVING THE MODEL ===")
-
-        # model.save(f"model/{save_name}")
-
-
-
-        # === 4. Get topic assignments ===
-        # doc_topics = model.get_document_topics()
-
-        
 
         return jsonify({
             "status": "success",
@@ -283,22 +272,154 @@ def get_model_registry():
 
 @server.route('/infer', methods=['POST'])  # ✅ POST supports JSON
 def infer_topic():
+    
     try:
         data = request.get_json()
         text = data.get("text", "").strip()
-        print(text)
+        modelName = data.get("model").strip()
+
+        payload =  {
+            "config_path": "static/config/config.yaml",
+            "data": [
+                {"id": "myid",
+                "raw_text" : text}],
+            "id_col": "id",
+            "model_path": "data/models/"+modelName,
+            "text_col": "raw_text"
+            }
         if not text:
             return jsonify({"error": "Text input is required."}), 400
 
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        response = requests.post(inferurl, json=payload, headers=headers)
 
-        return jsonify({
-                    "topics": [
-                        {"label": "Urban Mobility", "score": 0.42, "keywords": ["transit", "commute", "city"]},
-                        {"label": "Policy", "score": 0.25, "keywords": ["regulation", "planning"]},
-                        {"label": "Sustainability", "score": 0.18, "keywords": ["climate", "green", "emissions"]},
-                    ]
+        topicJson = {
+            "config_path": "static/config/config.yaml",
+            "model_path": "data/models/"+modelName
+            }
+
+        topic_info = requests.post(topicinfourl, json=topicJson).json()
+
+        print(topic_info)
+
+        inference_result = response.json()
+                # Step 3: Format the top 5 predictions
+        theta = inference_result["thetas"][0]["myid"]
+
+        top_topics = sorted(
+            [{"id": tid, "score": score} for tid, score in theta.items()],
+            key=lambda x: x["score"],
+            reverse=True
+        )[:7]  # Get top 5
+
+        # Step 4: Merge with metadata
+        enriched = []
+        for topic in top_topics:
+            tid = topic["id"]
+            info = topic_info.get(tid, {})
+            enriched.append({
+                "label": info.get("tpc_labels", tid),
+                "score": round(topic["score"], 4),
+                "text": text,
+            })
+
+        # Final output for frontend
+        response = {"topics": enriched}
+
+
+        return jsonify(response)
+
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+        
+
+
+
+@server.route('/infer-file', methods=['POST'])
+def infer_file():
+    try:
+        file = request.files.get("file")
+        id_col = request.form.get("id_col", "").strip()
+        text_col = request.form.get("text_col", "").strip()
+        modelName = request.form.get("model", "").strip()
+
+        if not file or not id_col or not text_col or not modelName:
+            return jsonify({"error": "Missing file, id_col, text_col, or model name"}), 400
+
+        # Load file
+        filename = file.filename.lower()
+        if filename.endswith(".csv"):
+            df = pd.read_csv(file)
+        elif filename.endswith(".json"):
+            df = pd.read_json(file)
+        elif filename.endswith((".xls", ".xlsx")):
+            df = pd.read_excel(file)
+        else:
+            return jsonify({"error": "Unsupported file type"}), 400
+
+        # Validate columns
+        if id_col not in df.columns or text_col not in df.columns:
+            return jsonify({"error": f"'{id_col}' or '{text_col}' not found in file"}), 400
+
+        # Create input data for inference
+        records = [
+            {"id": str(row[id_col]), "raw_text": str(row[text_col])}
+            for _, row in df.iterrows()
+            if pd.notna(row[id_col]) and pd.notna(row[text_col])
+        ]
+        id_to_text = {r["id"]: r["raw_text"] for r in records}
+
+        payload = {
+            "config_path": "static/config/config.yaml",
+            "data": records,
+            "id_col": "id",
+            "model_path": f"data/models/{modelName}",
+            "text_col": "raw_text"
+        }
+
+        headers = {"accept": "application/json", "Content-Type": "application/json"}
+        response = requests.post(inferurl, json=payload, headers=headers)
+        inference_result = response.json()
+
+        # Topic metadata
+        topic_metadata = requests.post(topicinfourl, json={
+            "config_path": "static/config/config.yaml",
+            "model_path": f"data/models/{modelName}"
+        }, headers=headers).json()
+
+        # Format output
+        final_output = []
+        for theta_entry in inference_result["thetas"]:
+            for doc_id, topic_scores in theta_entry.items():
+                top_topics = sorted(
+                    [{"id": tid, "score": score} for tid, score in topic_scores.items()],
+                    key=lambda x: x["score"],
+                    reverse=True
+                )[:3]
+
+                enriched = []
+                for topic in top_topics:
+                    tid = topic["id"]
+                    info = topic_metadata.get(tid, {})
+                    enriched.append({
+                        "label": info.get("tpc_labels", tid),
+                        "score": round(topic["score"], 4),
+                        "keywords": info.get("tpc_descriptions", "").split(", ")
+                    })
+
+                final_output.append({
+                    "doc_id": doc_id,
+                    "text": id_to_text.get(doc_id, ""),
+                    "top_topics": enriched
                 })
 
+        return jsonify({"topics": final_output})
 
     except Exception as e:
         import traceback
@@ -306,9 +427,65 @@ def infer_topic():
         return jsonify({"error": str(e)}), 500
 
 
+
 @server.route("/infer-page")
 def infer_page():
     return render_template("inference.html")
+
+
+@server.route('/get_models', methods=['GET'])
+def list_models():
+    model_dir = os.path.join("data", "models")
+    
+    if not os.path.exists(model_dir):
+        return jsonify([])  # Return empty if no directory
+
+    # List all directories/files inside model_dir
+    models = [
+        name for name in os.listdir(model_dir)
+        if os.path.isdir(os.path.join(model_dir, name))
+    ]
+    print(models)
+
+    return jsonify(models)
+
+
+
+@server.route('/get_model_info', methods=['POST'])  # Change to POST to accept JSON
+def get_model_info():
+    try:
+        data = request.get_json()
+        modelName = data.get("model", "").strip()
+        if not modelName:
+            return jsonify({"error": "Model name is required."}), 400
+
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        topicJson = {
+            "config_path": "static/config/config.yaml",
+            "model_path": f"data/models/{modelName}"
+        }
+
+        # Call your external topic-info URL (replace with your real endpoint)
+        response = requests.post(topicinfourl, json=topicJson, headers=headers)
+
+        # print(response)
+
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to retrieve model info."}), 500
+
+        topic_info = response.json()
+        print(topic_info)
+        return jsonify(topic_info)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 
 
 dash_app = init_dash_app(server)

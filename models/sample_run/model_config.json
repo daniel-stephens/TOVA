@@ -1,0 +1,17 @@
+{
+  "name": "sample_run",
+  "model_type": "src.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
+  "creation_date": "/Users/danielstephens/Desktop/TOVA",
+  "tr_params": {
+    "num_topics": 50,
+    "topn": 15,
+    "thetas_thr": 0.003,
+    "do_labeller": true,
+    "labeller_model_type": "qwen:32b",
+    "labeller_prompt": "./src/prompter/prompts/labelling_dft.txt",
+    "num_iters": 1000,
+    "alpha": 0.1,
+    "eta": 0.01,
+    "iter_interval": 10
+  }
+}
