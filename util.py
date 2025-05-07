@@ -102,45 +102,6 @@ def excel_confirmation(file, text_column, label_column=None) -> dict:
             "message": f"Validation failed: {str(e)}"
         }
 
-def load_file(file_path):
-    ext = file_path.split('.')[-1].lower()
-    docs = []
-
-    if ext == 'txt':
-        loader = TextLoader(file_path)
-        docs = loader.load()
-
-    elif ext == 'csv':
-        loader = CSVLoader(file_path)
-        docs = loader.load()
-
-    elif ext in ['json', 'jsonl', 'xls', 'xlsx']:  # 🔁 Use your custom processor (which uses pandas)
-        preprocessed = preprocess_file(file_path, ext)
-        return [{
-            "content": row["content"],
-            "embedding": row["embedding"],
-            "metadata": {
-                **row["metadata"],
-                "source": file_path,
-                "created_at": datetime.utcnow().isoformat()
-            }
-        } for row in preprocessed]
-
-    else:
-        raise ValueError(f"Unsupported file extension: .{ext}")
-
-    contents = [doc.page_content for doc in docs]
-    # embeddings = embedding_model.encode(contents, batch_size=32)
-
-    return [{
-        "content": contents[i],
-        # "embedding": embeddings[i].tolist(),
-        "metadata": {
-            **docs[i].metadata,
-            "source": file_path,
-            "created_at": datetime.utcnow().isoformat()
-        }
-    } for i in range(len(docs))]
 
 
 import json
@@ -275,3 +236,43 @@ def get_corpus_data(corpus_name, coll):
     return documents, metadatas, ids
 
 
+def format_corpus(documents, metadatas, ids):
+    formatted = []
+    for doc, meta, doc_id in zip(documents, metadatas, ids):
+        formatted.append({
+            "id": doc_id,
+            "raw_text": meta.get("original_content", doc)  # fallback to document if metadata missing
+        })
+    return formatted
+
+def format_single_inference_result(single_result: dict, topic_info: dict, top_n=5):
+    """
+    Format a single-document inference result.
+
+    Parameters:
+    - single_result (dict): one document's topic scores, e.g., {"114-HR-3348": {...}}
+    - topic_info (dict): topic metadata from get_topic_info
+    - top_n (int): number of top topics to include
+
+    Returns:
+    - dict with 'document_id' and 'topics' list
+    """
+    doc_id, topic_scores = list(single_result.items())[0]
+
+    top_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+
+    enriched_topics = []
+    for topic_id, score in top_topics:
+        meta = topic_info.get(topic_id, {})
+        enriched_topics.append({
+            "topic_id": topic_id,
+            "label": meta.get("tpc_labels", topic_id),
+            "score": round(score, 4),
+            "keywords": meta.get("tpc_descriptions", "").split(", "),
+            "top_docs": meta.get("top_docs_per_topic", {})
+        })
+
+    return {
+        "document_id": doc_id,
+        "topics": enriched_topics
+    }

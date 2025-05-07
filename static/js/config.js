@@ -77,6 +77,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!res.ok) throw new Error(data.message || 'Model run failed.');
         bootstrap.Modal.getInstance(document.getElementById('modelNameModal')).hide();
         alert(data.message || 'Model run completed!');
+
+
     })
     .catch(err => {
         alert("Error running model: " + err.message);
@@ -84,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .finally(() => {
         fullscreenLoader.style.display = 'none';
+        window.location.href = "/infer-page";
     });
 });
 
