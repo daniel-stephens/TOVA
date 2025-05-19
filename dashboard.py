@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import chromadb
-from .adapters.lda_adapter import LDAAdapter 
+
 import os
 from sklearn.decomposition import PCA
 import numpy as np
