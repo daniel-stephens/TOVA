@@ -1,23 +1,11 @@
 from flask import Flask, request, jsonify, render_template, redirect
-import os
+import os, tempfile, traceback
 import chromadb
-from sentence_transformers import SentenceTransformer
-from datetime import datetime
-import tempfile
-# from .util import *
 from .util import *
-from .adapters.lda_adapter import LDAAdapter
-import dash_table
-import plotly.express as px
-import pandas as pd
 import requests
-from collections import Counter
-from dash import Dash, html, dcc, dash_table, Input, Output
-from .dashboard import init_dash_app
-import traceback
-# from .src.commands.train import run
-
-
+import uuid
+from flask import session
+ 
 
 server = Flask(__name__)
 
@@ -25,16 +13,66 @@ server = Flask(__name__)
 with open("static/config/modelRegistry.json", "r") as f:
     model_registry = json.load(f)
 
-modelurl = "http://127.0.0.1:8989/train/json"
+modelurl = "http://localhost:8989/"
 inferurl = "http://127.0.0.1:8989/infer/json"
 topicinfourl = "http://127.0.0.1:8989//queries/model-info"
 
+
 client = chromadb.PersistentClient(path="database/myDB")
 collection = client.get_or_create_collection(name="documents")
+registry = client.get_or_create_collection("corpus_model_registry")
+
 # collect = client.get_or_create_collection(name="doc")
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+
+####################################################################
+# Render Pages
+
+# 1. Home Page
+@server.route('/')
+def home():
+    return render_template('index.html')
+
+
+# 2. Select Model Page
+@server.route('/model')
+def loadModel():
+    return render_template('loadModel.html')
+
+# 3. Inference Page
+@server.route("/infer-page")
+def infer_page():
+    return render_template("inference.html")
+
+@server.route("/trained-models")
+def trained_models():
+    results = registry.get()
+
+    # Build list of model entries
+    models = [
+        {
+            "model_id":meta.get("model_id", ""),
+            "document": doc,
+            "model_type":meta.get("model_type", ""),
+            "model_name": meta.get("model_name", ""),
+            "corpus_names": meta.get("corpus_names", ""),
+            "trained_on": meta.get("trained_on", "")
+        }
+        for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
+    ]
+
+    return render_template("trained_models.html", models=models)
+
+
+
+
+#####################################################################
+
+# This Route Validates the selected files
 
 @server.route('/validate', methods=['POST'])
 def validate_route():
@@ -67,16 +105,9 @@ def validate_route():
 
 
 
-@server.route('/upload', methods=['POST'])
-def upload_route():
-    # for eachFile in finalFiles:
-    #     print(eachFile)
+###########################################################################
 
-    return jsonify({
-            "status": "Success",
-            "message": "This code worked"
-        }), 200
-
+# This is called when you when the data has been validated
 
 @server.route('/loadDB', methods=['POST'])
 def loadDB_route():
@@ -98,38 +129,56 @@ def loadDB_route():
             tmp_path = tmp.name
 
         try:
-            # ✅ Preprocess & Embed directly
-            df = preprocess_and_embed(
-            file_path=tmp_path,
-            file_type=ext,
-            text_columns=[textColumn],
-            # label_column=labelColumn
-        )
+            # ✅ Load and prepare text columns
+            df = processFile(
+                file_path=tmp_path,
+                file_type=ext,
+                text_column=textColumn
+            )
 
-            # 🧹 Delete previous entries for this file (if any)
-            # collection.delete(where={"file_name": file.filename})
+            print("Processed Complete")
 
-            documents = df["processed_text"].tolist()
+            # ✅ Check if 'Context' column exists
+            if "Context" not in df.columns:
+                raise ValueError(f"'Context' column not found in file. Found columns: {list(df.columns)}")
 
+            documents = df["Context"].astype(str).tolist()  # Ensure strings
+            print("Documents Retrieved")
+
+            # ✅ Get safe filename
+            file_name = getattr(file, "filename", str(file))
+
+            print("\nBuilding Metadata")
+
+            # ✅ Build metadatas
             metadatas = [{
-                "original_content": row["calculate_on"],
-                "file_name": file.filename,
-                "corpus_name": corpusName  # ✅ Key line to enable filtering/grouping by corpus
-            } for _, row in df.iterrows()]
+                "file_name": file_name,
+                "corpus_name": corpusName,
+                "models_used": ""  # Start with an empty list, update later
+            } for _ in documents]  # Not df.iterrows()
 
-            ids = [f"{file.filename}_{i}" for i in range(len(df))]
+            print("\nGetting the IDs")
+            # ✅ Build IDs
+            ids = [f"{file_name}_{i}" for i in range(len(documents))]
 
+            # ✅ Confirm all lengths match
+            assert len(documents) == len(metadatas) == len(ids), "Mismatch in data lengths"
+
+            print("\n\n Inserting into the Database")
+            # ✅ Insert into collection
             collection.add(
                 documents=documents,
                 metadatas=metadatas,
-                # embeddings=df["embedding"].tolist(),  # Uncomment if embeddings are used
                 ids=ids
             )
-
+            print("\n\nInsert done")
             inserted += len(df)
 
         except Exception as e:
-            print(f"❌ Error processing {file.filename}: {e}")
+            
+            print(f"❌ Failed to insert file {file.filename}: {str(e)}")
+            traceback.print_exc()
+
 
         finally:
             os.remove(tmp_path)
@@ -140,6 +189,10 @@ def loadDB_route():
     }), 200
 
 
+
+##############################################################################
+
+# This function
 
 @server.route('/preview')
 def preview():
@@ -156,6 +209,11 @@ def preview():
     return jsonify(data)
 
 
+
+########################################################################
+# This is called to train the model
+
+
 @server.route('/train_model', methods=['POST'])
 def run_model():
     try:
@@ -163,9 +221,10 @@ def run_model():
 
         model_name = data.get("model")
         save_name = data.get("save_name")
-        corpus = data.get("corpus")
+        corpuses = data.get("corpuses")
         training_params = data.get("training_params")
         num_topics = training_params["num_topics"]
+
 
         # Basic validations
         if not model_name:
@@ -185,43 +244,64 @@ def run_model():
         except ValueError:
             return jsonify({"status": "error", "message": "'num_topics' must be an integer."}), 400
 
-        # === 2. Load data from ChromaDB ===
-        
-        # chroma_data = collection.get(include=["documents", "metadatas"])
-        # # print(chroma_data)
 
-        print(corpus)
-        
-        documents, metadatas, ids = get_corpus_data(corpus, collection)
-        formatted_data = format_corpus(documents, metadatas, ids)
+        final_output = []
 
-        print(f"Found {len(documents)} documents in corpus '{corpus}'.")
-        
+        for corpus in corpuses:
+            documents, metadatas, ids = get_corpus_data(corpus, collection)
+
+            for doc, doc_id in zip(documents, ids):
+                final_output.append({
+                    "id": doc_id,
+                    "raw_text": doc
+                })
+            
+            print(f"Found {len(documents)} documents in corpus '{corpus}'.")
+
+
         # # === 3. Initialize and fit model ===
         
 
         payload = {
             "config_path": "static/config/config.yaml",
+            "model": model_name,
+            "output": "models/"+ save_name,
+            "text_col": "raw_text",
+            "data": final_output,
+            "training_params": training_params,
             "do_preprocess": True,
             "id_col": "id",
-            "model": model_name,
-            "output": "data/models/"+ save_name,
-            "text_col": "raw_text",
-            "data": formatted_data,
-            "training_params": training_params
         }
 
         headers = {
             "accept": "application/json",
             "Content-Type": "application/json"
         }
-       
 
-        response = requests.post(modelurl, json=payload, headers=headers)
+        response = requests.post(modelurl+"train/json", json=payload, headers=headers)
 
         # Print result
         print("Status Code:", response.status_code)
         print("Response JSON:", response.json())
+
+        trained_on = datetime.utcnow().isoformat()
+
+        # Register each corpus individually
+        
+        joined_corpuses = ", ".join(corpuses)  # for display
+        joined_id = "_".join(corpuses)         # for ID, safer string
+
+        registry.add(
+            documents=[f"Trained {model_name} on {joined_corpuses}"],
+            metadatas=[{
+                "model_id" : f"{model_name}_{joined_id}_{trained_on}",
+                "model_type": model_name,
+                "model_name": save_name,
+                "corpus_names": joined_corpuses,  # you *can* keep this as a list in metadata
+                "trained_on": trained_on
+            }],
+            ids=[f"{model_name}_{joined_id}_{trained_on}"]
+        )
 
         return jsonify({
             "status": "success",
@@ -233,17 +313,8 @@ def run_model():
             "status": "error",
             "message": f"Model run failed: {str(e)}"
         }), 500
-    
 
 
-
-@server.route('/')
-def home():
-    return render_template('index.html')
-
-@server.route('/model')
-def loadModel():
-    return render_template('loadModel.html')
 
 @server.route('/corpora')
 def get_corpus_names():
@@ -255,9 +326,9 @@ def get_corpus_names():
         if meta.get("corpus_name") and isinstance(meta.get("corpus_name"), str)
     ]
     unique_corpora = sorted(set(all_corpora))
-    
-    print("Found:", unique_corpora)
     return jsonify(unique_corpora)
+
+
 
 @server.route("/model-config")
 def get_model_config():
@@ -270,6 +341,59 @@ def get_model_registry():
     with open("static/config/modelRegistry.json") as f:
         return jsonify(json.load(f))
 
+@server.route('/get_models', methods=['GET'])
+def list_models():
+    model_dir = os.path.join("data", "models")
+    
+    if not os.path.exists(model_dir):
+        return jsonify([])  # Return empty if no directory
+
+    # List all directories/files inside model_dir
+    models = [
+        name for name in os.listdir(model_dir)
+        if os.path.isdir(os.path.join(model_dir, name))
+    ]
+    print(models)
+
+    return jsonify(models)
+
+
+
+@server.route('/get_model_info', methods=['POST'])  # Change to POST to accept JSON
+def get_model_info():
+    try:
+        data = request.get_json()
+        modelName = data.get("model", "").strip()
+        if not modelName:
+            return jsonify({"error": "Model name is required."}), 400
+
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        topicJson = {
+            "config_path": "static/config/config.yaml",
+            "model_path": f"data/models/{modelName}"
+        }
+
+        # Call your external topic-info URL (replace with your real endpoint)
+        response = requests.post(topicinfourl, json=topicJson, headers=headers)
+
+        # print(response)
+
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to retrieve model info."}), 500
+
+        topic_info = response.json()
+        print(topic_info)
+        return jsonify(topic_info)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
 @server.route('/infer', methods=['POST'])  # ✅ POST supports JSON
 def infer_topic():
     
@@ -284,7 +408,7 @@ def infer_topic():
                 {"id": "myid",
                 "raw_text" : text}],
             "id_col": "id",
-            "model_path": "data/models/"+modelName,
+            "model_path": "models/"+modelName,
             "text_col": "raw_text"
             }
         if not text:
@@ -340,7 +464,6 @@ def infer_topic():
         
 
 
-
 @server.route('/infer-file', methods=['POST'])
 def infer_file():
     try:
@@ -379,7 +502,7 @@ def infer_file():
             "config_path": "static/config/config.yaml",
             "data": records,
             "id_col": "id",
-            "model_path": f"data/models/{modelName}",
+            "model_path": f"models/{modelName}",
             "text_col": "raw_text"
         }
 
@@ -390,7 +513,7 @@ def infer_file():
         # Topic metadata
         topic_metadata = requests.post(topicinfourl, json={
             "config_path": "static/config/config.yaml",
-            "model_path": f"data/models/{modelName}"
+            "model_path": f"models/{modelName}"
         }, headers=headers).json()
 
         # Format output
@@ -427,67 +550,25 @@ def infer_file():
         return jsonify({"error": str(e)}), 500
 
 
+@server.route("/inference/<model_id>")
+def inference_page(model_id):
+    return render_template("inference_page.html", model_id=model_id)
 
-@server.route("/infer-page")
-def infer_page():
-    return render_template("inference.html")
-
-
-@server.route('/get_models', methods=['GET'])
-def list_models():
-    model_dir = os.path.join("data", "models")
     
-    if not os.path.exists(model_dir):
-        return jsonify([])  # Return empty if no directory
+@server.route('/delete-model/', methods=['POST'])
+def delete_model():
+    data = request.get_json()
+    model_id = data.get("model_id")
 
-    # List all directories/files inside model_dir
-    models = [
-        name for name in os.listdir(model_dir)
-        if os.path.isdir(os.path.join(model_dir, name))
-    ]
-    print(models)
+    if not model_id:
+        return jsonify({"status": "error", "message": "No model_id provided"}), 400
 
-    return jsonify(models)
-
-
-
-@server.route('/get_model_info', methods=['POST'])  # Change to POST to accept JSON
-def get_model_info():
     try:
-        data = request.get_json()
-        modelName = data.get("model", "").strip()
-        if not modelName:
-            return jsonify({"error": "Model name is required."}), 400
-
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        }
-
-        topicJson = {
-            "config_path": "static/config/config.yaml",
-            "model_path": f"data/models/{modelName}"
-        }
-
-        # Call your external topic-info URL (replace with your real endpoint)
-        response = requests.post(topicinfourl, json=topicJson, headers=headers)
-
-        # print(response)
-
-        if response.status_code != 200:
-            return jsonify({"error": "Failed to retrieve model info."}), 500
-
-        topic_info = response.json()
-        print(topic_info)
-        return jsonify(topic_info)
-
+        registry.delete(where={"model_id": model_id})
+        return jsonify({"status": "success", "message": f"Model '{model_id}' deleted."})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-
-dash_app = init_dash_app(server)
 if __name__ == '__main__':
     server.run(debug=True)

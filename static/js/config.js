@@ -1,4 +1,3 @@
-
 let selectedModelData = null;
 let modelConfig = {};
 
@@ -13,7 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     topicInputGroup.style.display = selected === 'External' ? 'none' : 'block';
   });
 
-  loadCorpusDropdown();
+  loadCorpusCheckboxTable();
   loadModelConfig();
 
   document.getElementById('modelSelectionForm').addEventListener('submit', async function (e) {
@@ -37,11 +36,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const numTopics = document.getElementById('numTopics').value.trim();
     const fullscreenLoader = document.getElementById('fullscreenLoader');
     const corpus = document.getElementById("corpusName");
+    
 
     if (!modelName) {
         alert("Please provide a model name.");
         return;
     }
+
+
+    const selectedCorpora = Array.from(
+      document.querySelectorAll('input[name="corpusName"]:checked')
+    ).map(cb => cb.value);
+    
 
     // Collect advanced settings
       const training_param = {};
@@ -59,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
           model: modelSelect.value,               // Model selected
           save_name: modelName,                   // Model name
           training_params: training_param,    // ✅ Unified training params
-          corpus: corpus.value
+          corpuses: selectedCorpora,
       };
 
     console.log(requestData)
@@ -77,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!res.ok) throw new Error(data.message || 'Model run failed.');
         bootstrap.Modal.getInstance(document.getElementById('modelNameModal')).hide();
         alert(data.message || 'Model run completed!');
-
+        window.location.href = "/trained-models";
 
     })
     .catch(err => {
@@ -86,7 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .finally(() => {
         fullscreenLoader.style.display = 'none';
-        window.location.href = "/infer-page";
     });
 });
 
@@ -99,30 +104,51 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-async function loadCorpusDropdown() {
-  const select = document.getElementById("corpusName");
-  select.innerHTML = "<option selected disabled>Loading...</option>";
+async function loadCorpusCheckboxTable() {
+  const tbody = document.getElementById("corpusCheckboxTable");
+  tbody.innerHTML = `<tr><td colspan="2"><em>Loading corpora...</em></td></tr>`;
 
   try {
     const res = await fetch("/corpora");
     const corpora = await res.json();
 
     if (corpora.length > 0) {
-      select.innerHTML = "";
-      corpora.forEach(name => {
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        select.appendChild(option);
+      tbody.innerHTML = "";
+
+      corpora.forEach((name, index) => {
+        const row = document.createElement("tr");
+
+        const checkboxCell = document.createElement("td");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "corpusName";
+        checkbox.value = name;
+        checkbox.className = "form-check-input";
+        checkbox.id = `corpus-${index}`;
+        checkboxCell.appendChild(checkbox);
+
+        const nameCell = document.createElement("td");
+        const label = document.createElement("label");
+        label.htmlFor = `corpus-${index}`;
+        label.textContent = name;
+        nameCell.appendChild(label);
+
+        row.appendChild(checkboxCell);
+        row.appendChild(nameCell);
+        tbody.appendChild(row);
       });
     } else {
-      select.innerHTML = "<option disabled>No corpora found</option>";
+      tbody.innerHTML = `<tr><td colspan="2"><em>No corpora found</em></td></tr>`;
     }
-  } catch (err) {
-    console.error("Error loading corpora:", err);
-    select.innerHTML = "<option disabled>Error loading corpora</option>";
+  } catch (error) {
+    console.error("Error loading corpora:", error);
+    tbody.innerHTML = `<tr><td colspan="2"><em>Error loading corpora</em></td></tr>`;
   }
 }
+
+
+
+
 
 async function loadModelConfig() {
   if (Object.keys(modelConfig).length) return;
@@ -180,7 +206,3 @@ function renderParamsIntoModal(model) {
       container.appendChild(col);
   }
 }
-
-
-
-
