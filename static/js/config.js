@@ -83,6 +83,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!res.ok) throw new Error(data.message || 'Model run failed.');
         bootstrap.Modal.getInstance(document.getElementById('modelNameModal')).hide();
         alert(data.message || 'Model run completed!');
+        window.location.href = "/trained-models";
+
     })
     .catch(err => {
         alert("Error running model: " + err.message);
