@@ -3,9 +3,7 @@ __pycache__
 data
 database
 myData
-model
-savedModel
-uploads
+models
 topic
 data
 .vscode

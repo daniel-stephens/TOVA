@@ -1,20 +1,11 @@
-import os
-import re
 import pandas as pd
-import spacy
 from datetime import datetime
-from spacy.lang.en.stop_words import STOP_WORDS
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sentence_transformers import SentenceTransformer
 from langchain.document_loaders import (
-    TextLoader, CSVLoader, UnstructuredFileLoader, PDFMinerLoader
-)
-from langchain.schema import Document as LCDocument
+    TextLoader, CSVLoader)
+# from celery import Celery
+# import redis
 
-# Load models and NLP pipeline
-nlp = spacy.load('en_core_web_sm')
-nlp.add_pipe('sentencizer')
-embedding_model = SentenceTransformer('paraphrase-distilroberta-base-v2')
+
 
 def preprocess_file(file_path, file_type, label_column):
     if file_type == 'json':
@@ -34,43 +25,18 @@ def preprocess_file(file_path, file_type, label_column):
             raise ValueError(f"Missing required column: {col}")
 
     df = df.dropna(subset=[label_column])
-    texts = df['Content'].tolist()
-    docs = list(nlp.pipe(texts))
-
-    # TF-IDF filtering
-    vectorizer = TfidfVectorizer()
-    vectorizer.fit(texts)
-    low_value_words = set([
-        word for word, idf in zip(vectorizer.get_feature_names_out(), vectorizer.idf_) if idf <= 3
-    ])
-    stop_words = STOP_WORDS.union(low_value_words)
-
-    processed_texts = []
-    for doc in docs:
-        tokens = [token.lemma_.lower() for token in doc if
-                  re.search('[a-z0-9]+', token.text) and
-                  len(token.text) > 1 and
-                  not token.is_digit and
-                  not token.is_space and
-                  token.lemma_.lower() not in stop_words]
-
-        cleaned_tokens = [''.join([char for char in tok if char.isalpha()]) for tok in tokens]
-        cleaned_tokens = [tok for tok in cleaned_tokens if tok.strip() != '']
-        processed_texts.append(' '.join(cleaned_tokens))
-
-    # embeddings = embedding_model.encode(processed_texts, batch_size=32, show_progress_bar=True)
 
     output = []
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         metadata = row.to_dict()
-        del metadata['Content']
+        content = metadata.pop('Content')
         output.append({
-            "content": processed_texts[i],
-            # "embedding": embeddings[i].tolist(),
+            "content": content,
             "metadata": metadata
         })
 
     return output
+
 
 def excel_confirmation(file, text_column, label_column=None) -> dict:
     try:
@@ -102,6 +68,44 @@ def excel_confirmation(file, text_column, label_column=None) -> dict:
             "message": f"Validation failed: {str(e)}"
         }
 
+def load_file(file_path):
+    ext = file_path.split('.')[-1].lower()
+    docs = []
+
+    if ext == 'txt':
+        loader = TextLoader(file_path)
+        docs = loader.load()
+
+    elif ext == 'csv':
+        loader = CSVLoader(file_path)
+        docs = loader.load()
+
+    elif ext in ['json', 'jsonl', 'xls', 'xlsx']:  # 🔁 Use your custom processor (which uses pandas)
+        preprocessed = preprocess_file(file_path, ext)
+        return [{
+            "content": row["content"],
+            "metadata": {
+                **row["metadata"],
+                "source": file_path,
+                "created_at": datetime.utcnow().isoformat()
+            }
+        } for row in preprocessed]
+
+    else:
+        raise ValueError(f"Unsupported file extension: .{ext}")
+
+    contents = [doc.page_content for doc in docs]
+    # embeddings = embedding_model.encode(contents, batch_size=32)
+
+    return [{
+        "content": contents[i],
+        # "embedding": embeddings[i].tolist(),
+        "metadata": {
+            **docs[i].metadata,
+            "source": file_path,
+            "created_at": datetime.utcnow().isoformat()
+        }
+    } for i in range(len(docs))]
 
 
 import json
@@ -127,30 +131,22 @@ def parse_multiline_key_value_string(text, to_json=False):
 
     return json.dumps(data, indent=2) if to_json else data
 
-def preprocess_and_embed(
+
+def processFile(
     file_path: str,
     file_type: str,
-    text_columns: list,
-    sbert_model: str = "paraphrase-distilroberta-base-v2",
-    tfidf_threshold: float = 3,
-    batch_size: int = 32,
-    min_tokens: int = 5
+    text_column: str
 ) -> pd.DataFrame:
     """
-    Load file, preprocess texts, and compute embeddings for database insertion.
+    Load file and extract a single specified text column for database insertion.
 
     Args:
         file_path (str): Path to the file.
         file_type (str): Type of file (csv, json, jsonl, xlsx, xls, txt).
-        text_columns (list): Text columns to process.
-        label_column (str): Optional label/category column.
-        sbert_model (str): SentenceTransformer model.
-        tfidf_threshold (float): Threshold for tf-idf stopword expansion.
-        batch_size (int): Batch size for embeddings.
-        min_tokens (int): Minimum tokens for accepting preprocessed text.
+        text_column (str): The name of the text column to extract.
 
     Returns:
-        pd.DataFrame: Processed dataframe with processed_text and embedding.
+        pd.DataFrame: DataFrame with a single 'Context' column.
     """
 
     # --- Load File ---
@@ -165,59 +161,21 @@ def preprocess_and_embed(
     elif file_type == 'txt':
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        df = pd.DataFrame({"Document Number": [1], "Content": [content]})
+        return pd.DataFrame({"Context": [content]})
     else:
         raise ValueError("Unsupported file type")
 
-    # --- Drop rows with missing text columns ---
-    df = df.dropna(subset=text_columns, how="any")
+    # --- Drop rows with missing values in the text column ---
+    if text_column not in df.columns:
+        raise ValueError(f"'{text_column}' column not found in file")
 
-    # --- Calculate text to process ---
-    df["calculate_on"] = df.apply(lambda row: ' '.join([str(row[col]) for col in text_columns]), axis=1)
-    texts = df["calculate_on"].tolist()
+    df = df.dropna(subset=[text_column])  # Wrap in list
 
-    # --- NLP Preprocessing ---
-    nlp = spacy.load("en_core_web_sm")
-    nlp.add_pipe("sentencizer")
-    docs = list(nlp.pipe(texts))
+    # --- Rename column to 'Context' and return as DataFrame ---
+    df = df[[text_column]].rename(columns={text_column: "Context"})
 
-    vectorizer = TfidfVectorizer()
-    vectorizer.fit(texts)
-    tfidf_stopwords = set([
-        word for word, idf in zip(vectorizer.get_feature_names_out(), vectorizer.idf_)
-        if idf <= tfidf_threshold
-    ])
-    stop_words = STOP_WORDS.union(tfidf_stopwords)
-
-    processed_texts = []
-    for i, doc in enumerate(docs):
-        tokens = [
-            token.lemma_.lower() for token in doc
-            if re.search('[a-z0-9]+', token.text)
-            and len(token.text) > 1
-            and not token.is_digit
-            and not token.is_space
-            and token.lemma_.lower() not in stop_words
-        ]
-        cleaned_tokens = [''.join([c for c in t if c.isalpha()]) for t in tokens]
-        cleaned_tokens = [tok for tok in cleaned_tokens if tok.strip()]
-
-        if len(cleaned_tokens) < min_tokens:
-            processed_texts.append(df["calculate_on"].iloc[i])
-        else:
-            processed_texts.append(' '.join(cleaned_tokens))
-
-    # --- Embedding ---
-    # print("🚩 Calculating embeddings...")
-    # model = SentenceTransformer(sbert_model)
-    # embeddings = model.encode(processed_texts, batch_size=batch_size, show_progress_bar=True)
-
-    # --- Attach Results ---
-    df["processed_text"] = processed_texts
-    # df["embedding"] = [embedding.tolist() for embedding in embeddings]
-
-    print("✅ Preprocessing completed!")
     return df.reset_index(drop=True)
+
 
 def get_corpus_data(corpus_name, coll):
     """
@@ -234,45 +192,3 @@ def get_corpus_data(corpus_name, coll):
     ids = results.get("ids", [])  # ✅ ids are automatically returned even without include
 
     return documents, metadatas, ids
-
-
-def format_corpus(documents, metadatas, ids):
-    formatted = []
-    for doc, meta, doc_id in zip(documents, metadatas, ids):
-        formatted.append({
-            "id": doc_id,
-            "raw_text": meta.get("original_content", doc)  # fallback to document if metadata missing
-        })
-    return formatted
-
-def format_single_inference_result(single_result: dict, topic_info: dict, top_n=5):
-    """
-    Format a single-document inference result.
-
-    Parameters:
-    - single_result (dict): one document's topic scores, e.g., {"114-HR-3348": {...}}
-    - topic_info (dict): topic metadata from get_topic_info
-    - top_n (int): number of top topics to include
-
-    Returns:
-    - dict with 'document_id' and 'topics' list
-    """
-    doc_id, topic_scores = list(single_result.items())[0]
-
-    top_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
-
-    enriched_topics = []
-    for topic_id, score in top_topics:
-        meta = topic_info.get(topic_id, {})
-        enriched_topics.append({
-            "topic_id": topic_id,
-            "label": meta.get("tpc_labels", topic_id),
-            "score": round(score, 4),
-            "keywords": meta.get("tpc_descriptions", "").split(", "),
-            "top_docs": meta.get("top_docs_per_topic", {})
-        })
-
-    return {
-        "document_id": doc_id,
-        "topics": enriched_topics
-    }
