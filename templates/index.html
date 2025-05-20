@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Upload with Validation</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <title>Corpus Upload with Validation</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
     <style>
         .tooltip-custom {
         position: fixed;
@@ -87,7 +92,7 @@
             <!-- Left nav links -->
             <ul class="navbar-nav">
               <li class="nav-item">
-                <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Home</a>
+                <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Add Corpus</a>
               </li>
               <li class="nav-item">
                 <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Train Models</a>
@@ -139,8 +144,8 @@
                               
                             <div class="d-flex justify-content-center gap-2">
                                 <button type="submit" class="btn btn-primary">Validate</button>
-                                <button type="button" class="btn btn-secondary" onclick="loadPreview()" data-bs-toggle="modal" data-bs-target="#previewModal">
-                                    Preview File </button>
+                                <!-- <button type="button" class="btn btn-secondary" onclick="loadPreview()" data-bs-toggle="modal" data-bs-target="#previewModal">
+                                    Preview File </button> -->
                             </div>
                         </form>
 
@@ -250,6 +255,8 @@
                     </tr>
                   </thead>
                   <tbody id="preview-table-body">
+                    
+
                     <tr>
                       <td class="text-center" colspan="2" style="white-space: normal; word-break: break-word;">No data loaded.</td>
                     </tr>
@@ -358,10 +365,6 @@
             console.log("🔍 Columns detected:", [...columnsSet]);
             }
 
-            </script>
-            
-
-            <script>
     let files = null; // GLOBAL so both functions can use it
     const n = 5; // number of documents or lines to preview
     // Disable the Continue button initially
