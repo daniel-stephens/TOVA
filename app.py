@@ -4,7 +4,9 @@ import chromadb
 from .util import *
 import requests
 import uuid
+import shutil
 from flask import session
+from zoneinfo import ZoneInfo
  
 
 server = Flask(__name__)
@@ -22,13 +24,6 @@ client = chromadb.PersistentClient(path="database/myDB")
 collection = client.get_or_create_collection(name="documents")
 registry = client.get_or_create_collection("corpus_model_registry")
 
-# collect = client.get_or_create_collection(name="doc")
-
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-
-
 ####################################################################
 # Render Pages
 
@@ -37,40 +32,22 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def home():
     return render_template('index.html')
 
+# This function makes you view your data before it is uploaded
 
-# 2. Select Model Page
-@server.route('/model')
-def loadModel():
-    return render_template('loadModel.html')
+@server.route('/preview')
+def preview():
+    results = collection.get(include=['documents', 'metadatas'])
+    data = []
 
-# 3. Inference Page
-@server.route("/infer-page")
-def infer_page():
-    return render_template("inference.html")
+    for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
+        data.append({
+            "id": id_,
+            "processed_text": doc,
+            "content": meta.get("original_content", ""),
+        })
 
-@server.route("/trained-models")
-def trained_models():
-    results = registry.get()
+    return jsonify(data)
 
-    # Build list of model entries
-    models = [
-        {
-            "model_id":meta.get("model_id", ""),
-            "document": doc,
-            "model_type":meta.get("model_type", ""),
-            "model_name": meta.get("model_name", ""),
-            "corpus_names": meta.get("corpus_names", ""),
-            "trained_on": meta.get("trained_on", "")
-        }
-        for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
-    ]
-
-    return render_template("trained_models.html", models=models)
-
-
-
-
-#####################################################################
 
 # This Route Validates the selected files
 
@@ -105,9 +82,7 @@ def validate_route():
 
 
 
-###########################################################################
-
-# This is called when you when the data has been validated
+# This is called when you when the data has been validated to insert data into the vector database
 
 @server.route('/loadDB', methods=['POST'])
 def loadDB_route():
@@ -190,30 +165,15 @@ def loadDB_route():
 
 
 
-##############################################################################
 
-# This function
-
-@server.route('/preview')
-def preview():
-    results = collection.get(include=['documents', 'metadatas'])
-    data = []
-
-    for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
-        data.append({
-            "id": id_,
-            "processed_text": doc,
-            "content": meta.get("original_content", ""),
-        })
-
-    return jsonify(data)
+# 2. Select Model Page
+@server.route('/model')
+def loadModel():
+    return render_template('loadModel.html')
 
 
 
-########################################################################
-# This is called to train the model
-
-
+# This function trains the selected model on the data selected
 @server.route('/train_model', methods=['POST'])
 def run_model():
     try:
@@ -258,10 +218,6 @@ def run_model():
             
             print(f"Found {len(documents)} documents in corpus '{corpus}'.")
 
-
-        # # === 3. Initialize and fit model ===
-        
-
         payload = {
             "config_path": "static/config/config.yaml",
             "model": model_name,
@@ -286,7 +242,6 @@ def run_model():
 
         trained_on = datetime.utcnow().isoformat()
 
-        # Register each corpus individually
         
         joined_corpuses = ", ".join(corpuses)  # for display
         joined_id = "_".join(corpuses)         # for ID, safer string
@@ -315,7 +270,7 @@ def run_model():
         }), 500
 
 
-
+# This function fetches the corpora to be selected
 @server.route('/corpora')
 def get_corpus_names():
     print("Looking for corpus names...")
@@ -329,35 +284,98 @@ def get_corpus_names():
     return jsonify(unique_corpora)
 
 
-
+# This function gets the configuration file for the Models
 @server.route("/model-config")
 def get_model_config():
     with open("static/config/model_config.json") as f:
-        
         return jsonify(json.load(f))
     
+
+# This function gets the model registry
 @server.route("/model-registry")
 def get_model_registry():
     with open("static/config/modelRegistry.json") as f:
         return jsonify(json.load(f))
 
-@server.route('/get_models', methods=['GET'])
-def list_models():
-    model_dir = os.path.join("data", "models")
-    
-    if not os.path.exists(model_dir):
-        return jsonify([])  # Return empty if no directory
 
-    # List all directories/files inside model_dir
+
+@server.route('/delete-corpus/', methods=['POST'])
+def delete_corpus():
+    try:
+        data = request.get_json()
+        print("Received request to delete corpus:", data)
+
+        corpus_name = data.get("corpus_name")
+        if not corpus_name:
+            return jsonify({"status": "error", "message": "No corpus_name provided."}), 400
+
+        collection.delete(where={"corpus_name": corpus_name})
+
+        return jsonify({"status": "success", "message": f"Corpus '{corpus_name}' deleted."})
+    except Exception as e:
+        print("Error during corpus deletion:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+##################################################################################
+# 3. Trained Models
+@server.route("/trained-models")
+def trained_models():
+    results = registry.get()
+
+
+    # Build list of model entries
     models = [
-        name for name in os.listdir(model_dir)
-        if os.path.isdir(os.path.join(model_dir, name))
+        {
+            "model_id":meta.get("model_id", ""),
+            "document": doc,
+            "model_type":meta.get("model_type", ""),
+            "model_name": meta.get("model_name", ""),
+            "corpus_names": meta.get("corpus_names", ""),
+            "trained_on": datetime.fromisoformat(meta.get("trained_on", "")).replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+ 
+        }
+        for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
     ]
-    print(models)
 
-    return jsonify(models)
+    return render_template("trained_models.html", models=models)
 
 
+@server.route('/delete-model/', methods=['POST'])
+def delete_model():
+    data = request.get_json()
+    model_id = data.get("model_id")
+    model_name = data.get("model_name")
+    modelpath = f"./models/{model_name}"
+
+    if os.path.exists(modelpath) and os.path.isdir(modelpath):
+        shutil.rmtree(modelpath)
+        print(f"✅ Deleted model folder: {modelpath}")
+    else:
+        print(f"⚠️ Model path does not exist: {modelpath}")
+
+    if not model_id:
+        return jsonify({"status": "error", "message": "No model_id provided"}), 400
+
+    try:
+        registry.delete(where={"model_id": model_id})
+        return jsonify({"status": "success", "message": f"Model '{model_id}' deleted."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+###################################################################################
+# 4. Visualization and Inferences
+@server.route("/dashboard", methods=["POST", "GET"])
+def dashboard():
+    return render_template("dashboard.html")
+
+####################################################################################
+
+# 5. Inference Page
+@server.route("/infer-page")
+def infer_page():
+    return render_template("inference.html")
 
 @server.route('/get_model_info', methods=['POST'])  # Change to POST to accept JSON
 def get_model_info():
@@ -555,19 +573,33 @@ def inference_page(model_id):
     return render_template("inference_page.html", model_id=model_id)
 
     
-@server.route('/delete-model/', methods=['POST'])
-def delete_model():
-    data = request.get_json()
-    model_id = data.get("model_id")
+######################################################################################
 
-    if not model_id:
-        return jsonify({"status": "error", "message": "No model_id provided"}), 400
 
-    try:
-        registry.delete(where={"model_id": model_id})
-        return jsonify({"status": "success", "message": f"Model '{model_id}' deleted."})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# This function displays the available models
+@server.route('/get_models', methods=['GET'])
+def list_models():
+    model_dir = os.path.join("models")
+    
+    if not os.path.exists(model_dir):
+        return jsonify([])  # Return empty if no directory
+
+    # List all directories/files inside model_dir
+    models = [
+        name for name in os.listdir(model_dir)
+        if os.path.isdir(os.path.join(model_dir, name))
+    ]
+    print(models)
+
+    return jsonify(models)
+
+
+
+
+
+
 
 
 if __name__ == '__main__':

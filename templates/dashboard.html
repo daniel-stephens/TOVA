@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOVA Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex-grow: 1;
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  height: calc(100vh - 100px); /* Adjust based on your nav + footer */
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  padding: 1rem;
+  min-height: 0; /* ✅ needed for scroll to work inside */
+  overflow: hidden;
+}
+
+.table-scroll-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+    footer {
+      background-color: #f1f3f5;
+      text-align: center;
+      padding: 0.75rem;
+      font-size: 0.9rem;
+      border-top: 1px solid #dee2e6;
+    }
+
+  .truncate-cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px; /* Adjust as needed */
+    cursor: pointer;
+  }
+
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg bg-white shadow-sm">
+    <div class="container-fluid px-4">
+      <a class="navbar-brand fw-bold" href="#">TOVA</a>
+      <div>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modelInfoModal">ℹ️ Model Info</button>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inferenceModal">➕ Run Inference</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Full Workspace -->
+  <main class="flex-grow-1 px-4 py-3">
+    <div class="row g-3">
+      <!-- LEFT -->
+      <div class="col-lg-6 d-flex flex-column gap-3" style="max-height: 100%;">
+        <!-- Panel 1: Theme Overview -->
+        <div class="panel flex-grow-1 d-flex flex-column">
+          <h6 class="fw-bold mb-2">Theme Overview</h6>
+          <p class="text-muted small">Each bar shows a theme and how many documents belong to it. Click a bar to explore more.</p>
+          <canvas id="themeChart" class="flex-grow-1" style="min-height: 80px;"></canvas>
+        </div>
+      
+        <!-- Panel 2: Theme Diagnostics Table -->
+        <div class="panel flex-grow-1 d-flex flex-column overflow-hidden">
+            <h6 class="fw-bold mb-3">🎯 Theme Diagnostics</h6>
+            <p class="small text-muted mb-2">
+              This table summarizes purity, coherence, and document prevalence for each theme.
+            </p>
+          
+            <!-- Scrollable container -->
+            <div class="table-scroll-wrapper flex-grow-1 overflow-auto">
+              <table class="table table-sm table-hover align-middle mb-0" id="themeStatsTable">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Topic</th>
+                    <th>Purity Score</th>
+                    <th>Coherence</th>
+                    <th>Prevalence (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- JS-injected rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+      </div>
+      
+    
+
+      <!-- RIGHT -->
+      <div class="col-lg-6 d-flex flex-column gap-3" style="height: 100%;">
+
+  
+        <!-- Panel 1: Theme Insights (Compact 2-column layout) -->
+<div class="panel flex-grow-1 d-flex flex-column" style="max-height:30%">
+    <h6 class="fw-bold mb-3">📋 Theme Insights</h6>
+  
+    <div id="themeInsightsGrid" class="row row-cols-2 small g-2">
+        <!-- Metrics will be injected here by JS -->
+      </div>
+      
+  </div>
+  
+      
+        <!-- Panel 2: Document Table -->
+        <div class="panel flex-grow-1 d-flex flex-column overflow-scroll">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold mb-0">📄 Documents</h6>
+              <input type="text" id="docSearchInput" class="form-control form-control-sm w-50" placeholder="Search documents...">
+            </div>
+
+            <p  class="small text-muted mb-2"> Click on text to view full text information</p>
+          
+            <!-- Scrollable container for the table only -->
+            <div class="flex-grow-1" style="min-height: 0; max-height: 50%;">
+              <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                <thead id="docTableHead" class="sticky-top bg-white"></thead>
+                <tbody id="docTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          
+      
+      </div>
+      
+    </div>
+  </main>
+
+  <footer>
+    &copy; 2025 TOVA | AI-powered Topic Visualizer
+  </footer>
+
+  <!-- Modals -->
+  <div class="modal fade" id="modelInfoModal" tabindex="-1" aria-labelledby="modelInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modelInfoModalLabel">Model Information</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p><strong>Model Name:</strong> LDA_Model_v1</p>
+          <p><strong>Type:</strong> Latent Dirichlet Allocation</p>
+          <p><strong>Number of Topics:</strong> 10</p>
+          <p><strong>Trained On:</strong> 2025-05-21</p>
+          <p><strong>Corpora Used:</strong> News Articles, Research Abstracts</p>
+          <hr />
+          <p class="text-muted">This model was trained on a cleaned dataset of unstructured documents using 10-topic LDA. Use the chart and panels below to explore the results.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="inferenceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Run Inference</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label for="inputText" class="form-label">Paste unstructured text</label>
+          <textarea class="form-control" id="inputText" rows="6"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="runInferenceBtn">Infer Topic</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="docDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Document Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+  
+        <div class="modal-body">
+          <div class="row">
+            <!-- Full Text on the left -->
+            <div class="col-md-7">
+              <h6 class="mb-2 text-muted">📄 Full Text</h6>
+              <div class="border rounded p-2" style="max-height: 400px; overflow-y: auto;">
+                <p id="modalFullText" class="mb-0 small" style="white-space: pre-wrap;"></p>
+              </div>
+            </div>
+  
+            <!-- Theme + Rationale on the right -->
+            <div class="col-md-5">
+              <div class="mb-3">
+                <h6 class="mb-1 text-muted">🏷️ Theme</h6>
+                <p id="modalTheme" class="fw-semibold">–</p>
+              </div>
+              <br>
+              <div>
+                <h6 class="mb-1 text-muted">💡 Rationale</h6>
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                  <p id="modalRationale" class="mb-0 small text-muted" style="white-space: pre-wrap;">–</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+  
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

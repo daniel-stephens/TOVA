@@ -111,7 +111,7 @@
                                   
 
                                 <div class="d-flex justify-content-center gap-2">
-                                    <button type="submit" class="btn btn-primary">Train Model</button>
+                                    <button id="trainBtn" type="submit" disabled class="btn btn-primary">Train Model</button>
                                 </div>
                             </div>
                         </form>
@@ -139,7 +139,11 @@
                     <div class="col-md-6 mb-3">
                         <label for="modelNameInput" class="form-label">Model Name</label>
                         <input type="text" id="modelNameInput" class="form-control" placeholder="Enter model name..." required>
-                    </div>
+                        <div id="nameWarning" class="form-text text-danger" style="display: none;">
+                          This model name already exists. Please choose a different name.
+                        </div>
+                      </div>
+                      
                 
                     <div class="col-md-6 mb-3" id="topicCountGroup">
                         <label for="numTopics" class="form-label">Number of Topics</label>
@@ -210,6 +214,37 @@
     }
 
     document.addEventListener("DOMContentLoaded", loadModelOptions);
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        const modelInput = document.getElementById("modelNameInput");
+        const warningText = document.getElementById("nameWarning");
+
+        let existingModelNames = [];
+
+        // Fetch model names from the server
+        try {
+            const res = await fetch("/get_models");
+            existingModelNames = await res.json();
+        } catch (err) {
+            console.error("Failed to load existing models:", err);
+        }
+
+        modelInput.addEventListener("input", () => {
+            const enteredName = modelInput.value.trim().toLowerCase();
+            const isDuplicate = existingModelNames.some(name => name.toLowerCase() === enteredName);
+            const confirmButton = document.getElementById("confirmModelName");
+
+            if (isDuplicate) {
+            warningText.style.display = "block";
+            modelInput.classList.add("is-invalid");
+            confirmButton.disabled = true;
+            } else {
+            warningText.style.display = "none";
+            modelInput.classList.remove("is-invalid");
+            confirmButton.disabled = false;
+            }
+        });
+        });
 
 
     </script>

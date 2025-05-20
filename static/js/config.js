@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadCorpusCheckboxTable() {
   const tbody = document.getElementById("corpusCheckboxTable");
-  tbody.innerHTML = `<tr><td colspan="2"><em>Loading corpora...</em></td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="3"><em>Loading corpora...</em></td></tr>`;
 
   try {
     const res = await fetch("/corpora");
@@ -118,7 +118,9 @@ async function loadCorpusCheckboxTable() {
       corpora.forEach((name, index) => {
         const row = document.createElement("tr");
 
+        // Checkbox Cell
         const checkboxCell = document.createElement("td");
+        checkboxCell.className = "align-middle";
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.name = "corpusName";
@@ -127,22 +129,84 @@ async function loadCorpusCheckboxTable() {
         checkbox.id = `corpus-${index}`;
         checkboxCell.appendChild(checkbox);
 
+        // Name Cell
         const nameCell = document.createElement("td");
+        nameCell.className = "align-middle";
         const label = document.createElement("label");
         label.htmlFor = `corpus-${index}`;
         label.textContent = name;
         nameCell.appendChild(label);
 
+        // Delete Button Cell
+        const deleteCell = document.createElement("td");
+        deleteCell.className = "text-end align-middle";
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn btn-sm btn-outline-danger";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.title = "Delete Corpus";
+        deleteBtn.onclick = () => deleteCorpus(name);
+        deleteCell.appendChild(deleteBtn);
+
+        // Append all cells to row
         row.appendChild(checkboxCell);
         row.appendChild(nameCell);
+        row.appendChild(deleteCell);
         tbody.appendChild(row);
       });
+
+      // ✅ Enable Train button only if at least one checkbox is selected
+      const trainBtn = document.getElementById("trainBtn");
+
+      function updateTrainButtonState() {
+        const anyChecked = document.querySelectorAll('input[name="corpusName"]:checked').length > 0;
+        trainBtn.disabled = !anyChecked;
+      }
+
+      // Add listener to all checkboxes
+      document.querySelectorAll('input[name="corpusName"]').forEach(cb => {
+        cb.addEventListener("change", updateTrainButtonState);
+      });
+
+      // Initial check
+      updateTrainButtonState();
     } else {
-      tbody.innerHTML = `<tr><td colspan="2"><em>No corpora found</em></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3"><em>No corpora found</em></td></tr>`;
     }
   } catch (error) {
     console.error("Error loading corpora:", error);
-    tbody.innerHTML = `<tr><td colspan="2"><em>Error loading corpora</em></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3"><em>Error loading corpora</em></td></tr>`;
+  }
+}
+
+
+
+
+async function deleteCorpus(name) {
+  if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+
+  try {
+    const res = await fetch(`/delete-corpus/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ corpus_name: name })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Server responded with error:", data);
+      alert(`Error: ${data.message}`);
+      return;
+    }
+
+    alert(data.message);
+    loadCorpusCheckboxTable(); // reload the table after deletion
+  } catch (err) {
+    console.error("Fetch failed:", err);
+    alert("Failed to delete the corpus.");
   }
 }
 
