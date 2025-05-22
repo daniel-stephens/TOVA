@@ -60,6 +60,15 @@ main {
     cursor: pointer;
   }
 
+  #docDetailModal {
+  z-index: 1065;
+}
+.modal-backdrop + .modal-backdrop {
+  z-index: 1060;
+}
+
+  
+
   </style>
 </head>
 <body>
@@ -67,12 +76,23 @@ main {
   <nav class="navbar navbar-expand-lg bg-white shadow-sm">
     <div class="container-fluid px-4">
       <a class="navbar-brand fw-bold" href="#">TOVA</a>
-      <div>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modelInfoModal">ℹ️ Model Info</button>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inferenceModal">➕ Run Inference</button>
+  
+      <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modelInfoModal">
+           Model Info
+        </button>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inferenceModal">
+           Run Inference
+        </button>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#topicModelGuideModal">
+             Glossary
+        </button>
       </div>
     </div>
   </nav>
+
+  <div hidden id="model_id">{{model_id}}</div>
+  
 
   <!-- Full Workspace -->
   <main class="flex-grow-1 px-4 py-3">
@@ -96,8 +116,8 @@ main {
             <!-- Scrollable container -->
             <div class="table-scroll-wrapper flex-grow-1 overflow-auto">
               <table class="table table-sm table-hover align-middle mb-0" id="themeStatsTable">
-                <thead class="table-light sticky-top">
-                  <tr>
+                <thead class="table-light sticky-top ">
+                  <tr class="small">
                     <th>Topic</th>
                     <th>Purity Score</th>
                     <th>Coherence</th>
@@ -141,7 +161,7 @@ main {
           
             <!-- Scrollable container for the table only -->
             <div class="flex-grow-1" style="min-height: 0; max-height: 50%;">
-              <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+              <table class="table table-sm table-hover mb-0" style="font-size: 0.8rem;">
                 <thead id="docTableHead" class="sticky-top bg-white"></thead>
                 <tbody id="docTableBody"></tbody>
               </table>
@@ -183,21 +203,92 @@ main {
   </div>
 
   <div class="modal fade" id="inferenceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Run Inference</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
+  
         <div class="modal-body">
-          <label for="inputText" class="form-label">Paste unstructured text</label>
-          <textarea class="form-control" id="inputText" rows="6"></textarea>
+          <!-- Toggle Buttons -->
+          <div class="mb-3 d-flex justify-content-end">
+            <div class="btn-group" role="group" aria-label="Input Type">
+              <button type="button" class="btn btn-outline-primary active" id="toggleTextInput">Text Input</button>
+              <button type="button" class="btn btn-outline-primary" id="toggleFileInput">Upload File</button>
+            </div>
+          </div>
+  
+  
+        <!-- Inference Results -->
+        <div  class="mt-6">
+            <h6 class="fw-bold mb-3">🧠 Inference Summary</h6>
+            <div id="textInputGroup" class="row">
+            <!-- Left Column: Input Text Display -->
+            <div id="textAreaSpace" class="col-md-12">
+                <strong>📄 Enter or Paste Text:</strong>
+                <div class="mb-3" id="textInputGroup">
+                  <textarea 
+                    id="inputText" 
+                    class="form-control rounded-3 shadow-sm p-3" 
+                    rows="20" 
+                    placeholder="Start typing or paste your unstructured text here..."></textarea>
+                </div>
+              </div>
+              
+        
+            <!-- Right Column: Theme, Rationale, Chart -->
+            <div id="inferredResults" class="col-md-5" style="display: none;">
+                <div class="mb-3 mt-1 d-flex align-items-center">
+                <strong>🏷️ Top Theme:</strong>
+                <p id="inferredTheme" class="fw-semibold text-primary mb-0">–</p>
+                </div>
+        
+                <div class="mb-3">
+                <strong>💡 Rationale:</strong>
+                <p id="inferredRationale" class="fst-italic small text-muted mb-0" style="white-space: pre-wrap;">–</p>
+                </div>
+        
+                <div class="mt-4">
+                <strong>📊 Top 5 Theme Probabilities:</strong>
+                <div style="height: 250px;">
+                    <canvas id="inferredThemeChart"></canvas>
+                </div>
+                </div>
+            </div>
+            </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" id="runInferenceBtn">Infer Topic</button>
+        
+  
+  
+          <!-- File Input Section -->
+          <div id="fileInputGroup" style="display: none;">
+            <div class="mb-3">
+              <label for="textFile" class="form-label">Upload File</label>
+              <input class="form-control" type="file" id="files" accept=".csv,.json,.jsonl,.xls,.xlsx,.txt" />
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <label class="form-label">Text Column</label>
+                <select id="textColumn" class="form-select mt-1">
+                  <option disabled selected>Select text column...</option>
+                </select>
+              </div>
+                    <div class="col-md-6">
+                        <label class="form-label">ID Column</label>
+                        <select id="idColumn" class="form-select mt-1">
+                        <option disabled selected>Select id column...</option>
+                        </select>
+                    </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button class="btn btn-primary" id="inferBtn">Infer</button>
+                </div>
+            </div>
+            </div>
         </div>
-      </div>
-    </div>
   </div>
 
   <div class="modal fade" id="docDetailModal" tabindex="-1" aria-hidden="true">
@@ -209,31 +300,43 @@ main {
         </div>
   
         <div class="modal-body">
-          <div class="row">
-            <!-- Full Text on the left -->
-            <div class="col-md-7">
-              <h6 class="mb-2 text-muted">📄 Full Text</h6>
-              <div class="border rounded p-2" style="max-height: 400px; overflow-y: auto;">
-                <p id="modalFullText" class="mb-0 small" style="white-space: pre-wrap;"></p>
+            <h6 class="fw-bold mb-3">🧠 Inference Summary</h6>
+            <div class="row">
+              <!-- Left Column: Full Text -->
+              <div class="col-md-6">
+                <strong>📄 Full Text:</strong>
+                <div class="border rounded p-2 bg-light-subtle" style="max-height: 500px; overflow-y: auto;">
+                  <p id="modalFullText" class="mb-0 small" style="white-space: pre-wrap;"></p>
+                </div>
               </div>
-            </div>
-  
-            <!-- Theme + Rationale on the right -->
-            <div class="col-md-5">
-              <div class="mb-3">
-                <h6 class="mb-1 text-muted">🏷️ Theme</h6>
-                <p id="modalTheme" class="fw-semibold">–</p>
-              </div>
-              <br>
-              <div>
-                <h6 class="mb-1 text-muted">💡 Rationale</h6>
-                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
-                  <p id="modalRationale" class="mb-0 small text-muted" style="white-space: pre-wrap;">–</p>
+          
+              <!-- Right Column: Theme, Rationale, Chart -->
+              <div  class="col-md-6">
+                <!-- Top Theme -->
+                <div class="mb-3 mt-1 d-flex align-items-center">
+                  <strong>🏷️ Top Theme:</strong>
+                  <p id="modalTheme" class="fw-semibold text-primary mb-0">–</p>
+                </div>
+          
+                <!-- Rationale -->
+                <div class="mb-3">
+                  <strong>💡 Rationale:</strong>
+                  <p id="modalRationale" class="fst-italic small text-muted mb-0" style="white-space: pre-wrap;"></p>
+                </div>
+        
+                <hr>
+                <!-- Chart -->
+                <div class="mt-4">
+                  <strong>📊 Top 5 Theme Probabilities:</strong>
+                  <div style="height: 250px;">
+                    <canvas id="docInferenceChart"></canvas>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+          
+          
   
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -241,6 +344,133 @@ main {
       </div>
     </div>
   </div>
+
+<div class="modal-content" id="themeModalContent">
+  <div class="modal fade" id="themeDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold" id="selectedThemeLabel">Theme Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+  
+        <div class="modal-body">
+          <div class="row g-3">
+            <!-- Column 1: Summary, Keywords, Matches, Similar Themes, Trend -->
+            <div class="col-lg-6">
+              <div class="panel d-flex flex-column p-3 bg-white border rounded">
+                <p><strong>Summary:</strong></p>
+                <p id="selectedThemeSummary" class="small text-muted fst-italic">–</p>
+                <p><strong>Top Keywords:</strong></p>
+                <div id="selectedThemeKeywords" class="d-flex flex-wrap gap-1 small mb-3"></div>
+                <div class="mt-3 small">
+                    <h6 class="fw-semibold">Theme Diagnostics</h6>
+                    <div id="themeDiagnosticsGrid" class="row row-cols-2 g-2">
+                      <!-- JS will inject diagnostics here -->
+                    </div>
+                </div>
+                  
+                  
+                <p class="mt-4"><strong>Similar Themes:</strong></p>
+                <ul id="selectedThemeNeighbors" class="list-unstyled small mb-3"></ul>
+                <p class="mt-3"><strong>Trend Over Time:</strong></p>
+                <canvas id="selectedThemeTrend" style="height: 100px;"></canvas>
+              </div>
+            </div>
+  
+            <!-- Column 3: Document Table -->
+            <div class="col-lg-6 h-100 d-flex flex-column">
+                <div class="panel d-flex flex-column p-3 bg-white border rounded small h-100">
+                  <h6 class="fw-bold">Documents</h6>
+                  <p class="small text-muted mb-2">Click on text to view full text information</p>
+                  <input type="text" id="filteredSearchInput" class="form-control form-control-sm mb-2" placeholder="Search filtered documents..." />
+              
+                  <!-- This grows to fill remaining space -->
+                  <div class="flex-grow-1 overflow-auto">
+                    <table class="table table-sm table-hover mb-0" style="font-size: 0.75rem;">
+                      <thead id="filteredTableHead" class="sticky-top bg-white"></thead>
+                      <tbody id="filteredTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              
+          </div>
+        </div>
+  
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="topicModelGuideModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title fw-bold">🧠 Topic Modeling Glossary</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+  
+        <div class="modal-body small">
+          <p class="text-muted fst-italic">
+            This glossary explains the terms used in the Topic Modeling Dashboard to help you understand how themes are generated and evaluated.
+          </p>
+  
+          <dl class="row">
+            <dt class="col-sm-4 fw-semibold">Topic / Theme</dt>
+            <dd class="col-sm-8">A group of keywords that frequently co-occur across documents, forming a coherent semantic idea.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Top Keywords</dt>
+            <dd class="col-sm-8">The most representative words of a theme, used to describe its content.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Prevalence</dt>
+            <dd class="col-sm-8">The percentage of documents that are primarily associated with a particular theme.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Coherence</dt>
+            <dd class="col-sm-8">A measure of how semantically consistent the top keywords of a theme are. Higher is better.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Keyword Uniqueness</dt>
+            <dd class="col-sm-8">Indicates how exclusive a theme’s keywords are compared to those in other themes.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Theme Summary</dt>
+            <dd class="col-sm-8">A brief, human-readable description of what the theme represents.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Theme Diagnostics</dt>
+            <dd class="col-sm-8">Includes metrics like coherence, prevalence, and purity used to assess the quality of the theme.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Purity Score</dt>
+            <dd class="col-sm-8">Represents how cleanly documents within a theme belong to it, without overlapping heavily with others.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Entropy (Balance)</dt>
+            <dd class="col-sm-8">Shows how evenly documents are distributed across all topics. High entropy means better balance.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Document Match</dt>
+            <dd class="col-sm-8">The number of documents whose content is most aligned with a particular theme.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Trend Over Time</dt>
+            <dd class="col-sm-8">A line graph showing how often a theme appears across time (e.g. monthly or yearly).</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Top Representative Document</dt>
+            <dd class="col-sm-8">A document that best reflects the core idea of a theme based on keyword and score alignment.</dd>
+  
+            <dt class="col-sm-4 fw-semibold">Similarity</dt>
+            <dd class="col-sm-8">Indicates how similar one theme is to others based on shared keywords or document distribution.</dd>
+          </dl>
+        </div>
+  
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close Glossary</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  
+
+  
   
   
 
@@ -249,5 +479,6 @@ main {
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/infer.js"></script>
 </body>
 </html>

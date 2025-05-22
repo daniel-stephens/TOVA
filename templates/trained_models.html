@@ -106,9 +106,10 @@
                   </div>
               
                   <div class="mt-3 text-end">
-                    <a href="{{ url_for('inference_page', model_id=model.name) }}" class="btn btn-sm btn-primary">
-                      Use Model
-                    </a>
+                    <form action="{{ url_for('dashboard') }}" method="POST" class="text-end mt-3">
+                      <input type="hidden" name="model_id" value="{{ model_id }}">
+                      <button type="submit" class="btn btn-sm btn-primary">Use Model</button>
+                    </form>
                   </div>
                 </div>
               </div>
