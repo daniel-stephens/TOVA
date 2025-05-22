@@ -370,6 +370,253 @@ def delete_model():
 def dashboard():
     return render_template("dashboard.html")
 
+
+@server.route("/infer-text", methods=["POST"])
+def infer_text():
+    data = request.get_json()
+    text = data.get("text", "")
+
+    # Run inference (dummy result for now)
+    return jsonify({
+        "theme": "Theme 2 – Autonomous Vehicles",
+        "rationale": "Mentions self-driving cars and policy impacts.",
+        "top_themes": [
+            {"label": "Theme 2", "score": 0.41},
+            {"label": "Theme 5", "score": 0.28},
+            {"label": "Theme 3", "score": 0.15},
+            {"label": "Theme 1", "score": 0.10},
+            {"label": "Theme 7", "score": 0.06}
+        ]
+    })
+
+
+
+@server.route("/themeSummary")
+def themeSummary():
+    model_id = request.get("model_id")
+    return render_template("dashboard2.html", {"model_id": model_id})
+
+
+@server.route('/api/theme/<int:theme_id>')
+def get_theme_details(theme_id):
+    # Example: Replace with real DB/model lookup
+    theme_data = {
+        "id": theme_id,
+        "label": "Online Privacy & Data Protection",
+        "prevalence": 12.3,
+        "coherence": 0.61,
+        "uniqueness": 0.82,
+        "keywords": [
+            "privacy", "data", "tracking", "cookies", "regulation", "consent",
+            "encryption", "gdpr", "compliance", "surveillance", "user rights",
+            "authentication", "cybersecurity", "anonymity", "retention",
+            "third-party", "personal information", "data breach", "opt-out", "policy"
+        ],
+        "summary": "This theme captures public concern around personal data collection, user tracking, and digital surveillance. It highlights policy frameworks such as GDPR and the role of consent in data sharing.",
+        "top_doc": "As users navigate modern websites, they’re increasingly prompted to accept cookies...",
+        "similar_themes": [
+            {"id": 5, "label": "Cybersecurity Incidents", "similarity": 0.72},
+            {"id": 8, "label": "Legal Compliance", "similarity": 0.68},
+            {"id": 1, "label": "Technology Ethics", "similarity": 0.63}
+        ],
+        "trend": [10, 12, 18, 25, 21, 30],  # for line chart
+        "theme_matches": 20,
+        
+        # 👇 Add the list of matched documents
+        "documents": [
+        {
+            "id": "D001",
+            "text": "Websites increasingly prompt users to accept cookies for tracking purposes.",
+            "rationale": "Mentions user tracking and consent clearly."
+        },
+        {
+            "id": "D002",
+            "text": "GDPR has shifted the landscape of data compliance across the EU.",
+            "rationale": "Focuses on GDPR and compliance issues."
+        },
+        {
+            "id": "D003",
+            "text": "Privacy concerns rise as third-party trackers collect behavioral data.",
+            "rationale": "Highlights surveillance and third-party data practices."
+        },
+        {
+            "id": "D004",
+            "text": "Users now demand more control over personal data shared online.",
+            "rationale": "Captures public concern over privacy rights."
+        },
+        {
+            "id": "D005",
+            "text": "Many apps collect location data even when not in use.",
+            "rationale": "Illustrates passive data collection without consent."
+        },
+        {
+            "id": "D006",
+            "text": "Data breaches expose millions of users’ personal records each year.",
+            "rationale": "Addresses the consequences of poor data protection."
+        },
+        {
+            "id": "D007",
+            "text": "New privacy regulations require companies to delete data on request.",
+            "rationale": "Relates to user rights under GDPR or CCPA."
+        },
+        {
+            "id": "D008",
+            "text": "Anonymization techniques are often insufficient against re-identification.",
+            "rationale": "Questions the effectiveness of anonymization."
+        },
+        {
+            "id": "D009",
+            "text": "Encrypted messaging apps gain popularity for their promise of privacy.",
+            "rationale": "Links consumer behavior to privacy-enhancing tech."
+        },
+        {
+            "id": "D010",
+            "text": "Browser extensions can secretly collect and sell browsing history.",
+            "rationale": "Examples of unauthorized third-party tracking."
+        },
+        {
+            "id": "D011",
+            "text": "Opt-out forms are often hard to find or intentionally confusing.",
+            "rationale": "Shows poor consent practices and dark patterns."
+        },
+        {
+            "id": "D012",
+            "text": "Employers using surveillance tools to monitor remote workers sparks debate.",
+            "rationale": "Expands privacy discussion to workplace tracking."
+        },
+        {
+            "id": "D013",
+            "text": "Children’s apps found to violate privacy by collecting excessive data.",
+            "rationale": "Raises concern for vulnerable users and COPPA violations."
+        },
+        {
+            "id": "D014",
+            "text": "Consent fatigue results in users accepting all terms without reading.",
+            "rationale": "Examines behavioral impacts of constant privacy prompts."
+        },
+        {
+            "id": "D015",
+            "text": "AI algorithms sometimes rely on sensitive personal data for targeting.",
+            "rationale": "Touches on ethical concerns with data-driven AI."
+        },
+        {
+            "id": "D016",
+            "text": "Privacy policies are often too long and complex to understand.",
+            "rationale": "Highlights accessibility issues in data transparency."
+        },
+        {
+            "id": "D017",
+            "text": "Some VPN services log user activity despite advertising anonymity.",
+            "rationale": "Challenges trust in privacy tools."
+        },
+        {
+            "id": "D018",
+            "text": "Companies face legal challenges for failing to disclose tracking cookies.",
+            "rationale": "Legal implications of non-transparent data collection."
+        },
+        {
+            "id": "D019",
+            "text": "The right to be forgotten enables users to request erasure of personal data.",
+            "rationale": "Reflects emerging privacy laws and digital rights."
+        },
+        {
+            "id": "D020",
+            "text": "Cross-device tracking links user behavior across phones, tablets, and laptops.",
+            "rationale": "Demonstrates pervasive tracking and data linkage."
+        }
+        ]
+
+    }
+
+    return jsonify(theme_data)
+
+import random
+@server.route("/api/themes", methods=["GET"])
+def get_themes():
+    theme_labels = [
+        "Privacy & Data", "AI in Health", "Climate Change", "Cybersecurity",
+        "Urban Mobility", "Digital Education", "Social Media Impact",
+        "Renewable Energy", "Smart Cities", "Mental Health & Tech"
+    ]
+    
+    themes = []
+    for i in range(10):
+        themes.append({
+            "id": i + 1,
+            "label": theme_labels[i % len(theme_labels)],
+            "document_count": random.randint(20, 150)
+        })
+    # ✅ Always sort by document_count descending
+    themes = sorted(themes, key=lambda t: t["document_count"], reverse=True)
+
+    return jsonify(themes)
+
+@server.route('/api/documents')
+def get_documents():
+    with open("static/data/documents.json", "r", encoding="utf-8") as file:
+        documents = json.load(file)
+
+    # print(documents)
+
+    return jsonify(documents)
+
+@server.route('/api/theme-metrics')
+def get_theme_metrics():
+    data = {
+        "metrics": [
+            {
+                "label": "Topic Assignment Confidence",
+                "value": 0.87,
+                "note": "(range: 0 to 1)",
+                "id": "avgConfidence"
+            },
+            {
+                "label": "Keyword Overlap (Avg)",
+                "value": 2.3,
+                "id": "avgOverlap"
+            },
+            {
+                "label": "Topic Balance (Entropy)",
+                "value": 0.91,
+                "note": "Higher entropy = more evenly distributed topics",
+                "id": "entropyScore"
+            },
+            {
+                "label": "Most Unique Theme",
+                "value": "Privacy & Data",
+                "id": "mostUniqueTopic"
+            },
+            {
+                "label": "Least Confident Theme",
+                "value": "Digital Identity (avg 0.61)",
+                "id": "leastConfTopic"
+            },
+            {
+                "label": "Top Emerging Theme",
+                "value": "Remote Work & Society",
+                "id": "emergingTheme"
+            }
+        ]
+    }
+    return jsonify(data)
+
+
+
+
+
+@server.route("/api/diagnostics")
+def get_diagnostics():
+    with open("static/data/diag.json", "r", encoding="utf-8") as file:
+        diag = json.load(file)
+    print(diag)
+
+    return jsonify(diag)
+
+
+
+
+
+
 ####################################################################################
 
 # 5. Inference Page
@@ -445,7 +692,6 @@ def infer_topic():
 
         topic_info = requests.post(topicinfourl, json=topicJson).json()
 
-        print(topic_info)
 
         inference_result = response.json()
                 # Step 3: Format the top 5 predictions
@@ -576,8 +822,6 @@ def inference_page(model_id):
 ######################################################################################
 
 
-
-
 # This function displays the available models
 @server.route('/get_models', methods=['GET'])
 def list_models():
@@ -594,10 +838,6 @@ def list_models():
     print(models)
 
     return jsonify(models)
-
-
-
-
 
 
 
