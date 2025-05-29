@@ -10,6 +10,10 @@ from zoneinfo import ZoneInfo
  
 
 server = Flask(__name__)
+server.secret_key = 'your-secret-key'
+theme_cache = {}
+
+
 
 # Open and load the file
 with open("static/config/modelRegistry.json", "r") as f:
@@ -169,6 +173,7 @@ def loadDB_route():
 # 2. Select Model Page
 @server.route('/model')
 def loadModel():
+    
     return render_template('loadModel.html')
 
 
@@ -368,7 +373,34 @@ def delete_model():
 # 4. Visualization and Inferences
 @server.route("/dashboard", methods=["POST", "GET"])
 def dashboard():
+    if request.method == "POST":
+        model_id = request.form.get("model_id")
+        model_name = request.form.get("model_name")  # Make sure this matches the input name
+
+        print("Model ID:", model_id)
+        print("Model Name:", model_name)
+
+        # Optionally store in session
+        session["model_id"] = model_id
+        session["model_name"] = model_name
+        theme_cache[model_name] = model_name
+
+        call_gateway("127.0.0.1:8000/gateway", payload={"model_id": model_id, "model_name":model_name})
+        print("gateway called")
     return render_template("dashboard.html")
+
+
+
+@server.route("/gateway", methods=["POST", "GET"])
+def gateway():
+    modelName = session.get("modelName")
+    themeData = fetch_and_process_model_info(f"models/{modelName}")
+    themeData[modelName]["themeData"] = themeData
+
+
+    return jsonify({"response": "yes we can"})
+
+
 
 
 @server.route("/infer-text", methods=["POST"])
@@ -389,12 +421,6 @@ def infer_text():
         ]
     })
 
-
-
-@server.route("/themeSummary")
-def themeSummary():
-    model_id = request.get("model_id")
-    return render_template("dashboard2.html", {"model_id": model_id})
 
 
 @server.route('/api/theme/<int:theme_id>')
@@ -533,22 +559,8 @@ def get_theme_details(theme_id):
 import random
 @server.route("/api/themes", methods=["GET"])
 def get_themes():
-    theme_labels = [
-        "Privacy & Data", "AI in Health", "Climate Change", "Cybersecurity",
-        "Urban Mobility", "Digital Education", "Social Media Impact",
-        "Renewable Energy", "Smart Cities", "Mental Health & Tech"
-    ]
-    
-    themes = []
-    for i in range(10):
-        themes.append({
-            "id": i + 1,
-            "label": theme_labels[i % len(theme_labels)],
-            "document_count": random.randint(20, 150)
-        })
-    # ✅ Always sort by document_count descending
-    themes = sorted(themes, key=lambda t: t["document_count"], reverse=True)
-
+    themes = session.get("themeData")
+    # print(themes)
     return jsonify(themes)
 
 @server.route('/api/documents')
@@ -608,7 +620,7 @@ def get_theme_metrics():
 def get_diagnostics():
     with open("static/data/diag.json", "r", encoding="utf-8") as file:
         diag = json.load(file)
-    print(diag)
+    # print(diag)
 
     return jsonify(diag)
 
