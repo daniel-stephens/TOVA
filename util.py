@@ -192,3 +192,72 @@ def get_corpus_data(corpus_name, coll):
     ids = results.get("ids", [])  # ✅ ids are automatically returned even without include
 
     return documents, metadatas, ids
+
+
+import requests
+
+def fetch_and_process_model_info(model_path: str, endpoint: str = "http://127.0.0.1:8989/queries/model-info"):
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "config_path": "static/config/config.yaml",
+        "model_path": model_path
+    }
+
+    response = requests.post(endpoint, headers=headers, json=payload)
+    print("Status Code:", response.status_code)
+    
+    if response.status_code != 200:
+        raise Exception(f"Request failed with status code {response.status_code}: {response.text}")
+    
+    allInfo = response.json()
+
+    themes = []
+    for i, (key, val) in enumerate(allInfo.items(), start=1):
+        doc_count = len(val.get("top_docs_per_topic", {}))
+        themes.append({
+            "id": i,
+            "label": val.get("tpc_labels", f"Topic {i}"),
+            "document_count": doc_count
+        })
+
+    # Sort descending by document count
+    themes = sorted(themes, key=lambda t: t["document_count"], reverse=True)
+    return themes
+
+import requests
+
+def call_gateway(url, method="POST", payload=None, headers=None):
+    """
+    Call a gateway route with GET or POST.
+
+    Args:
+        url (str): The gateway endpoint URL.
+        method (str): HTTP method ("GET" or "POST").
+        params (dict, optional): Query parameters for GET.
+        payload (dict, optional): JSON body for POST.
+        headers (dict, optional): Headers to include.
+
+    Returns:
+        dict: JSON response if successful.
+        str: Error message if request fails.
+    """
+    try:
+        method = method.upper()
+        if method == "GET":
+            response = requests.get(url, params=["GET, POST"], headers=headers)
+        elif method == "POST":
+            headers = headers or {"Content-Type": "application/json"}
+            response = requests.post(url, json=payload, headers=headers)
+        else:
+            return f"Unsupported method: {method}"
+
+        if response.ok:
+            return response.json()
+        else:
+            return f"Error {response.status_code}: {response.text}"
+    except Exception as e:
+        return f"Exception occurred: {str(e)}"
+
