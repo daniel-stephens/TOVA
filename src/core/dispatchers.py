@@ -144,18 +144,17 @@ def get_model_info_dispatch(
     topic_info, _, _, irbo, td, similar, thetas_rpr = tmmodel.get_all_model_info(nsimilar=n_similar_tpcs, thr=similar_tpc_thr, n_most=n_top_docs)
     
     topic_info = topic_info.set_index("ID").to_dict(orient="index")
-    
     for tpc in topic_info.keys():
-        most_similars = []
-        for key in similar.keys():
+        for key in ["Coocurring"]: #similar.keys():#
+            most_similars = []
             for most_similar in similar[key][tpc]:
                 most_similars.append({
                     "ID": most_similar[0],
                     "Label": topic_info[most_similar[0]]["Label"],
                     "Similarity": most_similar[1]
                 })
-        topic_info[tpc][f"Similar Topics ({key})"] = most_similars
-    
+            topic_info[tpc][f"Similar Topics ({key})"] = most_similars
+
     topic_info = {f"t{str(k)}": v for k, v in topic_info.items()}
     
     model_info = {
