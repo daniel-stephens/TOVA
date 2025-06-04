@@ -56,12 +56,14 @@ class TMmodel(object):
     _ndocs_active = None
     _tpc_descriptions = None
     _tpc_labels = None
+    _tpc_summaries = None
     _vocab_w2id = None
     _vocab_id2w = None
     _vocab = None
     _size_vocab = None
     _s3 = None
     _most_representative_docs = None
+    _tpc_clusters = None
 
     def __init__(
         self, 
@@ -69,8 +71,10 @@ class TMmodel(object):
         df_corpus_train: pd.DataFrame=None,
         config_path: Path=None,
         do_labeller: bool = True, 
-        labeller_model_type: str = "qwen:32b",
+        do_summarizer: bool = False,
+        llm_model_type: str = "qwen:32b",
         labeller_prompt: str = "src/prompter/prompts/labelling_dft.txt",
+        summarizer_prompt: str = "src/prompter/prompts/summarization_dft.txt",
         logger: logging.Logger = None,
         ):
 
@@ -110,8 +114,10 @@ class TMmodel(object):
         self._df_corpus_train = df_corpus_train
         self._config_path = config_path
         self._do_labeller = do_labeller
-        self._labeller_model_type = labeller_model_type
+        self._do_summarizer = do_summarizer
+        self.llm_model_type = llm_model_type
         self._labeller_prompt = labeller_prompt
+        self._summarizer_prompt = summarizer_prompt
 
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
@@ -172,9 +178,6 @@ class TMmodel(object):
         self._load_vocab_dicts()
         #self._calculate_s3()
         
-        # get most representative documents
-        self.get_most_representative_per_tpc(self._thetas, topn=3)     
-        
         if self._do_labeller:
             try:
                 self._tpc_labels = [el[1] for el in self.get_tpc_labels()]
@@ -184,7 +187,23 @@ class TMmodel(object):
                 self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
         else:
             self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
-
+            
+        
+        if self._do_summarizer:
+            try:
+                self._tpc_summaries = [el[1] for el in self.get_tpc_summaries()]
+            except Exception as e:
+                self._logger.warning(
+                    f"Error in summarizer: {e}")
+                self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
+            
+        # get most representative documents and topic clusters
+        self.get_most_representative_per_tpc(self._thetas)    
+        self.get_topic_clusters()     
+        
+        # get thetas representation    
+        self.get_thetas_representation()
+        
         # calculate the rank-biased overlap and topic diversity
         try:
             self.calculate_rbo()
@@ -226,10 +245,18 @@ class TMmodel(object):
         with self._TMfolder.joinpath('tpc_descriptions.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join(self._tpc_descriptions))
             
-        self.save_most_representative_docs()
+        # Save most representative docs and clusters
+        self.save_topic_documents(mode="most_representative")
+        self.save_topic_documents(mode="clusters")
+        
+        # save thetas representation
+        self.save_thetas_representation()
         
         with self._TMfolder.joinpath('tpc_labels.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join(self._tpc_labels))
+            
+        with self._TMfolder.joinpath('tpc_summaries.txt').open('w', encoding='utf8') as fout:
+            fout.write('\n'.join(self._tpc_summaries))
 
         # Generate also pyLDAvisualization
         # pyLDAvis currently raises some Deprecation warnings
@@ -428,7 +455,7 @@ class TMmodel(object):
         except:
             self._logger.warning(
                 "Rank-biased overlap could not be saved to file")
-        return rbo
+        return irbo
 
     def calculate_topic_diversity(
         self,
@@ -681,12 +708,54 @@ class TMmodel(object):
         t_end = time.perf_counter()
         t_total = (t_end - t_start)/60
         self._logger.info(f"Total computation time: {t_total}")
+        
+    def get_thetas_representation(self):
+        if self._thetas is None:
+            self._load_thetas()
+        
+        all_docs = {}
+        thetas_array = self._thetas.toarray()
+        
+        for doc_id, topic_distribution in zip(self._df_corpus_train.id, thetas_array):
+            # Get non-zero topic probabilities
+            non_zero_topics = [(topic_id, float(prob)) for topic_id, prob in enumerate(topic_distribution) if prob > 0]
+            # Sort topics by probability in descending order
+            sorted_topics = sorted(non_zero_topics, key=lambda x: x[1], reverse=True)
+            all_docs[doc_id] = sorted_topics
+        
+        return all_docs
+    
+    def save_thetas_representation(self):
+        """Saves the topic distribution of each document in a JSON file."""
+        all_docs = self.get_thetas_representation()
+        
+        output_path = self._TMfolder.joinpath("thetas_representation.json")
+        with output_path.open("w", encoding="utf-8") as fout:
+            json.dump(all_docs, fout, indent=4)
+        
+        self._logger.info(f"Thetas representation saved to {output_path}")
+        
+    def load_thetas_representation(self):
+        """Loads the topic distribution of each document from a JSON file."""
+        input_path = self._TMfolder.joinpath("thetas_representation.json")
+        
+        if not input_path.is_file():
+            self._logger.error(f"Thetas representation file not found: {input_path}")
+            return
+        
+        with input_path.open("r", encoding="utf-8") as fin:
+            all_docs = json.load(fin)
+        
+        return all_docs
 
-    def get_most_representative_per_tpc(self, mat, topn=3):
+    def get_most_representative_per_tpc(self, mat, topn=None, get_text=False):
         # Find the most representative document for each topic based on a matrix mat
         top_docs_per_topic = []
         
         aux = mat.toarray()
+        
+        if topn is None:
+            topn = len(aux)
         
         for doc_distr in aux.T:
             sorted_docs_indices = np.argsort(doc_distr)[::-1]
@@ -694,12 +763,21 @@ class TMmodel(object):
             top_docs_per_topic.append(top)
         
         most_representative_docs = []
-        for topic_docs in top_docs_per_topic:
-            reps = [
-                (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].raw_text)
-                for doc in topic_docs
-            ]
-            most_representative_docs.append(reps)
+
+        if get_text:
+            for topic_id, topic_docs in enumerate(top_docs_per_topic):
+                reps = [
+                    (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].raw_text, aux[doc, topic_id])
+                    for doc in topic_docs
+                ]
+                most_representative_docs.append(reps)
+        else:
+            for topic_id, topic_docs in enumerate(top_docs_per_topic):
+                reps = [
+                    (self._df_corpus_train.iloc[doc].id, "", aux[doc, topic_id])
+                    for doc in topic_docs
+                ]
+                most_representative_docs.append(reps)
         
         self._logger.info("Most representative documents for each topic:")
         for i, topic_docs in enumerate(most_representative_docs):
@@ -707,89 +785,208 @@ class TMmodel(object):
             self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
 
         self._most_representative_docs = most_representative_docs
-        
-    def save_most_representative_docs(self):
-        """Saves the most representative documents for each topic in JSONL format."""
-        if self._most_representative_docs is None:
-            self._logger.warning("Most representative documents not calculated yet")
-            return
+    
+    def get_topic_clusters(self, get_text: bool = False):
+        """
+        For each document, assign it to the topic with the highest probability.
+        Then, for each topic, return the list of assigned documents with their probabilities.
 
-        output_path = self._TMfolder.joinpath("most_representative_docs.jsonl")
+        Parameters
+        ----------
+        get_text : bool
+            If True, includes the raw text of each document; otherwise, returns empty strings.
+
+        Returns
+        -------
+        clusters : List[List[Tuple[str, str, float]]]
+            A list with one sublist per topic. Each sublist contains tuples of:
+            (doc_id, raw_text (optional), topic_probability)
+        """
+        if self._thetas is None:
+            self._logger.warning("Thetas not loaded. Run `_load_thetas()` first.")
+            return []
+
+        thetas = self._thetas.toarray()
+        n_topics = thetas.shape[1]
+
+        if not hasattr(self, "_df_corpus_train") or len(self._df_corpus_train) != thetas.shape[0]:
+            self._logger.warning("Document corpus not available or misaligned.")
+            return []
+
+        clusters = [[] for _ in range(n_topics)]
+
+        for doc_idx, topic_probs in enumerate(thetas):
+            top_topic = topic_probs.argmax()
+            doc_id = self._df_corpus_train.iloc[doc_idx].id
+            raw_text = self._df_corpus_train.iloc[doc_idx].raw_text if get_text else ""
+            prob = topic_probs[top_topic]
+
+            clusters[top_topic].append((doc_id, raw_text, prob))
+
+        self._logger.info("Documents assigned to topic clusters based on max probability:")
+        for i, topic_docs in enumerate(clusters):
+            ids = [doc[0] for doc in topic_docs]
+            self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
+
+        self._tpc_clusters = clusters
+
+    def save_topic_documents(self, mode: str = "most_representative", output_file: str = None):
+        """
+        Saves topic-related document assignments in JSONL format.
+
+        Parameters
+        ----------
+        mode : str
+            Either 'most_representative' to save top-N documents per topic
+            or 'clusters' to save topic clusters (documents assigned by argmax).
+        output_file : str, optional
+            Override the default file name.
+        """
+        if mode not in {"most_representative", "clusters"}:
+            raise ValueError("Mode must be 'most_representative' or 'clusters'.")
+
+        if mode == "most_representative":
+            if self._most_representative_docs is None:
+                self._logger.warning("Most representative documents not calculated yet.")
+                return
+            data = self._most_representative_docs
+            filename = "most_representative_docs.jsonl"
+        else:
+            data = self._tpc_clusters
+            filename = "topic_clusters.jsonl"
+
+        output_path = Path(output_file) if output_file else self._TMfolder.joinpath(filename)
+
         with output_path.open("w", encoding="utf-8") as fout:
-            for tpc_id, docs in enumerate(self._most_representative_docs):
-                for rank, (doc_id, raw_text) in enumerate(docs):
-                    json_line = {
-                        "topic_id": tpc_id,
-                        "rank": rank + 1,
-                        "doc_id": doc_id,
-                        "text": raw_text
-                    }
-                    fout.write(json.dumps(json_line, ensure_ascii=False) + "\n")
+            for tpc_id, docs in enumerate(data):
+                topic_entry = {
+                    "topic_id": tpc_id,
+                    "docs": [
+                        {
+                            "doc_id": doc_id,
+                            "prob": float(prob)
+                        }
+                        for doc_id, _, prob in docs
+                    ]
+                }
+                fout.write(json.dumps(topic_entry) + "\n")
 
-        self._logger.info(f"Most representative documents saved to {output_path}")
+        self._logger.info(f"{mode.replace('_', ' ').title()} documents saved to {output_path}")
+
             
-    def load_most_representative_docs(self):
-        """Loads the most representative documents for each topic from a JSONL file."""
-        jsonl_path = self._TMfolder.joinpath("most_representative_docs.jsonl")
+    def load_topic_documents(self, mode: str = "most_representative", n_most: int = None, store: bool = True):
+        """
+        Loads topic-related document assignments from a JSONL file.
 
-        if not jsonl_path.is_file():
-            self._logger.warning(f"File not found: {jsonl_path}")
-            return
-
-        topic_docs = defaultdict(list)
-
-        with jsonl_path.open("r", encoding="utf8") as fin:
-            for line in fin:
-                try:
-                    record = json.loads(line)
-                    topic_id = record["topic_id"]
-                    doc_id = record["doc_id"]
-                    text = record["text"]
-                    topic_docs[topic_id].append((doc_id, text))
-                except (json.JSONDecodeError, KeyError) as e:
-                    self._logger.error(f"Skipping malformed line: {e}")
-
-        # Convert defaultdict to list of lists sorted by topic ID
-        max_topic_id = max(topic_docs.keys(), default=-1)
-        self._most_representative_docs = [
-            topic_docs[t] for t in range(max_topic_id + 1)
-        ]
-
-    def get_tpc_labels(self):
-        """Returns the labels of the topics in the model
+        Parameters
+        ----------
+        mode : str
+            Either 'most_representative' or 'clusters'.
+        n_most : int, optional
+            Keep only the top-N documents per topic.
+        store : bool
+            If True, stores result in internal attribute (e.g., self._most_representative_docs).
+            If False, returns the loaded structure.
         
         Returns
         -------
-        tpc_labels: list of tuples
-            Each element is a a term (topic_id, "label for topic topic_id")                    
+        Optional[List[List[Tuple[str, str, float]]]]
+            Only returned if `store=False`.
         """
+        if mode not in {"most_representative", "clusters"}:
+            raise ValueError("Mode must be 'most_representative' or 'clusters'.")
 
-        # Load tpc descriptions
+        filename = "most_representative_docs.jsonl" if mode == "most_representative" else "topic_clusters.jsonl"
+        jsonl_path = self._TMfolder.joinpath(filename)
+
+        if not jsonl_path.is_file():
+            self._logger.warning(f"File not found: {jsonl_path}")
+            return None
+
+        self._logger.info(f"Loading topic document assignments from {jsonl_path}")
+        topic_docs_list = []
+
+        with jsonl_path.open("r", encoding="utf-8") as fin:
+            for line in fin:
+                entry = json.loads(line)
+                docs = sorted(entry.get("docs", []), key=lambda d: d["prob"], reverse=True)
+                keep_n = n_most if n_most is not None else len(docs)
+                topic_docs = [
+                    (doc["doc_id"], None, doc["prob"])
+                    for doc in docs[:keep_n]
+                ]
+                topic_docs_list.append(topic_docs)
+
+        if store:
+            if mode == "most_representative":
+                self._most_representative_docs = topic_docs_list
+            else:
+                self._tpc_clusters = topic_docs_list
+            self._logger.info(f"Loaded {mode.replace('_', ' ')} documents into internal attribute.")
+        else:
+            return topic_docs_list
+
+    def generate_topic_outputs(self, task: str = "label", topn: int = 3):
+        """
+        Generates LLM-based labels or summaries for topics in the model.
+
+        Parameters
+        ----------
+        task : str
+            Either 'label' or 'summary'.
+        topn : int
+            Number of representative documents per topic to use in the prompt.
+
+        Returns
+        -------
+        output : List[Tuple[int, str]]
+            List of (topic_id, label/summary) tuples.
+        """
+        if task not in {"label", "summary"}:
+            raise ValueError(f"Invalid task: {task}. Use 'label' or 'summary'.")
+
         self.load_tpc_descriptions()
-        
-        # Get the most representative documents for each topic
-        self.get_most_representative_per_tpc(self._thetas, topn=3) # TODO: Check whether s3 or thetas should be used
-        
-        prompter =  Prompter(
+        self.get_most_representative_per_tpc(self._thetas, topn=topn, get_text=True)
+
+        prompt_path = self._labeller_prompt if task == "label" else self._summarizer_prompt
+        with open(prompt_path, "r") as file:
+            template_str = file.read()
+
+        prompter = Prompter(
             config_path=self._config_path,
-            model_type=self._labeller_model_type
+            model_type=self.llm_model_type
         )
-        with open(self._labeller_prompt, 'r') as file: TEMPLATE = file.read()
-        
-        labels = []
+
+        outputs = []
         for tpc_id, most_repr in enumerate(self._most_representative_docs):
             docs = "\n- " + "\n- ".join([doc_tuple[1] for doc_tuple in most_repr])
-            template = TEMPLATE.format(keywords=self._tpc_descriptions[tpc_id], docs = docs)
-            label, _ = prompter.prompt(question=template, system_prompt_template_path=None)
-            labels.append(label)    
-        labels_format = [(i, p) for i, p in enumerate(labels)]
-            
-        return labels_format
+            prompt_filled = template_str.format(
+                keywords=self._tpc_descriptions[tpc_id],
+                docs=docs
+            )
+            output_text, _ = prompter.prompt(
+                question=prompt_filled,
+                system_prompt_template_path=None
+            )
+            output_text = output_text.replace("\n", " ")       
+            outputs.append((tpc_id, output_text))
+        return outputs
+    
+    def get_tpc_labels(self, topn=3):
+        return self.generate_topic_outputs(task="label", topn=topn)
+
+    def get_tpc_summaries(self, topn=3):
+        return self.generate_topic_outputs(task="summary", topn=topn)
 
     def load_tpc_labels(self):
         if self._tpc_labels is None:
             with self._TMfolder.joinpath('tpc_labels.txt').open('r', encoding='utf8') as fin:
                 self._tpc_labels = [el.strip() for el in fin.readlines()]
+    
+    def load_tpc_summaries(self):
+        if self._tpc_summaries is None:
+            with self._TMfolder.joinpath('tpc_summaries.txt').open('r', encoding='utf8') as fin:
+                self._tpc_summaries = [el.strip() for el in fin.readlines()]
                 
     def load_tpc_coords(self):
         if self._coords is None:
@@ -937,6 +1134,84 @@ class TMmodel(object):
 
         return similarTopics
 
+    def getSimilarTopicsDicts(self, nsimilar: int = 5, thr: float = 1e-3):
+        """
+        Returns two dictionaries mapping each topic ID to a list of its top-N most similar topics
+        and similarity scores, based on co-occurrence and word distributions.
+
+        Parameters
+        ----------
+        topn : int
+            Number of most similar topics to return per topic.
+        thr : float
+            Threshold for filtering low-importance vocabulary when computing JS similarity.
+
+        Returns
+        -------
+        Dict[str, Dict[int, List[Tuple[int, float]]]]
+            {
+                "Coocurring": {
+                    topic_id: [(topic_id_1, score_1), (topic_id_2, score_2), ...],
+                    ...
+                },
+                "Worddesc": {
+                    topic_id: [(topic_id_1, score_1), ...],
+                    ...
+                }
+            }
+        """
+        from scipy.spatial.distance import jensenshannon
+
+        self._load_thetas()
+        self._load_betas()
+
+        # --- Co-occurrence-based similarity ---
+        med = np.asarray(np.mean(self._thetas, axis=0)).ravel()
+        thetas2 = self._thetas.multiply(self._thetas)
+        med2 = np.asarray(np.mean(thetas2, axis=0)).ravel()
+        stds = np.sqrt(med2 - med ** 2)
+
+        num = self._thetas.T.dot(self._thetas).toarray() / self._thetas.shape[0]
+        num -= med[..., np.newaxis].dot(med[np.newaxis, ...])
+        deno = stds[..., np.newaxis].dot(stds[np.newaxis, ...])
+        corrcoef = num / deno
+
+        coocur_sim = {}
+        for i in range(self._ntopics):
+            sim_row = corrcoef[i].copy()
+            sim_row[i] = -np.inf
+            top_indices = np.argsort(sim_row)[-nsimilar:][::-1]
+            coocur_sim[i] = [(int(j), float(sim_row[j])) for j in top_indices]
+
+        # --- Word-distribution-based similarity (Jensen-Shannon) ---
+        vocab_mask = self._betas.max(axis=0) > thr
+        betas_aux = self._betas[:, vocab_mask]
+
+        worddesc_sim = {}
+
+        if betas_aux.shape[1] == 0:
+            self._logger.warning("No vocab terms passed the threshold for JS computation.")
+            worddesc_sim = {i: [] for i in range(self._ntopics)}
+        else:
+            betas_aux = betas_aux / betas_aux.sum(axis=1, keepdims=True)
+
+            js_mat = np.zeros((self._ntopics, self._ntopics))
+            for k in range(self._ntopics):
+                for kk in range(self._ntopics):
+                    js_mat[k, kk] = jensenshannon(betas_aux[k, :], betas_aux[kk, :])
+            JSsim = 1 - js_mat
+
+            for i in range(self._ntopics):
+                sim_row = JSsim[i].copy()
+                sim_row[i] = -np.inf
+                top_indices = np.argsort(sim_row)[-nsimilar:][::-1]
+                worddesc_sim[i] = [(int(j), float(sim_row[j])) for j in top_indices]
+
+        return {
+            "Coocurring": coocur_sim,
+            "Worddesc": worddesc_sim
+        }
+        
     def fuseTopics(self, tpcs):
         """This is a costly operation, almost everything
         needs to get modified"""
@@ -1074,7 +1349,7 @@ class TMmodel(object):
                 '-- -- Topics coherence recalculation  an error. Operation failed')
             return 0
 
-    def to_dataframe(self):
+    def get_all_model_info(self, nsimilar: int = 5, thr:float=1e-3, n_most:int = 20):
         self._load_alphas()
         self._load_betas()
         self._load_betas_ds()
@@ -1084,21 +1359,51 @@ class TMmodel(object):
         self._load_topic_coherence()
         self.load_tpc_descriptions()
         self.load_tpc_labels()
+        self.load_tpc_summaries()
         self._load_ndocs_active()
         self._load_vocab()
         self._load_vocab_dicts()
-        self.load_most_representative_docs()
-
+        self.load_topic_documents(mode="most_representative", n_most=n_most)
+        self.load_topic_documents(mode="clusters")
+        self.load_tpc_coords()
+        irbo = self.calculate_rbo() # not at the topic level
+        td = self.calculate_topic_diversity() # not at the topic level
+        similar = self.getSimilarTopicsDicts(nsimilar=nsimilar, thr=thr)
+        thetas_rpr = self.load_thetas_representation()
+                
         data = {
-            "betas": [self._betas],
-            "betas_ds": [self._betas_ds],
-            "alphas": [self._alphas],
-            "topic_entropy": [self._topic_entropy],
-            "topic_coherence": [self._topic_coherence],
-            "ndocs_active": [self._ndocs_active],
-            "tpc_descriptions": [self._tpc_descriptions],
-            "tpc_labels": [self._tpc_labels],
-            "top_docs_per_topic": [self._most_representative_docs],
+            #"Betas": [self._betas.tolist()],
+            #"betas_ds": [self._betas_ds],
+            "Size": [self._alphas],
+            "Entropy": [self._topic_entropy],
+            "Coherence (NPMI)": [self._topic_coherence],
+            "# Docs Active": [self._ndocs_active],
+            "Keywords": [self._tpc_descriptions],
+            "Label": [self._tpc_labels],
+            "Summary": [self._tpc_summaries],
+            "Top Documents": [self._most_representative_docs],
+            "Assigned Documents": [self._tpc_clusters],
+            "Coordinates": [self._coords],
         }
         df = pd.DataFrame(data)
-        return df, self._vocab_id2w, self._vocab
+        
+        df = df.apply(pd.Series.explode)
+        
+        # scale alphas to percentage (f"{}:.2%}")
+        df["Size"] = df["Size"].apply(lambda x: f"{x:.2%}")
+        
+        # convert top_docs_per_topic, which is a list of tuples, with the first element being the doc_id and the third being the probability to a nested dict
+
+        df["Top Documents"] = df["Top Documents"].apply(
+            lambda x: {i[0]: float(i[2]) for i in x}
+        )
+        # do the same for the topic_clusters
+        df["Assigned Documents"] = df["Assigned Documents"].apply(
+            lambda x: {i[0]: float(i[2]) for i in x}
+        )
+        
+        # assign topic id
+        df = df.reset_index(drop=True)
+        df["ID"] = df.index
+        
+        return df, self._vocab_id2w, self._vocab, irbo, td, similar, thetas_rpr

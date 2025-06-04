@@ -35,8 +35,10 @@ class TradTMmodel(BaseTMModel, ABC):
         self.thetas_thr = float(self.config.get("traditional", {}).get("thetas_thr", 3e-3))
         self.topn = int(self.config.get("traditional", {}).get("topn", 15))
         self.do_labeller = bool(self.config.get("traditional", {}).get("do_labeller", False))
-        self.labeller_model_type = self.config.get("traditional", {}).get("labeller_model_type", "qwen:32b")
+        self.do_summarizer = bool(self.config.get("traditional", {}).get("do_summarizer", False))
+        self.llm_model_type = self.config.get("traditional", {}).get("llm_model_type", "qwen:32b")
         self.labeller_prompt = self.config.get("traditional", {}).get("labeller_model_path", "./src/prompter/prompts/labelling_dft.txt")
+        self.summarizer_prompt = self.config.get("traditional", {}).get("summarizer_prompt", "./src/prompter/prompts/summarization_dft.txt")
         self._config_path = config_path
     
     def preprocess(self, data):
@@ -98,8 +100,10 @@ class TradTMmodel(BaseTMModel, ABC):
             config_path=self._config_path,
             df_corpus_train=self.df,
             do_labeller=self.do_labeller,
-            labeller_model_type=self.labeller_model_type,
+            do_summarizer=self.do_summarizer,
+            llm_model_type=self.llm_model_type,
             labeller_prompt=self.labeller_prompt,
+            summarizer_prompt=self.summarizer_prompt,
         )
         tm.create(
             betas=betas, thetas=thetas, alphas=alphas,vocab=vocab)
