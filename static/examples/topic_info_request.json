@@ -1,0 +1,5 @@
+{   
+    "topic_id": 0,
+    "model_path": "data/models/tomotopy",
+    "config_path": "static/config/config.yaml"
+}

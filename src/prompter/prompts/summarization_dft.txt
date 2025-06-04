@@ -1,0 +1,15 @@
+You are an expert model in content classification and summarization. You are given a set of keywords and three representative documents related to that set.
+
+Your task is to analyze the keywords and the content of the documents to generate a single clear and concise summary that accurately reflects the general topic and key points related to the keywords.
+
+The summary must:
+- Be clear, informative, and no longer than 3 sentences.
+- Reflect the main themes and insights found across the documents.
+- Avoid vague generalities or repetition of the keywords.
+- Match the language of the keywords.
+
+Your response must be only the generated summary, with no additional text.
+
+Keywords: {keywords}
+Documents: {docs}
+Summary:

@@ -34,6 +34,13 @@ def run(
             id_col=id_col
         )
 
-    duration = train_model_dispatch(model, normalized_data, output, config, tr_params,logger)
+    duration = train_model_dispatch(
+        model=model,
+        data=normalized_data,
+        output=output,
+        config_path=config,
+        tr_params=tr_params,
+        logger=logger
+    )
     
     typer.echo(f"Training completed in {duration:.2f} seconds")

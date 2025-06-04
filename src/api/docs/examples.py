@@ -10,3 +10,5 @@ INFER_REQUEST_EXAMPLE = json.loads((EXAMPLES_DIR / "infer_request.json").read_te
 INFER_FILE_REQUEST_EXAMPLE = json.loads((EXAMPLES_DIR / "infer_file_request.json").read_text(encoding="utf-8"))
 
 MODEL_INFO_REQUEST_EXAMPLE = json.loads((EXAMPLES_DIR / "model_info_request.json").read_text(encoding="utf-8"))
+
+TOPIC_INFO_REQUEST_EXAMPLE = json.loads((EXAMPLES_DIR / "topic_info_request.json").read_text(encoding="utf-8"))

@@ -7,7 +7,7 @@ import pandas as pd # type: ignore
 from typing import Dict, List, Optional, Union
 
 from src.topic_models.tm_model import TMmodel
-from src.utils.common import init_logger
+from src.utils.common import init_logger, load_yaml_config_file
 
 # -------------------- #
 # AUXILIARY FUNCTIONS  #
@@ -133,34 +133,59 @@ def get_model_info_dispatch(
     logger: Optional[logging.Logger] = None
 ) -> Dict:
     
-    tmmodel = TMmodel(Path(model_path).joinpath("TMmodel"), logger=logger, config_path=config_path)
-    df, _, _ = tmmodel.to_dataframe()
-    df = df.apply(pd.Series.explode)
-    # keep only alphas, tpc_labels and tpc_descriptions, top_docs_per_topic
-    df = df[["alphas", "tpc_labels", "tpc_descriptions", "top_docs_per_topic"]]
-    # scale alphas to percentage (f"{}:.2%}")
-    df["alphas"] = df["alphas"].apply(lambda x: f"{x:.2%}")
-    # convert top_docs_per_topic, which is a list of tuples, with the first element being the doc_id and the second being the score to a nested dict
-    df["top_docs_per_topic"] = df["top_docs_per_topic"].apply(
-        lambda x: {f"doc_{i[0]}": i[1] for i in x}
-    )
+    # load configuration
+    config = load_yaml_config_file(config_path, "topic_modeling", logger)
+    n_similar_tpcs = int(config.get("general", {}).get("n_similar_tpcs", 5))
+    similar_tpc_thr = float(config.get("general", {}).get("similar_tpc_thr", 0.5))
+    n_top_docs = int(config.get("general", {}).get("n_top_docs", 20))
     
-    # assign topic id
-    df = df.reset_index(drop=True)
-    df["id"] = df.index
+    tmmodel = TMmodel(Path(model_path).joinpath("TMmodel"), logger=logger, config_path=config_path)
+    
+    topic_info, _, _, irbo, td, similar, thetas_rpr = tmmodel.get_all_model_info(nsimilar=n_similar_tpcs, thr=similar_tpc_thr, n_most=n_top_docs)
+    
+    topic_info = topic_info.set_index("ID").to_dict(orient="index")
+    
+    for tpc in topic_info.keys():
+        most_similars = []
+        for key in similar.keys():
+            for most_similar in similar[key][tpc]:
+                most_similars.append({
+                    "ID": most_similar[0],
+                    "Label": topic_info[most_similar[0]]["Label"],
+                    "Similarity": most_similar[1]
+                })
+        topic_info[tpc][f"Similar Topics ({key})"] = most_similars
+    
+    topic_info = {f"t{str(k)}": v for k, v in topic_info.items()}
+    
+    model_info = {
+        "Model Path": model_path,
+        "Topics Info": topic_info,
+        #"Thetas": thetas_rpr,
+        "Topic Diversity": td,
+        "IRBO": irbo
+    }
+    return model_info
 
-    # convert to dict of dicts
-    df = df.set_index("id").to_dict(orient="index")
-    df = {f"t{str(k)}": v for k, v in df.items()}
-
-    return df
-
-def get_thetas_dispatch(
+def get_topic_info_dispatch(
+    topic_id: int,
     model_path: str,
     config_path: Path = Path("./static/config/config.yaml"),
     logger: Optional[logging.Logger] = None
 ) -> Dict:
     
-    tmmodel = TMmodel(Path(model_path).joinpath("TMmodel"), logger=logger, config_path=config_path)
-    tmmodel._load_thetas()
-    return tmmodel._thetas.toarray().tolist()
+    # call get_model_info_dispatch to get all topics info and then filter by topic_id
+    model_info = get_model_info_dispatch(
+        model_path=model_path,
+        config_path=config_path,
+        logger=logger
+    )
+    topic_info = model_info["Topics Info"]
+    topic_info = {k: v for k, v in topic_info.items() if k == f"t{topic_id}"}
+    if not topic_info:
+        return None
+    topic_info = topic_info[f"t{topic_id}"]
+    topic_info["ID"] = f"t{topic_id}"
+    return topic_info
+    
+    
