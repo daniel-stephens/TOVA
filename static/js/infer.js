@@ -39,7 +39,16 @@ document.addEventListener("DOMContentLoaded", () => {
   
     // Theme + rationale
     document.getElementById("inferredTheme").textContent = topThemes[0].label || "–";
-    document.getElementById("inferredRationale").textContent = rationale || "–";
+    const rationaleDiv = document.getElementById("inferredRationaleWrapper"); // The wrapper div
+    const rationaleText = document.getElementById("inferredRationale");       // The span or p for the text
+
+    if (!rationale || rationale.trim() === "") {
+      rationaleDiv.style.display = "none";
+    } else {
+      rationaleText.textContent = rationale;
+      rationaleDiv.style.display = "block";
+    }
+
     
     // change the text area class
     document.getElementById("textAreaSpace").className = "col-md-6";
@@ -77,7 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-
+// console.log(modelName)
   document.getElementById("inferBtn").addEventListener("click", async () => {
     const text = document.getElementById("inputText").value.trim();
     madeInference = true;
@@ -89,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text: text, id: "id", model: modelName })
       });
   
       if (!response.ok) throw new Error("Failed to fetch inference");

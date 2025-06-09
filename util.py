@@ -2,9 +2,10 @@ import pandas as pd
 from datetime import datetime
 from langchain.document_loaders import (
     TextLoader, CSVLoader)
-# from celery import Celery
-# import redis
-
+import chromadb
+client = chromadb.PersistentClient(path="database/myDB")
+collection = client.get_or_create_collection(name="documents")
+registry = client.get_or_create_collection("corpus_model_registry")
 
 
 def preprocess_file(file_path, file_type, label_column):
@@ -203,7 +204,7 @@ def fetch_and_process_model_info(model_path: str, endpoint: str = "http://127.0.
     }
     payload = {
         "config_path": "static/config/config.yaml",
-        "model_path": model_path
+        "model_path": f"models/{model_path}"
     }
 
     response = requests.post(endpoint, headers=headers, json=payload)
@@ -214,20 +215,11 @@ def fetch_and_process_model_info(model_path: str, endpoint: str = "http://127.0.
     
     allInfo = response.json()
 
-    themes = []
-    for i, (key, val) in enumerate(allInfo.items(), start=1):
-        doc_count = len(val.get("top_docs_per_topic", {}))
-        themes.append({
-            "id": i,
-            "label": val.get("tpc_labels", f"Topic {i}"),
-            "document_count": doc_count
-        })
+    themeDetails = build_theme_data_dict(allInfo, collection)
+    summary = extract_topic_summaries(allInfo)
+    themeSummary = sorted(summary, key=lambda t: t["document_count"], reverse=True)
+    return themeSummary, themeDetails
 
-    # Sort descending by document count
-    themes = sorted(themes, key=lambda t: t["document_count"], reverse=True)
-    return themes
-
-import requests
 
 def call_gateway(url, method="POST", payload=None, headers=None):
     """
@@ -260,4 +252,250 @@ def call_gateway(url, method="POST", payload=None, headers=None):
             return f"Error {response.status_code}: {response.text}"
     except Exception as e:
         return f"Exception occurred: {str(e)}"
+
+
+def build_theme_data_dict(allInfo, doc_collection):
+    """
+    Builds a dictionary of theme data indexed by ID, with text and score for each assigned document.
+    """
+    theme_dict = {}
+    topics_info = allInfo.get("Topics Info", {})
+    topic_keys = list(topics_info.keys())
+
+    for idx, topic_key in enumerate(topic_keys):
+        topic_data = topics_info[topic_key]
+        theme_id = topic_key
+
+        # Extract top_doc text
+        top_doc_text = ""
+        top_docs = topic_data.get("Top Documents", {})
+        if isinstance(top_docs, dict) and top_docs:
+            first_doc_key = next(iter(top_docs))
+            top_doc_text = top_docs[first_doc_key]
+
+        # Assigned Documents with Scores
+        docs_prob = topic_data.get("Assigned Documents", {})
+        assigned_results = []
+        if docs_prob:
+            ids = list(docs_prob.keys())
+            results = doc_collection.get(ids=ids, include=["documents"])
+            assigned_results = [
+                {
+                    "id": doc_id,
+                    "text": text,
+                    "score": docs_prob.get(doc_id, 0.0),
+                    "theme": topic_data.get("Label", f"Topic {idx}"),
+                }
+                for doc_id, text in zip(results["ids"], results["documents"])
+            ]
+
+        
+
+        # Build theme data
+        theme_data = {
+            "id": theme_id,
+            "label": topic_data.get("Label", f"Topic {idx}"),
+            "prevalence": topic_data["Size"],
+            "coherence": topic_data["Coherence (NPMI)"],
+            "uniqueness": topic_data["Entropy"],
+            "keywords": topic_data["Keywords"].split(", "),
+            "summary": topic_data["Summary"],
+            "top_doc": top_doc_text,
+            "theme_matches": len(docs_prob),
+            "Coordinates": topic_data["Coordinates"],
+            "similar_themes": topic_data.get("Similar Topics (Coocurring)", []),
+            "trend": [],  # Add if you compute this
+            "documents": assigned_results
+        }
+
+        theme_dict[theme_id] = theme_data
+
+    return theme_dict
+
+
+def get_assigned_documents_with_scores(doc_collection, docs_prob):
+    """
+    Given a ChromaDB document collection and a dictionary of Assigned Documents
+    (with scores), return a list of {id, text, score} for each document.
+    """
+    if not docs_prob:
+        return []
+
+    doc_ids = list(docs_prob.keys())
+
+    # Fetch document texts from ChromaDB
+    results = doc_collection.get(
+        ids=doc_ids,
+        include=["documents"]
+    )
+
+    return [
+        {
+            "id": doc_id,
+            "text": text,
+            "score": docs_prob.get(doc_id, 0.0)
+        }
+        for doc_id, text in zip(results["ids"], results["documents"])
+    ]
+
+def extract_topic_summaries(allInfo):
+    topic_info = allInfo.get("Topics Info", {})
+    topic_summaries = []
+
+    for idx, (topic_key, topic_data) in enumerate(topic_info.items()):
+        label = topic_data.get("Label", f"Topic {idx}")
+        document_count = len(topic_data.get("Assigned Documents", []))
+
+        topic_summaries.append({
+            "id": topic_key,
+            "label": label,
+            "document_count": document_count
+        })
+
+    return topic_summaries
+
+
+import json
+from pathlib import Path
+
+import json
+from pathlib import Path
+
+def load_or_create_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
+    """
+    Loads existing dashboard JSON data if available,
+    or creates an empty JSON file and returns an empty dict.
+
+    Args:
+        path (str): Path to the JSON file.
+
+    Returns:
+        dict: The dashboard data.
+    """
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if file_path.exists():
+        # Load existing data
+        with file_path.open("r", encoding="utf-8") as f:
+            try:
+                data = json.load(f)
+                print(f"📂 Loaded dashboard data from {file_path.resolve()}")
+            except json.JSONDecodeError:
+                print(f"⚠️ File was invalid. Resetting to empty JSON.")
+                data = {}
+    else:
+        # Create empty file
+        data = {}
+        with file_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        print(f"🆕 Created empty dashboard JSON at {file_path.resolve()}")
+
+    return data
+
+
+def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, path: str = "static/config/dashboardData.json") -> dict:
+    """
+    Adds a new model entry to an existing dashboard JSON file.
+
+    Args:
+        model_name (str): The name of the model to add.
+        path (str): Path to the JSON file.
+
+    Returns:
+        dict: The updated dashboard data.
+    """
+    file_path = Path(path)
+    if file_path.exists():
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = {}
+
+    # Add new model entry
+    data[model_name] = {
+        "Theme Summary": themeSummary,
+        "Theme Details": themeDetails
+    }
+
+    # Write back to file
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"✅ Added model '{model_name}' to dashboard JSON")
+    # return data
+
+import json
+from pathlib import Path
+
+def read_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
+    """
+    Reads the dashboardData.json file and returns its contents as a dictionary.
+
+    Args:
+        path (str): Path to the JSON file.
+
+    Returns:
+        dict: The dashboard data. Returns an empty dict if the file doesn't exist or is invalid.
+    """
+    file_path = Path(path)
+
+    if not file_path.exists():
+        print(f"⚠️ File not found at {file_path.resolve()}. Returning empty dict.")
+        return {}
+
+    try:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+            print(f"📂 Successfully read dashboard data from {file_path.resolve()}")
+            return data
+    except json.JSONDecodeError:
+        print(f"❌ JSON format error in {file_path.resolve()}. Returning empty dict.")
+        return {}
+
+
+def extract_metrics_from_theme_details(theme_details: dict) -> list:
+    metrics = []
+
+    for topic_id, topic_data in theme_details.items():
+        try:
+            prevalence_str = topic_data.get("prevalence", "0%").replace("%", "")
+            prevalence = round(float(prevalence_str) / 100, 3)  # Convert "18.44%" → 0.184
+
+            metrics.append({
+                "theme": topic_data.get("label", topic_id),  # 👈 now uses 'theme'
+                "prevalence": prevalence,
+                "coherence": topic_data.get("coherence"),
+                "uniqueness": topic_data.get("uniqueness")
+            })
+        except Exception as e:
+            print(f"Skipping topic {topic_id} due to error: {e}")
+
+    return metrics
+
+import requests
+
+def infer_text_(id, raw_text, config_path="static/config/config.yaml", url="http://127.0.0.1:8989/infer/json"):
+    payload = {
+        "config_path": config_path,
+        "data": [
+            {
+                "id": id,
+                "raw_text": raw_text
+            }
+        ]
+    }
+
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()  # Raise an error for bad status codes
+        return response.json()
+    except requests.RequestException as e:
+        print("Request failed:", e)
+        return None
 
