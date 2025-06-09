@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect
+from flask import Flask, request, jsonify, render_template, abort
 import os, tempfile, traceback
 import chromadb
 from .util import *
@@ -7,11 +7,12 @@ import uuid
 import shutil
 from flask import session
 from zoneinfo import ZoneInfo
+import random
  
 
 server = Flask(__name__)
 server.secret_key = 'your-secret-key'
-theme_cache = {}
+dashboard_data = load_or_create_dashboard_json()
 
 
 
@@ -256,6 +257,7 @@ def run_model():
             metadatas=[{
                 "model_id" : f"{model_name}_{joined_id}_{trained_on}",
                 "model_type": model_name,
+                "num_topic": num_topics,
                 "model_name": save_name,
                 "corpus_names": joined_corpuses,  # you *can* keep this as a list in metadata
                 "trained_on": trained_on
@@ -336,6 +338,7 @@ def trained_models():
             "document": doc,
             "model_type":meta.get("model_type", ""),
             "model_name": meta.get("model_name", ""),
+            "num_topics": meta.get("num_topic", ""),
             "corpus_names": meta.get("corpus_names", ""),
             "trained_on": datetime.fromisoformat(meta.get("trained_on", "")).replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
  
@@ -370,45 +373,80 @@ def delete_model():
 
 
 ###################################################################################
+
 # 4. Visualization and Inferences
-@server.route("/dashboard", methods=["POST", "GET"])
-def dashboard():
-    if request.method == "POST":
-        model_id = request.form.get("model_id")
-        model_name = request.form.get("model_name")  # Make sure this matches the input name
+@server.route("/dashboard/<model_name>", methods=["GET", "POST"])
+def dashboard(model_name):
 
-        print("Model ID:", model_id)
-        print("Model Name:", model_name)
+    print("Model Name (from URL):", model_name)
 
-        # Optionally store in session
-        session["model_id"] = model_id
-        session["model_name"] = model_name
-        theme_cache[model_name] = model_name
-
-        call_gateway("127.0.0.1:8000/gateway", payload={"model_id": model_id, "model_name":model_name})
-        print("gateway called")
-    return render_template("dashboard.html")
+    themeSummary, themeDetails = fetch_and_process_model_info(model_path=model_name)
+    add_model_to_dashboard(model_name, themeSummary=themeSummary, themeDetails=themeDetails)
+    print(model_name)
+    return render_template("dashboard.html", model_name=model_name)
 
 
 
-@server.route("/gateway", methods=["POST", "GET"])
-def gateway():
-    modelName = session.get("modelName")
-    themeData = fetch_and_process_model_info(f"models/{modelName}")
-    themeData[modelName]["themeData"] = themeData
+@server.route("/api/themes", methods=["POST"])
+def get_themes():
+    try:
+        data = request.get_json(force=True)  # 🔁 force=True to parse even without header
+        print("Raw JSON from request:", data)
+
+        if not data or "model" not in data:
+            return jsonify({"error": "Missing 'model' in request body"}), 400
+
+        model_name = data["model"]
+
+        dashboard_data = read_dashboard_json()
+        model_data = dashboard_data.get(model_name)
+
+        if not model_data:
+            return jsonify({"error": f"No data found for model '{model_name}'"}), 404
+
+        summary = model_data.get("Theme Summary", [])
+        return jsonify(summary)
+
+    except Exception as e:
+        print("Exception:", str(e))
+        return jsonify({"error": "Invalid JSON or server error"}), 400
 
 
-    return jsonify({"response": "yes we can"})
 
-
-
-
-@server.route("/infer-text", methods=["POST"])
-def infer_text():
+@server.route("/text-info", methods=["POST"])
+def text_info():
+    
     data = request.get_json()
-    text = data.get("text", "")
+    text = data.get("text", "").strip()
+    text_id = data.get("id", "").strip()
+    model_name = data.get("model", "").strip()
 
-    # Run inference (dummy result for now)
+    if not text or not model_name:
+        return jsonify({"error": "Both 'text' and 'model' are required."}), 400
+
+    model_path = "models/" + model_name
+
+    # Step 1: Call inference API
+    infer_payload = {
+        "config_path": "static/config/config.yaml",
+        "model_path": model_path,
+        "id_col": text_id,
+        "text_col": "raw_text",
+        "data": [{"id": text_id, "raw_text": text}]
+    }
+
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    infer_response = requests.post(inferurl, json=infer_payload, headers=headers)
+    infer_response.raise_for_status()
+    inference_result = infer_response.json()
+    print(inference_result) 
+
+
+
     return jsonify({
         "theme": "Theme 2 – Autonomous Vehicles",
         "rationale": "Mentions self-driving cars and policy impacts.",
@@ -422,155 +460,147 @@ def infer_text():
     })
 
 
+@server.route("/api/theme/<theme_id>", methods=["GET"])
+def get_theme_detail(theme_id):
+    model_name = request.args.get("model")
+    if not model_name:
+        return jsonify({"error": "Missing model name"}), 400
 
-@server.route('/api/theme/<int:theme_id>')
-def get_theme_details(theme_id):
-    # Example: Replace with real DB/model lookup
-    theme_data = {
-        "id": theme_id,
-        "label": "Online Privacy & Data Protection",
-        "prevalence": 12.3,
-        "coherence": 0.61,
-        "uniqueness": 0.82,
-        "keywords": [
-            "privacy", "data", "tracking", "cookies", "regulation", "consent",
-            "encryption", "gdpr", "compliance", "surveillance", "user rights",
-            "authentication", "cybersecurity", "anonymity", "retention",
-            "third-party", "personal information", "data breach", "opt-out", "policy"
-        ],
-        "summary": "This theme captures public concern around personal data collection, user tracking, and digital surveillance. It highlights policy frameworks such as GDPR and the role of consent in data sharing.",
-        "top_doc": "As users navigate modern websites, they’re increasingly prompted to accept cookies...",
-        "similar_themes": [
-            {"id": 5, "label": "Cybersecurity Incidents", "similarity": 0.72},
-            {"id": 8, "label": "Legal Compliance", "similarity": 0.68},
-            {"id": 1, "label": "Technology Ethics", "similarity": 0.63}
-        ],
-        "trend": [10, 12, 18, 25, 21, 30],  # for line chart
-        "theme_matches": 20,
-        
-        # 👇 Add the list of matched documents
-        "documents": [
-        {
-            "id": "D001",
-            "text": "Websites increasingly prompt users to accept cookies for tracking purposes.",
-            "rationale": "Mentions user tracking and consent clearly."
-        },
-        {
-            "id": "D002",
-            "text": "GDPR has shifted the landscape of data compliance across the EU.",
-            "rationale": "Focuses on GDPR and compliance issues."
-        },
-        {
-            "id": "D003",
-            "text": "Privacy concerns rise as third-party trackers collect behavioral data.",
-            "rationale": "Highlights surveillance and third-party data practices."
-        },
-        {
-            "id": "D004",
-            "text": "Users now demand more control over personal data shared online.",
-            "rationale": "Captures public concern over privacy rights."
-        },
-        {
-            "id": "D005",
-            "text": "Many apps collect location data even when not in use.",
-            "rationale": "Illustrates passive data collection without consent."
-        },
-        {
-            "id": "D006",
-            "text": "Data breaches expose millions of users’ personal records each year.",
-            "rationale": "Addresses the consequences of poor data protection."
-        },
-        {
-            "id": "D007",
-            "text": "New privacy regulations require companies to delete data on request.",
-            "rationale": "Relates to user rights under GDPR or CCPA."
-        },
-        {
-            "id": "D008",
-            "text": "Anonymization techniques are often insufficient against re-identification.",
-            "rationale": "Questions the effectiveness of anonymization."
-        },
-        {
-            "id": "D009",
-            "text": "Encrypted messaging apps gain popularity for their promise of privacy.",
-            "rationale": "Links consumer behavior to privacy-enhancing tech."
-        },
-        {
-            "id": "D010",
-            "text": "Browser extensions can secretly collect and sell browsing history.",
-            "rationale": "Examples of unauthorized third-party tracking."
-        },
-        {
-            "id": "D011",
-            "text": "Opt-out forms are often hard to find or intentionally confusing.",
-            "rationale": "Shows poor consent practices and dark patterns."
-        },
-        {
-            "id": "D012",
-            "text": "Employers using surveillance tools to monitor remote workers sparks debate.",
-            "rationale": "Expands privacy discussion to workplace tracking."
-        },
-        {
-            "id": "D013",
-            "text": "Children’s apps found to violate privacy by collecting excessive data.",
-            "rationale": "Raises concern for vulnerable users and COPPA violations."
-        },
-        {
-            "id": "D014",
-            "text": "Consent fatigue results in users accepting all terms without reading.",
-            "rationale": "Examines behavioral impacts of constant privacy prompts."
-        },
-        {
-            "id": "D015",
-            "text": "AI algorithms sometimes rely on sensitive personal data for targeting.",
-            "rationale": "Touches on ethical concerns with data-driven AI."
-        },
-        {
-            "id": "D016",
-            "text": "Privacy policies are often too long and complex to understand.",
-            "rationale": "Highlights accessibility issues in data transparency."
-        },
-        {
-            "id": "D017",
-            "text": "Some VPN services log user activity despite advertising anonymity.",
-            "rationale": "Challenges trust in privacy tools."
-        },
-        {
-            "id": "D018",
-            "text": "Companies face legal challenges for failing to disclose tracking cookies.",
-            "rationale": "Legal implications of non-transparent data collection."
-        },
-        {
-            "id": "D019",
-            "text": "The right to be forgotten enables users to request erasure of personal data.",
-            "rationale": "Reflects emerging privacy laws and digital rights."
-        },
-        {
-            "id": "D020",
-            "text": "Cross-device tracking links user behavior across phones, tablets, and laptops.",
-            "rationale": "Demonstrates pervasive tracking and data linkage."
+    dashboard = read_dashboard_json()
+    model_data = dashboard.get(model_name)
+
+    if not model_data:
+        return jsonify({"error": f"No model found for '{model_name}'"}), 404
+
+    theme_details = model_data.get("Theme Details", {})
+    theme = theme_details.get(theme_id)
+
+    if not theme:
+        return jsonify({"error": f"No theme '{theme_id}' found for model '{model_name}'"}), 404
+
+    return jsonify(theme)
+
+@server.route("/infer-text", methods=["POST"])
+def infer_text():
+    try:
+        data = request.get_json()
+        text = data.get("text", "").strip()
+        text_id = data.get("id", "").strip()
+        model_name = data.get("model", "").strip()
+
+        if not text or not model_name:
+            return jsonify({"error": "Both 'text' and 'model' are required."}), 400
+
+        model_path = "models/" + model_name
+
+        # Step 1: Call inference API
+        infer_payload = {
+            "config_path": "static/config/config.yaml",
+            "model_path": model_path,
+            "id_col": text_id,
+            "text_col": "raw_text",
+            "data": [{"id": text_id, "raw_text": text}]
         }
+
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        infer_response = requests.post(inferurl, json=infer_payload, headers=headers)
+        infer_response.raise_for_status()
+        inference_result = infer_response.json()
+        print(inference_result) 
+        # Load dashboard JSON (contains Theme Summary)
+        dashboard_data = read_dashboard_json()
+
+        model_data = dashboard_data.get(model_name)
+        if not model_data:
+            return jsonify({"error": f"No data found for model '{model_name}'"}), 404
+
+        theme_summary = model_data.get("Theme Summary", [])
+        theme_map = {item["id"]: item["label"] for item in theme_summary}
+
+        # Process inference results
+        theta = inference_result["thetas"][0]["id"]
+        all_themes = [
+            {
+                "label": theme_map.get(tid, tid),
+                "score": round(score, 4)
+            }
+            for tid, score in theta.items()
         ]
 
-    }
+        # Sort and pick top theme
+        all_themes.sort(key=lambda x: x["score"], reverse=True)
+        top_theme = all_themes[0]["label"]
 
-    return jsonify(theme_data)
+        return jsonify({
+            "theme": top_theme[:5],
+            "top_themes": all_themes[:5]
+        })
 
-import random
-@server.route("/api/themes", methods=["GET"])
-def get_themes():
-    themes = session.get("themeData")
-    # print(themes)
-    return jsonify(themes)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
-@server.route('/api/documents')
+
+
+@server.route('/api/documents', methods = ["POST"])
 def get_documents():
-    with open("static/data/documents.json", "r", encoding="utf-8") as file:
-        documents = json.load(file)
 
-    # print(documents)
+    data = request.get_json()
+    modelName = data.get("model", "").strip()
+    data = read_dashboard_json()
+    allDocuments = [
+    {
+        **doc,
+        "theme": details.get("label", theme),
+        "model": modelName
+    }
+    for theme, details in data[modelName]["Theme Details"].items()
+    for doc in details.get("documents", [])
+]
+    random.shuffle(allDocuments)
 
-    return jsonify(documents)
+    return jsonify(allDocuments)
+
+
+
+@server.route("/api/model-info", methods=["POST"])
+def model_info():
+    data = request.get_json()
+    model_name = data.get("model_name", "")
+    print(f"Requested model_name: {model_name}")
+
+    results = registry.get()
+
+    for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"]):
+        if meta.get("model_name") == model_name:
+            try:
+                trained_on = meta.get("trained_on", "")
+                trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
+                trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+            except Exception as e:
+                print("Date parse error:", e)
+                trained_on_local = trained_on  # fallback
+
+            model = {
+                "model_id": meta.get("model_id", ""),
+                "document": doc,
+                "model_type": meta.get("model_type", ""),
+                "model_name": model_name,
+                "num_topics": meta.get("num_topic", ""),
+                "corpus_names": meta.get("corpus_names", ""),
+                "trained_on": trained_on_local
+            }
+
+            return jsonify(model)
+
+    return abort(404, description="Model not found")
+
+
 
 @server.route('/api/theme-metrics')
 def get_theme_metrics():
@@ -616,17 +646,48 @@ def get_theme_metrics():
 
 
 
-@server.route("/api/diagnostics")
+@server.route("/api/diagnostics", methods=["GET"])
 def get_diagnostics():
-    with open("static/data/diag.json", "r", encoding="utf-8") as file:
-        diag = json.load(file)
-    # print(diag)
+    model_name = request.args.get("model")
+    if not model_name:
+        return jsonify({"error": "Missing model name"}), 400
 
-    return jsonify(diag)
+    dashboard = read_dashboard_json()
+    theme_details = dashboard.get(model_name, {}).get("Theme Details", {})
+
+    metrics = extract_metrics_from_theme_details(theme_details)
+    return jsonify(metrics)
 
 
 
 
+@server.route("/api/theme-coordinates", methods=["POST"])
+def get_theme_coordinates():
+    data = request.get_json()
+    model_name = data.get("model")
+
+    if not model_name:
+        return abort(400, description="Missing 'model' in request body")
+
+    dashboard_data = read_dashboard_json()
+    model_data = dashboard_data.get(model_name)
+
+    if not model_data:
+        return abort(404, description=f"No data found for model: {model_name}")
+
+    theme_entries = model_data.get("Theme Details", {})
+
+    theme_coords = []
+    for key, entry in theme_entries.items():
+        coords = entry.get("Coordinates", [None, None])
+        theme_coords.append({
+            "id": entry.get("topic_id") or entry.get("id"),
+            "label": entry.get("label") or entry.get("theme"),
+            "x": coords[0],
+            "y": coords[1]
+        })
+
+    return jsonify(theme_coords)
 
 
 ####################################################################################
@@ -850,6 +911,9 @@ def list_models():
     print(models)
 
     return jsonify(models)
+
+
+
 
 
 
