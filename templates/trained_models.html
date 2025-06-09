@@ -69,42 +69,45 @@
 
     <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
         {% if models %}
-          <div class="d-flex flex-wrap justify-content-center gap-4">
-            {% for model in models %}
-            <div class="card shadow-sm position-relative" style="width: 100%; max-width: 320px; flex: 1 1 300px; border: 1px solid #e2e6ea;">
-  
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+          {% for model in models %}
+            <div class="col d-flex">
+              <div class="card shadow-sm position-relative w-100 h-100" style="border: 1px solid #e2e6ea;">
+                
                 <!-- Delete Icon -->
                 <a href="#" class="position-absolute top-0 end-0 m-2 text-danger"
                     title="Delete model"
                     onclick="deleteModel('{{ model.model_id }}', '{{ model.model_name}}'); return false;">
                     <i class="bi bi-x-circle-fill fs-5"></i>
                 </a>
-              
+        
                 <div class="card-body d-flex flex-column justify-content-between">
                   <div>
-
-                    
-                    <!-- MODEL NAME -->
-                    <h5 id="model-name" class="card-title text-uppercase text-center text-primary fw-bold mb-3">
+                    <h5 class="card-title text-uppercase text-center text-primary fw-bold mb-3">
                       {{ model.model_name }}
                     </h5>
-              
+                  
                     <p class="model-meta mb-2">
                       <strong class="text-muted">Type:</strong>
                       <span class="badge bg-info text-dark">{{ model.model_type }}</span>
                     </p>
-              
+                  
                     <p class="model-meta mb-2">
                       <strong class="text-muted">Corpus:</strong> {{ model.corpus_names }}
                     </p>
-
-                    <h5 id="model-id" hidden>{{model.model_id}}</h5>
-              
+                  
+                    <p class="model-meta mb-2">
+                      <strong class="text-muted">Topics:</strong> {{ model.num_topics }}
+                    </p>
+                  
+                    <h5 hidden>{{ model.model_id }}</h5>
+                  
                     <p class="model-meta mb-0">
                       <strong class="text-muted">Created:</strong> {{ model.trained_on }}
                     </p>
                   </div>
-              
+                  
+        
                   <div class="mt-3 text-end">
                     <button 
                       class="btn btn-sm btn-primary use-model-btn" 
@@ -113,14 +116,12 @@
                       Use Model
                     </button>
                   </div>
-                  
-                    
-                  </div>
                 </div>
               </div>
-              
-            {% endfor %}
-          </div>
+            </div>
+          {% endfor %}
+        </div>
+        
         {% else %}
           <div class="alert alert-warning text-center mt-5">No trained models found.</div>
         {% endif %}
@@ -154,31 +155,26 @@
   </script>
   <script>
     document.querySelectorAll('.use-model-btn').forEach(button => {
-      button.addEventListener('click', () => {
-        const modelId = button.getAttribute('data-model-id');
-        const modelName = button.getAttribute('data-model-name');
-    
-        // Create a form dynamically
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/dashboard';
-    
-        const inputId = document.createElement('input');
-        inputId.type = 'hidden';
-        inputId.name = 'model_id';
-        inputId.value = modelId;
-        form.appendChild(inputId);
-    
-        const inputName = document.createElement('input');
-        inputName.type = 'hidden';
-        inputName.name = 'model_name';
-        inputName.value = modelName;
-        form.appendChild(inputName);
-    
-        document.body.appendChild(form);
-        form.submit();  // This behaves like a normal form submission
-      });
+    button.addEventListener('click', () => {
+      const modelId = button.getAttribute('data-model-id');
+      const modelName = button.getAttribute('data-model-name');
+
+      // Create a form dynamically
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `/dashboard/${encodeURIComponent(modelName)}`;  // updated URL
+
+      const inputId = document.createElement('input');
+      inputId.type = 'hidden';
+      inputId.name = 'model_id';
+      inputId.value = modelId;
+      form.appendChild(inputId);
+
+      document.body.appendChild(form);
+      form.submit();  // Submit to /dashboard/<model_name>
     });
+  });
+
     </script>
     
 </body>
