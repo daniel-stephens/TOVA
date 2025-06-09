@@ -92,13 +92,13 @@
             <!-- Left nav links -->
             <ul class="navbar-nav">
               <li class="nav-item">
-                <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Add Corpus</a>
+                <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Upload Data</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Train Models</a>
+                <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Initiate Training</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">View Models</a>
+                <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Model Repository</a>
               </li>
             </ul>
       
