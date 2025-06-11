@@ -115,7 +115,7 @@ def infer_model_dispatch(
         {
             ids[i]: {
                 **{
-                f"t{j}": float(thetas[i][j])
+                str(j): float(thetas[i][j])
                 for j in range(len(thetas[i]))
                 if thetas[i][j] > 0
             }
@@ -141,7 +141,7 @@ def get_model_info_dispatch(
     
     tmmodel = TMmodel(Path(model_path).joinpath("TMmodel"), logger=logger, config_path=config_path)
     
-    topic_info, _, _, irbo, td, similar, thetas_rpr = tmmodel.get_all_model_info(nsimilar=n_similar_tpcs, thr=similar_tpc_thr, n_most=n_top_docs)
+    topic_info, _, _, irbo, td, similar, _ = tmmodel.get_all_model_info(nsimilar=n_similar_tpcs, thr=similar_tpc_thr, n_most=n_top_docs)
     
     topic_info = topic_info.set_index("ID").to_dict(orient="index")
     for tpc in topic_info.keys():
@@ -149,85 +149,22 @@ def get_model_info_dispatch(
             most_similars = []
             for most_similar in similar[key][tpc]:
                 most_similars.append({
-                    "ID": most_similar[0],
+                    "ID": str(most_similar[0]),
                     "Label": topic_info[most_similar[0]]["Label"],
                     "Similarity": most_similar[1]
                 })
             topic_info[tpc][f"Similar Topics ({key})"] = most_similars
 
-    topic_info = {f"t{str(k)}": v for k, v in topic_info.items()}
+    topic_info = {str(k): v for k, v in topic_info.items()}
     
     model_info = {
         "Model Path": model_path,
         "Topics Info": topic_info,
-        #"Thetas": thetas_rpr,
         "Topic Diversity": td,
         "IRBO": irbo
     }
     return model_info
-
-def get_topic_info_dispatch(
-    topic_id: int,
-    model_path: str,
-    config_path: Path = Path("./static/config/config.yaml"),
-    logger: Optional[logging.Logger] = None
-) -> Dict:
     
-    # call get_model_info_dispatch to get all topics info and then filter by topic_id
-    model_info = get_model_info_dispatch(
-        model_path=model_path,
-        config_path=config_path,
-        logger=logger
-    )
-    topic_info = model_info["Topics Info"]
-    topic_info = {k: v for k, v in topic_info.items() if k == f"t{topic_id}"}
-    if not topic_info:
-        return None
-    topic_info = topic_info[f"t{topic_id}"]
-    topic_info["ID"] = f"t{topic_id}"
-    return topic_info
-    
-    
-def get_thetas_document_by_id(
-    doc_id: int,
-    model_path: str,
-    config_path: Path = Path("./static/config/config.yaml"),
-    logger: Optional[logging.Logger] = None
-) -> Dict:
-
-    # load configuration
-    config = load_yaml_config_file(config_path, "topic_modeling", logger)
-    n_similar_tpcs = int(config.get("general", {}).get("n_similar_tpcs", 5))
-    similar_tpc_thr = float(config.get("general", {}).get("similar_tpc_thr", 0.5))
-    n_top_docs = int(config.get("general", {}).get("n_top_docs", 20))
-
-    tmmodel = TMmodel(Path(model_path).joinpath("TMmodel"), logger=logger, config_path=config_path)
-
-    topic_info, _, _, irbo, td, similar, thetas_rpr = tmmodel.get_all_model_info(nsimilar=n_similar_tpcs, thr=similar_tpc_thr, n_most=n_top_docs)
-
-    topic_info = topic_info.set_index("ID").to_dict(orient="index")
-    for tpc in topic_info.keys():
-        for key in ["Coocurring"]: #similar.keys():#
-            most_similars = []
-            for most_similar in similar[key][tpc]:
-                most_similars.append({
-                    "ID": most_similar[0],
-                    "Label": topic_info[most_similar[0]]["Label"],
-                    "Similarity": most_similar[1]
-                })
-            topic_info[tpc][f"Similar Topics ({key})"] = most_similars
-
-    topic_info = {f"t{str(k)}": v for k, v in topic_info.items()}
-
-    model_info = {
-        "Model Path": model_path,
-        "Topics Info": topic_info,
-        #"Thetas": thetas_rpr,
-        "Topic Diversity": td,
-        "IRBO": irbo
-    }
-    return model_info
-
 def get_topic_info_dispatch(
     topic_id: int,
     model_path: str,
@@ -242,11 +179,12 @@ def get_topic_info_dispatch(
         logger=logger
     )
     topic_info = model_info["Topics Info"]
-    topic_info = {k: v for k, v in topic_info.items() if k == f"t{topic_id}"}
+    topic_info = {k: v for k, v in topic_info.items() if int(k) == topic_id}
     if not topic_info:
         return None
-    topic_info = topic_info[f"t{topic_id}"]
-    topic_info["ID"] = f"t{topic_id}"
+    topic_info = topic_info[str(topic_id)]
+    topic_info["ID"] = str(topic_id)    
+    topic_info = {k: topic_info[k] for k in ["ID"] + [k for k in topic_info if k != "ID"]}
     return topic_info
 
 
