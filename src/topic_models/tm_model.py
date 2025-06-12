@@ -1372,8 +1372,6 @@ class TMmodel(object):
         thetas_rpr = self.load_thetas_representation()
                 
         data = {
-            #"Betas": [self._betas.tolist()],
-            #"betas_ds": [self._betas_ds],
             "Size": [self._alphas],
             "Entropy": [self._topic_entropy],
             "Coherence (NPMI)": [self._topic_coherence],

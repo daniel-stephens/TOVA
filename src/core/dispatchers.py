@@ -156,12 +156,18 @@ def get_model_info_dispatch(
             topic_info[tpc][f"Similar Topics ({key})"] = most_similars
 
     topic_info = {str(k): v for k, v in topic_info.items()}
+    topic_cohrs = [tpc["Coherence (NPMI)"] for tpc in topic_info.values()]
+    topic_entrs = [tpc["Entropy"] for tpc in topic_info.values()]
     
     model_info = {
         "Model Path": model_path,
         "Topics Info": topic_info,
-        "Topic Diversity": td,
-        "IRBO": irbo
+        "Model-Level Metrics": {
+            "Average Coherence (NPMI)": sum(topic_cohrs) / len(topic_cohrs) if topic_cohrs else 0,
+            "Average Entropy": sum(topic_entrs) / len(topic_entrs) if topic_entrs else 0,
+            "Topic Diversity": td,
+            "IRBO": irbo
+        },
     }
     return model_info
     
