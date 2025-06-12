@@ -297,7 +297,8 @@ def build_theme_data_dict(allInfo, doc_collection):
             "label": topic_data.get("Label", f"Topic {idx}"),
             "prevalence": topic_data["Size"],
             "coherence": topic_data["Coherence (NPMI)"],
-            "uniqueness": topic_data["Entropy"],
+            "entropy": topic_data["Entropy"],
+            "size" : topic_data["Size"],
             "keywords": topic_data["Keywords"].split(", "),
             "summary": topic_data["Summary"],
             "top_doc": top_doc_text,
@@ -355,11 +356,6 @@ def extract_topic_summaries(allInfo):
     return topic_summaries
 
 
-import json
-from pathlib import Path
-
-import json
-from pathlib import Path
 
 def load_or_create_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
     """
@@ -466,7 +462,7 @@ def extract_metrics_from_theme_details(theme_details: dict) -> list:
                 "theme": topic_data.get("label", topic_id),  # 👈 now uses 'theme'
                 "prevalence": prevalence,
                 "coherence": topic_data.get("coherence"),
-                "uniqueness": topic_data.get("uniqueness")
+                "enthropy": topic_data.get("entropy")
             })
         except Exception as e:
             print(f"Skipping topic {topic_id} due to error: {e}")
@@ -498,4 +494,64 @@ def infer_text_(id, raw_text, config_path="static/config/config.yaml", url="http
     except requests.RequestException as e:
         print("Request failed:", e)
         return None
+
+
+
+def get_thetas_by_doc_ids( doc_id, model):
+    url = 'http://127.0.0.1:8989/queries/thetas-by-docs-ids'
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        "config_path": "static/config/config.yaml",
+        "docs_ids": doc_id,
+        "model_path": f"models/{model}"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Request failed with status code {response.status_code}")
+        print(response.text)
+        return None
+
+
+def format_theta_output_dict(thetas, theme_summary, rationale=None):
+    # Create a mapping from topic ID to label
+    label_lookup = {
+        summary["id"].replace("t", ""): summary["label"]
+        for summary in theme_summary
+    }
+
+    results = {}
+
+    for doc_id, probs in thetas.items():
+        # Sort the topic probabilities in descending order
+        sorted_topics = sorted(probs.items(), key=lambda x: -x[1])
+
+        # Build top themes with readable labels, IDs, and rounded scores
+        top_themes = [
+            {
+                "theme_id": f"t{tid}",
+                "label": label_lookup.get(tid, f"Theme {tid}"),
+                "score": round(score, 2)
+            }
+            for tid, score in sorted_topics
+        ]
+
+        # Construct the output dict for this document
+        doc_info = {
+            "theme": top_themes[0]["label"],
+            "top_themes": top_themes
+        }
+
+        if rationale:
+            doc_info["rationale"] = rationale
+
+        results[doc_id] = doc_info
+
+    return results
 

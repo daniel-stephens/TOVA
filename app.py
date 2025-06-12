@@ -23,6 +23,7 @@ with open("static/config/modelRegistry.json", "r") as f:
 modelurl = "http://localhost:8989/"
 inferurl = "http://127.0.0.1:8989/infer/json"
 topicinfourl = "http://127.0.0.1:8989//queries/model-info"
+textinfourl = "http://localhost:8989/queries/thetas-by-docs-ids"
 
 
 client = chromadb.PersistentClient(path="database/myDB")
@@ -367,6 +368,13 @@ def delete_model():
 
     try:
         registry.delete(where={"model_id": model_id})
+        dashboard_data =  read_dashboard_json()
+        if model_name in dashboard_data:
+            del dashboard_data[model_name]
+        with open('data.json', 'w') as file:
+            json.dump(data, file, indent=4)
+        
+
         return jsonify({"status": "success", "message": f"Model '{model_id}' deleted."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -424,40 +432,15 @@ def text_info():
     if not text or not model_name:
         return jsonify({"error": "Both 'text' and 'model' are required."}), 400
 
-    model_path = "models/" + model_name
+    dashboard_data = read_dashboard_json()
 
-    # Step 1: Call inference API
-    infer_payload = {
-        "config_path": "static/config/config.yaml",
-        "model_path": model_path,
-        "id_col": text_id,
-        "text_col": "raw_text",
-        "data": [{"id": text_id, "raw_text": text}]
-    }
+    thetas = get_thetas_by_doc_ids(text_id, model_name)
 
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/json"
-    }
-
-    infer_response = requests.post(inferurl, json=infer_payload, headers=headers)
-    infer_response.raise_for_status()
-    inference_result = infer_response.json()
-    print(inference_result) 
+    textData = format_theta_output_dict(thetas, dashboard_data[model_name]["Theme Summary"])
+    print(textData)
 
 
-
-    return jsonify({
-        "theme": "Theme 2 – Autonomous Vehicles",
-        "rationale": "Mentions self-driving cars and policy impacts.",
-        "top_themes": [
-            {"label": "Theme 2", "score": 0.41},
-            {"label": "Theme 5", "score": 0.28},
-            {"label": "Theme 3", "score": 0.15},
-            {"label": "Theme 1", "score": 0.10},
-            {"label": "Theme 7", "score": 0.06}
-        ]
-    })
+    return jsonify(textData[text_id])
 
 
 @server.route("/api/theme/<theme_id>", methods=["GET"])
@@ -524,7 +507,8 @@ def infer_text():
         # Process inference results
         theta = inference_result["thetas"][0]["id"]
         all_themes = [
-            {
+            {   
+                "theme_id": tid,
                 "label": theme_map.get(tid, tid),
                 "score": round(score, 4)
             }
@@ -533,6 +517,7 @@ def infer_text():
 
         # Sort and pick top theme
         all_themes.sort(key=lambda x: x["score"], reverse=True)
+        print(all_themes)
         top_theme = all_themes[0]["label"]
 
         return jsonify({
@@ -574,21 +559,16 @@ def model_info():
     model_name = data.get("model_name", "")
     print(f"Requested model_name: {model_name}")
 
-    results = registry.get()
+    results = registry.get(where={"model_name": model_name})
+    print(results)
+    meta = results['metadatas'][0]
+    trained_on = meta.get("trained_on", "")
+    trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
+    trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
 
-    for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"]):
-        if meta.get("model_name") == model_name:
-            try:
-                trained_on = meta.get("trained_on", "")
-                trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
-                trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
-            except Exception as e:
-                print("Date parse error:", e)
-                trained_on_local = trained_on  # fallback
-
-            model = {
+    model = {
                 "model_id": meta.get("model_id", ""),
-                "document": doc,
+                "document": results["documents"][0],
                 "model_type": meta.get("model_type", ""),
                 "model_name": model_name,
                 "num_topics": meta.get("num_topic", ""),
@@ -596,9 +576,9 @@ def model_info():
                 "trained_on": trained_on_local
             }
 
-            return jsonify(model)
+    return jsonify(model)
 
-    return abort(404, description="Model not found")
+
 
 
 
@@ -683,9 +663,12 @@ def get_theme_coordinates():
         theme_coords.append({
             "id": entry.get("topic_id") or entry.get("id"),
             "label": entry.get("label") or entry.get("theme"),
+            "size": float(entry.get("size")[:-1]) or float(entry.get("prevalence")[:-1]),
             "x": coords[0],
             "y": coords[1]
         })
+
+        print(theme_coords)
 
     return jsonify(theme_coords)
 
