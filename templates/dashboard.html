@@ -154,91 +154,80 @@ footer {
 
   <!-- Full Workspace -->
   <main class="flex-grow-1 px-4 py-3">
-    <div class="row g-3">
-      <!-- LEFT -->
-      <div class="col-lg-6 d-flex flex-column gap-3" style="height: 100%; overflow: hidden;">
+    <div class="d-flex flex-grow-1 gap-3 h-100">
+      
+      <!-- LEFT PANEL -->
+      <div class="d-flex flex-column gap-3" style="width: 50%; height: 100%; min-height: 0;">
   
-        <!-- Panel 1: Theme Overview -->
-        <div class="panel d-flex flex-column" style="flex: 1 1 0; overflow: hidden;">
+        <!-- Theme Overview Panel -->
+        <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold mb-0">Theme Overview</h5>
             <div class="d-flex gap-2">
-              <button id="barChartBtn" class="btn btn-sm btn-outline-primary">Bar Chart</button>
-              <button id="gridViewBtn" class="btn btn-sm btn-outline-primary">Grid View</button>
+              <button id="toggleChartBtn" class="btn btn-sm btn-outline-primary">Switch to Grid View</button>
             </div>
           </div>
       
-          <!-- Canvas container with max-height and overflow handling -->
-          <div class="flex-grow-1 d-flex">
-            <canvas hidden id="themeChart" class="w-100" style="height: 100%;"></canvas>
-            <canvas id="themeChartGrid" class="w-100" style="height: 100%;"></canvas>
+          <!-- Chart container -->
+          <div class="flex-grow-1 d-flex position-relative" style="min-height: 0;">
+            <canvas id="themeChart" class="w-100 h-100 position-absolute" hidden></canvas>
+            <canvas id="themeChartGrid" class="w-100 h-100 position-absolute"></canvas>
           </div>
         </div>
       
-        <!-- Panel 2: Theme Diagnostics -->
-        <!-- Panel 2: Theme Diagnostics -->
-      <div class="panel d-flex flex-column" style="flex: 1 1 0; overflow: hidden;">
-        <h6 class="fw-semibold mb-1 text-muted small">Theme Diagnostics</h6>
-        <p class="text-muted mb-2" style="font-size: 0.75rem;">
-          This table summarizes available diagnostics for each theme.
-        </p>
-
-        <!-- Fill remaining space -->
-        <div class="flex-grow-1 d-flex flex-column">
-          <div class="table-scroll-wrapper flex-grow-1 border rounded overflow-auto">
-            <table class="table table-sm table-hover align-middle mb-0 h-100" id="themeStatsTable" style="font-size: 0.75rem;">
-              <thead class="table-light sticky-top">
-                <!-- JS will populate this -->
-              </thead>
-              <tbody>
-                <!-- JS will populate this -->
-              </tbody>
-            </table>
+        <!-- Diagnostics Panel (Initially Hidden) -->
+        <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;" hidden>
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">Theme Diagnostics</h6>
+              <p class="text-muted mb-0" style="font-size: 0.75rem;">
+                Summary of diagnostics for each theme.
+              </p>
+            </div>
+          
+            <button id="toggleMetricBtn" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-bar-chart-line me-1"></i> Switch to Model Metrics
+            </button>
+          </div>
+          
+      
+          <!-- Theme Metrics Table -->
+          <div id="themeMetricsPanel" class="flex-grow-1 d-flex flex-column" style="max-height: 90%;">
+            <div class="table-scroll-wrapper flex-grow-1 border rounded overflow-auto">
+              <table class="table table-sm table-hover align-middle mb-0" id="themeStatsTable" style="font-size: 0.75rem;">
+                <thead class="table-light sticky-top" style="top: 0; z-index: 1;"></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+      
+          <!-- Theme Insights Grid -->
+          <div id="modelMetricsPanel" class="d-none flex-grow-1 d-flex flex-column">
+            <h6 class="fw-bold mb-3 mt-2">Theme Insights</h6>
+            <div id="themeInsightsGrid" class="row row-cols-2 small g-2 flex-grow-1 overflow-auto"></div>
           </div>
         </div>
       </div>
-
       
-      </div>
-      
-      
-
-      
-    
-
-      <div class="col-lg-6 d-flex flex-column gap-3" style="height: 100%; overflow: hidden;">
   
-        <!-- Panel 1: Theme Insights -->
-        <div class="panel" style="flex: 0 1 auto;">
-          <h6 class="fw-bold mb-3">Theme Insights</h6>
-          <div id="themeInsightsGrid" class="row row-cols-2 small g-2">
-            <!-- Metrics will be injected here -->
-          </div>
+      <!-- RIGHT PANEL (Documents Table) -->
+      <div class="panel d-flex flex-column flex-grow-1" style="width: 50%; overflow: hidden;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="fw-bold mb-0">Documents</h6>
+          <input type="text" id="docSearchInput" class="form-control form-control-sm w-50" placeholder="Search documents...">
         </div>
-      
-        <!-- Panel 2: Document Table -->
-        <div class="panel d-flex flex-column" style="flex: 1 1 0; overflow: hidden;">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="fw-bold mb-0">Documents</h6>
-            <input type="text" id="docSearchInput" class="form-control form-control-sm w-50" placeholder="Search documents...">
-          </div>
-      
-          <p class="small text-muted mb-2" style="font-size: 0.75rem;">Click on text to view full text information</p>
-      
-          <div class="flex-grow-1 overflow-auto">
-            <table class="table table-sm table-hover mb-0">
-              <thead id="docTableHead" class="sticky-top bg-white"></thead>
-              <tbody id="docTableBody"></tbody>
-            </table>
-          </div>
+        <p class="small text-muted mb-2" style="font-size: 0.75rem;">Click on text to view full text information</p>
+        <div class="flex-grow-1 overflow-auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead id="docTableHead" class="sticky-top bg-white"></thead>
+            <tbody id="docTableBody"></tbody>
+          </table>
         </div>
-      
       </div>
-      
-      
+  
     </div>
-  
   </main>
+  
   <footer>
     &copy; 2025 TOVA | AI-powered Topic Visualizer
   </footer>
@@ -386,7 +375,7 @@ footer {
                 </div>
           
                 <!-- Rationale -->
-                <div class="mb-3">
+                <div id="rationalDiv" class="mb-3">
                   <strong>Rationale:</strong>
                   <p id="modalRationale" class="fst-italic small text-muted mb-0" style="white-space: pre-wrap;"></p>
                 </div>
@@ -554,7 +543,7 @@ footer {
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
   <script src="/static/js/dashboard.js"></script>
-  <script src="/static/js/infer.js"></script>
+  <!-- <script src="/static/js/infer.js"></script> -->
   <script>
     model_name = document.getElementById("modelName").textContent;
     console.log(model_name)
@@ -569,11 +558,12 @@ footer {
       },
       body: JSON.stringify({ model_name: modelName })
     });
+    console.log("this worked")
 
     if (!res.ok) throw new Error("Failed to fetch model data");
 
     const model = await res.json();
-    // console.log("Fetched model data:", model);
+    console.log("Fetched model data:", model);
 
     const modalBody = document.getElementById("modelDetailBody");
 
@@ -614,18 +604,22 @@ footer {
     alert("Failed to load model details.");
   }
 }
-        const barChart = document.getElementById("themeChart");
-        const gridChart = document.getElementById("themeChartGrid");
-      
-        document.getElementById("barChartBtn").addEventListener("click", () => {
-          barChart.hidden = false;
-          gridChart.hidden = true;
-        });
-      
-        document.getElementById("gridViewBtn").addEventListener("click", () => {
-          barChart.hidden = true;
-          gridChart.hidden = false;
-        });
+
+  
+    const barChart = document.getElementById("themeChart");
+    const gridChart = document.getElementById("themeChartGrid");
+    const toggleBtn = document.getElementById("toggleChartBtn");
+
+    toggleBtn.addEventListener("click", () => {
+      const showingBar = !barChart.hidden;
+
+      barChart.hidden = showingBar;
+      gridChart.hidden = !showingBar;
+
+      // Update button text
+      toggleBtn.textContent = showingBar ? "Switch to Bar Chart" : "Switch to Grid View";
+    });
+
       </script>
       
       
