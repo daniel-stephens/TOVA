@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    modelName = document.getElementById("modelName").textContent;
+  modelName = document.getElementById("modelName").textContent;
     let themeColorMap = {}; 
     // console.log(modelName)
     let themes = [];
@@ -81,10 +81,13 @@ function lightenColor(hex, percent) {
 fetchThemes(modelName);
     // Inject colors into each theme
 const colors = generateColors(themes.length);
+
 themes = themes.map((t, i) => ({ ...t, color: colors[i] }));
 
 // Build chart data and render
 const themeChartData = createThemeChartData(themes);
+
+// console.log(themeChartData)
 renderThemeChart(themeChartData);
     
 function renderThemeChart(chartData) {
@@ -238,10 +241,48 @@ function renderDocumentTable(docs = []) {
       // Populate modal
       document.getElementById("modalFullText").textContent = doc.text || "—";
       document.getElementById("modalTheme").textContent = result.theme || "—";
-      document.getElementById("modalRationale").textContent = result.rationale || "—";
-  
+      
+      const rationale = result.rationale?.trim();
+      const rationaleDiv = document.getElementById("rationalDiv");
+
+      if (rationale) {
+        // If div doesn't exist yet, create it
+        if (!rationaleDiv) {
+          const newDiv = document.createElement("div");
+          newDiv.id = "rationalDiv";
+          newDiv.className = "mb-3";
+
+          const strong = document.createElement("strong");
+          strong.textContent = "Rationale:";
+
+          const p = document.createElement("p");
+          p.id = "modalRationale";
+          p.className = "fst-italic small text-muted mb-0";
+          p.style.whiteSpace = "pre-wrap";
+          p.textContent = rationale;
+
+          newDiv.appendChild(strong);
+          newDiv.appendChild(p);
+
+          document.getElementById("inferenceOutput").appendChild(newDiv);
+        } else {
+          // If already exists, just update the text
+          document.getElementById("modalRationale").textContent = rationale;
+        }
+      } else {
+        // Remove it only if it exists
+        if (rationaleDiv) {
+          rationaleDiv.remove();
+        }
+      }
+
+
+
+
     //   console.log(result.top_themes)
-      renderDocInferenceChart(result.top_themes);
+      
+      console.log(result.top_themes)
+      renderDocInferenceChart(result.top_themes, modelName);
 
   
       const modal = new bootstrap.Modal(document.getElementById("docDetailModal"), {
@@ -260,7 +301,7 @@ function renderDocumentTable(docs = []) {
 
   let docInferenceChart = null; // Global variable to track the chart instance
 
-  function renderDocInferenceChart(topThemes = []) {
+  function renderDocInferenceChart(topThemes = [], modelName = "") {
     const canvas = document.getElementById("docInferenceChart");
     if (!canvas) {
       console.warn("Canvas element #docInferenceChart not found.");
@@ -278,6 +319,12 @@ function renderDocumentTable(docs = []) {
       docInferenceChart.destroy();
     }
   
+    // 🎨 Safe color lookup function
+    const getThemeColor = (id) =>
+      themeColorMap["t" + id] || themeColorMap[id] || "#0d6efd";
+  
+    const backgroundColors = topThemes.map(t => getThemeColor(t.theme_id));
+  
     // ✅ Create and assign new chart
     docInferenceChart = new Chart(ctx, {
       type: "bar",
@@ -285,7 +332,7 @@ function renderDocumentTable(docs = []) {
         labels: topThemes.map(t => t.label),
         datasets: [{
           data: topThemes.map(t => t.score),
-          backgroundColor: "#0d6efd"
+          backgroundColor: backgroundColors
         }]
       },
       options: {
@@ -304,10 +351,35 @@ function renderDocumentTable(docs = []) {
               label: ctx => `${(ctx.parsed.y * 100).toFixed(1)}%`
             }
           }
+        },
+        onClick: (e, elements) => {
+          if (elements.length > 0) {
+            const index = elements[0].index;
+            const theme = topThemes[index];
+            const themeId = theme.theme_id.startsWith("t") ? theme.theme_id : "t" + theme.theme_id;
+            const color = getThemeColor(theme.theme_id);
+  
+            loadThemeDetails(themeId, color, modelName);
+  
+            // Optional: update modal styling
+            const modalHeader = document.querySelector("#themeDetailModal .modal-header");
+            if (modalHeader) {
+              modalHeader.style.borderBottom = `3px solid ${color}`;
+            }
+  
+            const themeLabel = document.querySelector("#themeDetailModal #modalThemeLabel");
+            if (themeLabel) {
+              themeLabel.style.color = color;
+            }
+  
+            new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
+          }
         }
       }
     });
   }
+  
+  
   
   
 
@@ -323,7 +395,7 @@ document.getElementById("docSearchInput").addEventListener("input", function () 
 
   let documents = [];
 
-    async function fetchDocuments(modelName) {
+  async function fetchDocuments(modelName) {
       try {
         const response = await fetch("/api/documents", {
           method: "POST",
@@ -346,7 +418,7 @@ document.getElementById("docSearchInput").addEventListener("input", function () 
       }
     }
   fetchDocuments(modelName);
-renderDocumentTable(documents);
+  renderDocumentTable(documents);
 
 
 function populateThemeDiagnosticsTable(themes = []) {
@@ -436,17 +508,15 @@ async function populateThemeInsightsFromAPI() {
     const data = await res.json();
     const metrics = data.metrics;
 
-    metrics.forEach((metric, i) => {
+    metrics.forEach((metric) => {
       const col = document.createElement("div");
       col.className = "col-md-6";
 
-      const bgClass = i % 2 === 0 ? "bg-light-subtle" : "bg-body-tertiary";
-
       col.innerHTML = `
-        <div class="p-2 mb-2 ${bgClass} rounded medium-text">
-          <div class="d-flex justify-content-between">
-            <strong>${metric.label}</strong>
-            <span class="text-muted">${typeof metric.value === "number" ? metric.value.toFixed(2) : metric.value}</span>
+        <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light shadow-sm">
+          <div class="text-muted small fw-semibold">${metric.label}</div>
+          <div class="fw-bold text-dark small">
+            ${typeof metric.value === "number" ? metric.value.toFixed(2) : metric.value}
           </div>
         </div>
       `;
@@ -454,10 +524,11 @@ async function populateThemeInsightsFromAPI() {
       container.appendChild(col);
     });
   } catch (error) {
-    container.innerHTML = `<div class="text-danger">Failed to load theme insights.</div>`;
+    container.innerHTML = `<div class="text-danger small">⚠️ Failed to load theme insights.</div>`;
     console.error("Error loading metrics:", error);
   }
 }
+
 
   
   
@@ -595,19 +666,20 @@ function renderFilteredTable(filters = []) {
       
       // ✅ Use filtered table function
       renderFilteredTable(data.documents);
-      renderThemeSimilarityChart(data.similar_themes);
+      renderThemeSimilarityChart(data.similar_themes, modelName);
 
 
     }
 
-    function renderThemeSimilarityChart(similarThemes) {
+    function renderThemeSimilarityChart(similarThemes, modelName = "") {
       const canvas = document.getElementById("similarityDotPlot");
       if (!canvas) return console.error("Canvas with ID 'similarityDotPlot' not found.");
       const ctx = canvas.getContext("2d");
     
-      // ✅ Sort by absolute distance from 0 (more similar = closer to 0)
+      // ✅ Sort by absolute distance from 0
       const processed = similarThemes
         .map(t => ({
+          id: t.ID,
           theme: `Theme ${t.ID}`,
           similarity: parseFloat(t.Similarity)
         }))
@@ -615,13 +687,12 @@ function renderFilteredTable(filters = []) {
     
       const labels = processed.map(t => t.theme);
       const values = processed.map(t => t.similarity);
+      const backgroundColors = processed.map(t => themeColorMap["t" + t.id] || "#4B8DF8");
     
-      // ✅ Destroy existing chart if needed
       if (window.similarityDotPlot instanceof Chart) {
         window.similarityDotPlot.destroy();
       }
     
-      // ✅ Create the chart
       window.similarityDotPlot = new Chart(ctx, {
         type: "bar",
         data: {
@@ -629,7 +700,7 @@ function renderFilteredTable(filters = []) {
           datasets: [{
             label: "Similarity Score",
             data: values,
-            backgroundColor: "#4B8DF8",
+            backgroundColor: backgroundColors,
             borderRadius: 4
           }]
         },
@@ -652,13 +723,37 @@ function renderFilteredTable(filters = []) {
                 label: ctx => `Similarity: ${ctx.raw.toFixed(3)}`
               }
             }
+          },
+          onClick: (e, elements) => {
+            if (elements.length > 0) {
+              const index = elements[0].index;
+              const theme = processed[index];
+              const themeId = "t" + theme.id;
+              const color = themeColorMap[themeId] || "#0d6efd";
+    
+              loadThemeDetails(themeId, color, modelName);
+    
+              const modalHeader = document.querySelector("#themeDetailModal .modal-header");
+              if (modalHeader) {
+                modalHeader.style.borderBottom = `3px solid ${color}`;
+              }
+    
+              const themeLabel = document.querySelector("#themeDetailModal #modalThemeLabel");
+              if (themeLabel) {
+                themeLabel.style.color = color;
+              }
+    
+              new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
+            }
           }
         }
       });
     }
+    
+    
 
 
-    document.getElementById("themeDetailModal").addEventListener("hidden.bs.modal", () => {
+      document.getElementById("themeDetailModal").addEventListener("hidden.bs.modal", () => {
         if (themeTrendChart instanceof Chart) {
           themeTrendChart.destroy();
           themeTrendChart = null;
@@ -678,8 +773,9 @@ function renderFilteredTable(filters = []) {
           if (!response.ok) throw new Error('Failed to fetch theme coordinates');
       
           const data = await response.json();
-          console.log('Theme Coordinates:', data);
-      
+          // console.log('Theme Coordinates:', data);
+          
+          // console.log(data)
           // 👉 You can now call a function to plot, e.g.:
           plotScatterChart(data, modelName);
       
@@ -699,17 +795,28 @@ function renderFilteredTable(filters = []) {
       function plotScatterChart(data, modelName) {
         const ctx = document.getElementById("themeChartGrid").getContext("2d");
       
+        const minSize = Math.min(...data.map(d => d.size));
+        const maxSize = Math.max(...data.map(d => d.size));
+      
+        // Normalize size to a range (e.g., 10 to 40)
+        const normalizeSize = (s) => {
+          const minRadius = 10;
+          const maxRadius = 40;
+          if (maxSize === minSize) return (minRadius + maxRadius) / 2;
+          return ((s - minSize) / (maxSize - minSize)) * (maxRadius - minRadius) + minRadius;
+        };
+      
         if (scatterChartInstance) {
           scatterChartInstance.destroy();
         }
-      
-        const scatterPoints = data.map(d => {
+          const scatterPoints = data.map(d => {
           const solidColor = themeColorMap[d.id] || "rgba(66, 133, 244, 1)";
           const fillColor = solidColor.replace("rgb(", "rgba(").replace(")", ", 0.2)");
       
           return {
             x: d.x,
             y: d.y,
+            r: normalizeSize(d.size),  // 👈 Used dynamically below
             label: d.label,
             id: d.id,
             color: solidColor,
@@ -725,9 +832,8 @@ function renderFilteredTable(filters = []) {
               data: scatterPoints,
               backgroundColor: scatterPoints.map(p => p.backgroundColor),
               borderColor: scatterPoints.map(p => p.borderColor),
-              borderWidth: 2,
-              pointRadius: 30,         // ⬅️ Bigger circles
-              pointHoverRadius: 42     // ⬅️ Bigger hover effect
+              borderWidth: 2
+              // ⛔ Remove fixed pointRadius here — use dynamic one in options
             }
           ]
         };
@@ -741,7 +847,7 @@ function renderFilteredTable(filters = []) {
             meta.data.forEach((point, index) => {
               const { x, y } = point.getCenterPoint();
               ctx.fillStyle = "#000";
-              ctx.font = "bold 13px sans-serif";  // ⬅️ Bigger label text
+              ctx.font = "bold 13px sans-serif";
               ctx.textAlign = "center";
               ctx.textBaseline = "middle";
               ctx.fillText(scatterPoints[index].label, x, y);
@@ -757,13 +863,25 @@ function renderFilteredTable(filters = []) {
             responsive: true,
             maintainAspectRatio: false,
             layout: {
-              padding: 20  // Slightly more padding inside chart
+              padding: 20
             },
             plugins: {
               legend: { display: false },
               tooltip: {
                 callbacks: {
                   label: ctx => ctx.raw.label
+                }
+              }
+            },
+            elements: {
+              point: {
+                radius: ctx => {
+                  const index = ctx.dataIndex;
+                  return scatterPoints[index].r || 20;
+                },
+                hoverRadius: ctx => {
+                  const index = ctx.dataIndex;
+                  return (scatterPoints[index].r || 20) * 1.2;
                 }
               }
             },
@@ -814,13 +932,142 @@ function renderFilteredTable(filters = []) {
       }
       
       
+      
+      const toggleMetricBtn = document.getElementById("toggleMetricBtn");
+      const themeMetricsPanel = document.getElementById("themeMetricsPanel");
+      const modelMetricsPanel = document.getElementById("modelMetricsPanel");
+      
+      toggleMetricBtn.addEventListener("click", () => {
+        const showingTheme = !themeMetricsPanel.classList.contains("d-none");
+      
+        themeMetricsPanel.classList.toggle("d-none", showingTheme);
+        modelMetricsPanel.classList.toggle("d-none", !showingTheme);
+      
+        toggleMetricBtn.textContent = showingTheme
+          ? "Switch to Theme Metrics"
+          : "Switch to Model Metrics";
+      });
 
+      
+    /// Inference
+    const toggleTextBtn = document.getElementById("toggleTextInput");
+    const toggleFileBtn = document.getElementById("toggleFileInput");
+    const textArea = document.getElementById("textAreaSpace");
+    const fileGroup = document.getElementById("fileInputGroup");
+    const inferedBlock = document.getElementById("inferredResults");
+    let madeInference = false;
+    toggleTextBtn.addEventListener("click", () => {
+          textArea.style.display = "block";
+          fileGroup.style.display = "none";
+          toggleTextBtn.classList.add("active");
+          toggleFileBtn.classList.remove("active");
+          if (madeInference) {
+              inferedBlock.style.display = "block";
+            }
+  
+          // console.log(madeInference)
+            
+          
+        });
+        
+        toggleFileBtn.addEventListener("click", () => {
+          textArea.style.display = "none";
+          fileGroup.style.display = "block";
+          toggleFileBtn.classList.add("active");
+          toggleTextBtn.classList.remove("active");
+          inferedBlock.style.display = "none";
+        });
+  
+        function renderInferenceResults(topThemes = [], rationale = "") {
+          if (!topThemes || topThemes.length === 0) return;
+        
+          // Theme + rationale
+          document.getElementById("inferredTheme").textContent = topThemes[0].label || "–";
+          const rationaleDiv = document.getElementById("inferredRationaleWrapper");
+          const rationaleText = document.getElementById("inferredRationale");
+        
+          if (!rationale || rationale.trim() === "") {
+            rationaleDiv.style.display = "none";
+          } else {
+            rationaleText.textContent = rationale;
+            rationaleDiv.style.display = "block";
+          }
+        
+          // Adjust layout
+          document.getElementById("textAreaSpace").className = "col-md-6";
+        
+          // Show results block
+          document.getElementById("inferredResults").style.display = "block";
+        
+          // Get canvas context
+          const ctx = document.getElementById("inferredThemeChart").getContext("2d");
+          if (window.inferredChart) window.inferredChart.destroy();
+        
+          // Get background colors from themeColorMap
+
+          
+          const backgroundColors = topThemes.map(t => themeColorMap[t.theme_id] || "#0d6efd");
+        
+          // Create chart
+          window.inferredChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: topThemes.map(t => t.label),
+              datasets: [{
+                data: topThemes.map(t => t.score),
+                backgroundColor: backgroundColors
+              }]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: { beginAtZero: true, max: 1 }
+              },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: ctx => `${(ctx.parsed.y * 100).toFixed(1)}%`
+                  }
+                }
+              }
+            }
+          });
+        }
+        
+
+  // console.log(modelName)
+    document.getElementById("inferBtn").addEventListener("click", async () => {
+      const text = document.getElementById("inputText").value.trim();
+      madeInference = true;
+      if (!text) return alert("Please enter some text.");
+    
+      try {
+        const response = await fetch("/infer-text", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ text: text, id: "id", model: modelName })
+        });
+    
+        if (!response.ok) throw new Error("Failed to fetch inference");
+    
+        const result = await response.json();
+        const { top_themes, rationale } = result;
+    
+        renderInferenceResults(top_themes, rationale);
+      } catch (err) {
+        console.error("Inference error:", err);
+        alert("Failed to perform inference.");
+      }
+    }); 
 
       
       
 
       
-      
+      console.log(themeColorMap)
       
 
 
