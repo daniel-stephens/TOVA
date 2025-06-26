@@ -8,7 +8,9 @@ import shutil
 from flask import session
 from zoneinfo import ZoneInfo
 import random
- 
+from datetime import datetime
+import sqlite3
+
 
 server = Flask(__name__)
 server.secret_key = 'your-secret-key'
@@ -36,6 +38,7 @@ registry = client.get_or_create_collection("corpus_model_registry")
 # 1. Home Page
 @server.route('/')
 def home():
+    create_normalized_schema()
     return render_template('index.html')
 
 # This function makes you view your data before it is uploaded
@@ -93,82 +96,89 @@ def validate_route():
 @server.route('/loadDB', methods=['POST'])
 def loadDB_route():
     files = request.files.getlist('files')
-    textColumn = request.form.get('text_column')
-    corpusName = request.form.get('corpusName')
+    text_column = request.form.get('text_column')
+    corpus_name = request.form.get('corpusName')
+    original_id_column = request.form.get('originalID')  # Optional
 
     if not files:
         return jsonify({"status": "error", "message": "No files received."}), 400
 
     inserted = 0
-    for file in files:
-        print("📥", file.filename)
-        ext = os.path.splitext(file.filename)[1].lower().replace('.', '')  # get extension without the dot
 
-        # Save temporarily
+    # Connect to SQLite
+    conn = sqlite3.connect("database/mydatabase.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    # Insert corpus (if it doesn't exist)
+    cursor.execute("""
+        INSERT OR IGNORE INTO corpus (name) VALUES (?)
+    """, (corpus_name,))
+
+    for file in files:
+        # print("📥", file.filename)
+        ext = os.path.splitext(file.filename)[1].lower().replace('.', '')
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
             tmp.write(file.read())
             tmp_path = tmp.name
 
         try:
-            # ✅ Load and prepare text columns
+            # Load file into DataFrame
             df = processFile(
                 file_path=tmp_path,
                 file_type=ext,
-                text_column=textColumn
+                text_column=text_column
             )
-
             print("Processed Complete")
 
-            # ✅ Check if 'Context' column exists
             if "Context" not in df.columns:
                 raise ValueError(f"'Context' column not found in file. Found columns: {list(df.columns)}")
 
-            documents = df["Context"].astype(str).tolist()  # Ensure strings
-            print("Documents Retrieved")
+            documents = df["Context"].astype(str).tolist()
+            original_ids = (
+                df[original_id_column].astype(str).tolist()
+                if original_id_column and original_id_column in df.columns
+                else [None] * len(documents)
+            )
 
-            # ✅ Get safe filename
             file_name = getattr(file, "filename", str(file))
-
-            print("\nBuilding Metadata")
-
-            # ✅ Build metadatas
-            metadatas = [{
-                "file_name": file_name,
-                "corpus_name": corpusName,
-                "models_used": ""  # Start with an empty list, update later
-            } for _ in documents]  # Not df.iterrows()
-
-            print("\nGetting the IDs")
-            # ✅ Build IDs
             ids = [f"{file_name}_{i}" for i in range(len(documents))]
 
-            # ✅ Confirm all lengths match
-            assert len(documents) == len(metadatas) == len(ids), "Mismatch in data lengths"
+            assert len(ids) == len(documents) == len(original_ids), "Length mismatch"
 
-            print("\n\n Inserting into the Database")
-            # ✅ Insert into collection
-            collection.add(
-                documents=documents,
-                metadatas=metadatas,
-                ids=ids
-            )
-            print("\n\nInsert done")
-            inserted += len(df)
+            # Prepare and insert data
+            insert_query = """
+                INSERT OR IGNORE INTO documents (
+                    id, original_text_id, document, file_name, corpus_name, models_used
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """
+            data_to_insert = list(zip(
+                ids,
+                original_ids,
+                documents,
+                [file_name] * len(documents),
+                [corpus_name] * len(documents),
+                [''] * len(documents)  # models_used
+            ))
+            cursor.executemany(insert_query, data_to_insert)
+            conn.commit()
+            print("Inserted into documents")
+            inserted += len(documents)
 
         except Exception as e:
-            
             print(f"❌ Failed to insert file {file.filename}: {str(e)}")
             traceback.print_exc()
 
-
         finally:
             os.remove(tmp_path)
+
+    conn.close()
 
     return jsonify({
         "status": "success",
         "message": f"{inserted} document(s) processed and added."
     }), 200
-
 
 
 
@@ -190,50 +200,54 @@ def run_model():
         save_name = data.get("save_name")
         corpuses = data.get("corpuses")
         training_params = data.get("training_params")
-        num_topics = training_params["num_topics"]
+        num_topics = training_params.get("num_topics")
 
-
-        # Basic validations
         if not model_name:
-            return jsonify({"status": "error", "message": "Missing 'model_name' in request."}), 400
+            return jsonify({"status": "error", "message": "Missing 'model_name'."}), 400
 
         if model_name not in model_registry:
             return jsonify({"status": "error", "message": f"Model '{model_name}' not found in registry."}), 400
 
         if not save_name:
-            return jsonify({"status": "error", "message": "Missing 'save_name' (name to save the model)."}), 400
+            return jsonify({"status": "error", "message": "Missing 'save_name'."}), 400
 
-        # Try to ensure num_topics is a valid number
         try:
             num_topics = int(num_topics)
             if num_topics < 2:
-                return jsonify({"status": "error", "message": "'num_topics' must be greater than or equal to 2."}), 400
-        except ValueError:
+                return jsonify({"status": "error", "message": "'num_topics' must be >= 2."}), 400
+        except (ValueError, TypeError):
             return jsonify({"status": "error", "message": "'num_topics' must be an integer."}), 400
 
+        # Connect to SQLite
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
 
         final_output = []
 
         for corpus in corpuses:
-            documents, metadatas, ids = get_corpus_data(corpus, collection)
+            cursor.execute("SELECT id, document FROM documents WHERE corpus_name = ?", (corpus,))
+            rows = cursor.fetchall()
 
-            for doc, doc_id in zip(documents, ids):
+            # print(f"Found {len(rows)} documents in corpus '{corpus}'.")
+            for doc_id, doc_text in rows:
                 final_output.append({
                     "id": doc_id,
-                    "raw_text": doc
+                    "raw_text": doc_text
                 })
-            
-            print(f"Found {len(documents)} documents in corpus '{corpus}'.")
 
+        if not final_output:
+            return jsonify({"status": "error", "message": "No documents found for selected corpora."}), 400
+
+        # Payload for model training API
         payload = {
             "config_path": "static/config/config.yaml",
             "model": model_name,
-            "output": "models/"+ save_name,
+            "output": f"models/{save_name}",
             "text_col": "raw_text",
             "data": final_output,
             "training_params": training_params,
             "do_preprocess": True,
-            "id_col": "id",
+            "id_col": "id"
         }
 
         headers = {
@@ -241,55 +255,80 @@ def run_model():
             "Content-Type": "application/json"
         }
 
-        response = requests.post(modelurl+"train/json", json=payload, headers=headers)
+        response = requests.post(modelurl + "train/json", json=payload, headers=headers)
 
-        # Print result
         print("Status Code:", response.status_code)
-        print("Response JSON:", response.json())
+        # print("Response JSON:", response.json())
 
         trained_on = datetime.utcnow().isoformat()
+        joined_corpuses = ", ".join(corpuses)
+        joined_id = "_".join(corpuses)
+        model_id = f"{model_name}_{joined_id}_{trained_on}"
 
-        
-        joined_corpuses = ", ".join(corpuses)  # for display
-        joined_id = "_".join(corpuses)         # for ID, safer string
+        # Insert model metadata
+        # Insert model metadata
+        cursor.execute("""
+            INSERT INTO model_registry (
+                model_id, model_type, num_topic, model_name, trained_on, description, training_params
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            model_id,
+            model_name,
+            num_topics,
+            save_name,
+            trained_on,
+            f"Trained {model_name} on {joined_corpuses}",
+            json.dumps(training_params)  # 👈 Serialize training params to JSON
+        ))
 
-        registry.add(
-            documents=[f"Trained {model_name} on {joined_corpuses}"],
-            metadatas=[{
-                "model_id" : f"{model_name}_{joined_id}_{trained_on}",
-                "model_type": model_name,
-                "num_topic": num_topics,
-                "model_name": save_name,
-                "corpus_names": joined_corpuses,  # you *can* keep this as a list in metadata
-                "trained_on": trained_on
-            }],
-            ids=[f"{model_name}_{joined_id}_{trained_on}"]
-        )
+
+        # Map model to each corpus
+        model_corpus_pairs = [(model_id, corpus) for corpus in corpuses]
+        cursor.executemany("""
+            INSERT INTO model_corpus_map (model_id, corpus_name)
+            VALUES (?, ?)
+        """, model_corpus_pairs)
+
+        conn.commit()
+        conn.close()
 
         return jsonify({
             "status": "success",
-            "message": "The system works is ready to use."
+            "message": f"Model '{model_name}' trained and saved as '{save_name}'."
         }), 200
 
     except Exception as e:
+        print("❌ Error in run_model:", str(e))
         return jsonify({
             "status": "error",
             "message": f"Model run failed: {str(e)}"
         }), 500
 
 
-# This function fetches the corpora to be selected
 @server.route('/corpora')
 def get_corpus_names():
     print("Looking for corpus names...")
-    results = collection.get(include=["metadatas"], limit=10000)
-    all_corpora = [
-        meta.get("corpus_name", "").strip()
-        for meta in results["metadatas"]
-        if meta.get("corpus_name") and isinstance(meta.get("corpus_name"), str)
-    ]
-    unique_corpora = sorted(set(all_corpora))
-    return jsonify(unique_corpora)
+
+    try:
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
+
+        # Get all corpus names from the corpus table
+        cursor.execute("SELECT name FROM corpus")
+        rows = cursor.fetchall()
+
+        # Extract and sort
+        unique_corpora = sorted(row[0] for row in rows)
+
+        return jsonify(unique_corpora)
+
+    except Exception as e:
+        print(f"❌ Error fetching corpus names: {e}")
+        return jsonify({"status": "error", "message": "Failed to retrieve corpus names"}), 500
+
+    finally:
+        conn.close()
+
 
 
 # This function gets the configuration file for the Models
@@ -311,43 +350,88 @@ def get_model_registry():
 def delete_corpus():
     try:
         data = request.get_json()
-        print("Received request to delete corpus:", data)
+        print("Received request to delete corpus:")
 
         corpus_name = data.get("corpus_name")
         if not corpus_name:
             return jsonify({"status": "error", "message": "No corpus_name provided."}), 400
 
-        collection.delete(where={"corpus_name": corpus_name})
+        # Connect to database
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
 
-        return jsonify({"status": "success", "message": f"Corpus '{corpus_name}' deleted."})
+        # First delete all documents that belong to the corpus
+        cursor.execute("DELETE FROM documents WHERE corpus_name = ?", (corpus_name,))
+
+        # Then delete the corpus itself
+        cursor.execute("DELETE FROM corpus WHERE name = ?", (corpus_name,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "status": "success",
+            "message": f"Corpus '{corpus_name}' and its documents deleted."
+        })
+
     except Exception as e:
         print("Error during corpus deletion:", str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 ##################################################################################
 # 3. Trained Models
+from zoneinfo import ZoneInfo
+from datetime import datetime
+import sqlite3
+from flask import render_template, jsonify
+
 @server.route("/trained-models")
 def trained_models():
-    results = registry.get()
+    try:
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
 
+        cursor.execute("SELECT * FROM model_registry")
+        rows = cursor.fetchall()
 
-    # Build list of model entries
-    models = [
-        {
-            "model_id":meta.get("model_id", ""),
-            "document": doc,
-            "model_type":meta.get("model_type", ""),
-            "model_name": meta.get("model_name", ""),
-            "num_topics": meta.get("num_topic", ""),
-            "corpus_names": meta.get("corpus_names", ""),
-            "trained_on": datetime.fromisoformat(meta.get("trained_on", "")).replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
- 
-        }
-        for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
-    ]
+        # Get column names so we can access fields by name (safer if schema changes)
+        columns = [desc[0] for desc in cursor.description]
 
-    return render_template("trained_models.html", models=models)
+        models = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+
+            # Format timestamp
+            try:
+                dt = datetime.fromisoformat(row_dict["trained_on"]).replace(tzinfo=ZoneInfo("UTC"))
+                local_time = dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+            except Exception:
+                local_time = row_dict["trained_on"]
+
+            models.append({
+                "model_id": row_dict["model_id"],
+                "document": row_dict["description"],
+                "model_type": row_dict["model_type"],
+                "model_name": row_dict["model_name"],
+                "num_topics": row_dict["num_topic"],
+                "training_params": json.loads(row_dict["training_params"]) if row_dict.get("training_params") else {},
+                "corpus_names": get_model_corpora(row_dict["model_id"]),
+                "trained_on": local_time
+            })
+
+        return render_template("trained_models.html", models=models)
+
+    except Exception as e:
+        print("❌ Error fetching trained models:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    finally:
+        conn.close()
 
 
 @server.route('/delete-model/', methods=['POST'])
@@ -357,6 +441,7 @@ def delete_model():
     model_name = data.get("model_name")
     modelpath = f"./models/{model_name}"
 
+    # ✅ Delete model folder (if exists)
     if os.path.exists(modelpath) and os.path.isdir(modelpath):
         shutil.rmtree(modelpath)
         print(f"✅ Deleted model folder: {modelpath}")
@@ -367,17 +452,35 @@ def delete_model():
         return jsonify({"status": "error", "message": "No model_id provided"}), 400
 
     try:
-        registry.delete(where={"model_id": model_id})
-        dashboard_data =  read_dashboard_json()
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+
+        # ✅ Delete from model_corpus_map first (due to FK constraints)
+        cursor.execute("DELETE FROM model_corpus_map WHERE model_id = ?", (model_id,))
+        # ✅ Delete from model_registry
+        cursor.execute("DELETE FROM model_registry WHERE model_id = ?", (model_id,))
+        conn.commit()
+        conn.close()
+
+        # ✅ Optionally update dashboard data
+        dashboard_data = read_dashboard_json()
         if model_name in dashboard_data:
             del dashboard_data[model_name]
-        with open('data.json', 'w') as file:
-            json.dump(data, file, indent=4)
-        
+            with open('data.json', 'w') as file:
+                json.dump(dashboard_data, file, indent=4)
 
-        return jsonify({"status": "success", "message": f"Model '{model_id}' deleted."})
+        return jsonify({
+            "status": "success",
+            "message": f"Model '{model_id}' deleted."
+        })
+
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        print("❌ Error deleting model:", str(e))
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 ###################################################################################
@@ -386,11 +489,11 @@ def delete_model():
 @server.route("/dashboard/<model_name>", methods=["GET", "POST"])
 def dashboard(model_name):
 
-    print("Model Name (from URL):", model_name)
+    # print("Model Name (from URL):", model_name)
 
-    themeSummary, themeDetails = fetch_and_process_model_info(model_path=model_name)
-    add_model_to_dashboard(model_name, themeSummary=themeSummary, themeDetails=themeDetails)
-    print(model_name)
+    themeSummary, themeDetails, modelMetrics = fetch_and_process_model_info(model_path=model_name)
+    add_model_to_dashboard(model_name, themeSummary=themeSummary, themeDetails=themeDetails, modelLevelMetrics=modelMetrics)
+    # print(model_name)
     return render_template("dashboard.html", model_name=model_name)
 
 
@@ -399,7 +502,7 @@ def dashboard(model_name):
 def get_themes():
     try:
         data = request.get_json(force=True)  # 🔁 force=True to parse even without header
-        print("Raw JSON from request:", data)
+        # print("Raw JSON from request:", data)
 
         if not data or "model" not in data:
             return jsonify({"error": "Missing 'model' in request body"}), 400
@@ -437,8 +540,6 @@ def text_info():
     thetas = get_thetas_by_doc_ids(text_id, model_name)
 
     textData = format_theta_output_dict(thetas, dashboard_data[model_name]["Theme Summary"])
-    print(textData)
-
 
     return jsonify(textData[text_id])
 
@@ -493,8 +594,6 @@ def infer_text():
         infer_response = requests.post(inferurl, json=infer_payload, headers=headers)
         infer_response.raise_for_status()
         inference_result = infer_response.json()
-        print(inference_result) 
-        # Load dashboard JSON (contains Theme Summary)
         dashboard_data = read_dashboard_json()
 
         model_data = dashboard_data.get(model_name)
@@ -502,22 +601,30 @@ def infer_text():
             return jsonify({"error": f"No data found for model '{model_name}'"}), 404
 
         theme_summary = model_data.get("Theme Summary", [])
-        theme_map = {item["id"]: item["label"] for item in theme_summary}
 
-        # Process inference results
+        # ✅ Build lookup maps
+        theme_map = {
+            item["id"]: {
+                "label": item.get("label", item["id"]),
+                "keywords": item.get("keywords", "")
+            }
+            for item in theme_summary
+        }
+
+        # ✅ Process inference results
         theta = inference_result["thetas"][0]["id"]
         all_themes = [
-            {   
+            {
                 "theme_id": tid,
-                "label": theme_map.get(tid, tid),
-                "score": round(score, 4)
+                "label": theme_map.get(tid, {}).get("label", tid),
+                "score": round(score, 4),
+                "keywords": theme_map.get(tid, {}).get("keywords", "")
             }
             for tid, score in theta.items()
         ]
 
         # Sort and pick top theme
         all_themes.sort(key=lambda x: x["score"], reverse=True)
-        print(all_themes)
         top_theme = all_themes[0]["label"]
 
         return jsonify({
@@ -529,7 +636,6 @@ def infer_text():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 
 @server.route('/api/documents', methods = ["POST"])
@@ -547,9 +653,11 @@ def get_documents():
     for theme, details in data[modelName]["Theme Details"].items()
     for doc in details.get("documents", [])
 ]
-    random.shuffle(allDocuments)
+    # random.shuffle(allDocuments)
 
     return jsonify(allDocuments)
+
+
 
 
 
@@ -559,68 +667,90 @@ def model_info():
     model_name = data.get("model_name", "")
     print(f"Requested model_name: {model_name}")
 
-    results = registry.get(where={"model_name": model_name})
-    print(results)
-    meta = results['metadatas'][0]
-    trained_on = meta.get("trained_on", "")
-    trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
-    trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+    if not model_name:
+        return jsonify({"status": "error", "message": "Missing model_name"}), 400
 
-    model = {
-                "model_id": meta.get("model_id", ""),
-                "document": results["documents"][0],
-                "model_type": meta.get("model_type", ""),
-                "model_name": model_name,
-                "num_topics": meta.get("num_topic", ""),
-                "corpus_names": meta.get("corpus_names", ""),
-                "trained_on": trained_on_local
-            }
+    try:
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
 
-    return jsonify(model)
+        cursor.execute("""
+            SELECT model_id, model_type, num_topic, model_name, trained_on, description, training_params
+            FROM model_registry
+            WHERE model_name = ?
+            LIMIT 1
+        """, (model_name,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"status": "error", "message": "Model not found."}), 404
+
+        model_id, model_type, num_topic, model_name, trained_on, description, training_params_json = row
+
+        # Format training date
+        try:
+            trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
+            trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+        except Exception:
+            trained_on_local = trained_on
+
+        # Get corpus names
+        conn = sqlite3.connect("database/mydatabase.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT corpus_name FROM model_corpus_map WHERE model_id = ?", (model_id,))
+        corpus_rows = cursor.fetchall()
+        conn.close()
+
+        corpus_names = ", ".join(row[0] for row in corpus_rows)
+
+        try:
+            training_params = json.loads(training_params_json) if training_params_json else {}
+        except Exception:
+            training_params = {}
+
+        model = {
+            "model_id": model_id,
+            "document": description,
+            "model_type": model_type,
+            "model_name": model_name,
+            "num_topics": num_topic,
+            "corpus_names": corpus_names,
+            "trained_on": trained_on_local,
+            "training_params": training_params
+        }
+
+        return jsonify(model)
+
+    except Exception as e:
+        print("❌ Error in /api/model-info:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 
-
-
-@server.route('/api/theme-metrics')
+@server.route('/api/theme-metrics', methods=["POST", "GET"])
 def get_theme_metrics():
-    data = {
-        "metrics": [
-            {
-                "label": "Topic Assignment Confidence",
-                "value": 0.87,
-                "note": "(range: 0 to 1)",
-                "id": "avgConfidence"
-            },
-            {
-                "label": "Keyword Overlap (Avg)",
-                "value": 2.3,
-                "id": "avgOverlap"
-            },
-            {
-                "label": "Topic Balance (Entropy)",
-                "value": 0.91,
-                "note": "Higher entropy = more evenly distributed topics",
-                "id": "entropyScore"
-            },
-            {
-                "label": "Most Unique Theme",
-                "value": "Privacy & Data",
-                "id": "mostUniqueTopic"
-            },
-            {
-                "label": "Least Confident Theme",
-                "value": "Digital Identity (avg 0.61)",
-                "id": "leastConfTopic"
-            },
-            {
-                "label": "Top Emerging Theme",
-                "value": "Remote Work & Society",
-                "id": "emergingTheme"
-            }
-        ]
+    data = request.get_json()
+    # print(data)
+    model_name = data.get("model", "")
+    dashboard_data = read_dashboard_json()
+    model_metrics = dashboard_data[model_name]["Model-Level Metrics"]
+    converted_metrics = {
+    "metrics": []
     }
-    return jsonify(data)
+
+    for key, value in model_metrics.items():
+        metric_entry = {
+            "label": key,
+            "value": value,
+            "id": key.lower()
+                    .replace("(", "")
+                    .replace(")", "")
+                    .replace(" ", "_")
+                    .replace("-", "_")
+        }
+        converted_metrics["metrics"].append(metric_entry)
+    return jsonify(converted_metrics)
 
 
 
@@ -665,10 +795,11 @@ def get_theme_coordinates():
             "label": entry.get("label") or entry.get("theme"),
             "size": float(entry.get("size")[:-1]) or float(entry.get("prevalence")[:-1]),
             "x": coords[0],
-            "y": coords[1]
+            "y": coords[1],
+            "keywords":entry.get("keywords")
         })
 
-        print(theme_coords)
+        # print(theme_coords)
 
     return jsonify(theme_coords)
 
@@ -707,7 +838,7 @@ def get_model_info():
             return jsonify({"error": "Failed to retrieve model info."}), 500
 
         topic_info = response.json()
-        print(topic_info)
+        # print(topic_info)
         return jsonify(topic_info)
 
     except Exception as e:
@@ -891,7 +1022,7 @@ def list_models():
         name for name in os.listdir(model_dir)
         if os.path.isdir(os.path.join(model_dir, name))
     ]
-    print(models)
+    # print(models)
 
     return jsonify(models)
 

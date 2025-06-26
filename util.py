@@ -197,7 +197,14 @@ def get_corpus_data(corpus_name, coll):
 
 import requests
 
-def fetch_and_process_model_info(model_path: str, endpoint: str = "http://127.0.0.1:8989/queries/model-info"):
+def fetch_and_process_model_info(
+    model_path: str,
+    endpoint: str = "http://127.0.0.1:8989/queries/model-info",
+    db_path: str = "database/mydatabase.db"):
+    """
+    Fetches model info from external service, and extracts summary, theme data, and metrics.
+    Uses SQLite to retrieve document content.
+    """
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json"
@@ -215,10 +222,12 @@ def fetch_and_process_model_info(model_path: str, endpoint: str = "http://127.0.
     
     allInfo = response.json()
 
-    themeDetails = build_theme_data_dict(allInfo, collection)
+    modelLevelMetrics = allInfo.get("Model-Level Metrics", {})
+    themeDetails = build_theme_data_dict(allInfo, db_path=db_path)
     summary = extract_topic_summaries(allInfo)
     themeSummary = sorted(summary, key=lambda t: t["document_count"], reverse=True)
-    return themeSummary, themeDetails
+
+    return themeSummary, themeDetails, modelLevelMetrics
 
 
 def call_gateway(url, method="POST", payload=None, headers=None):
@@ -254,13 +263,14 @@ def call_gateway(url, method="POST", payload=None, headers=None):
         return f"Exception occurred: {str(e)}"
 
 
-def build_theme_data_dict(allInfo, doc_collection):
-    """
-    Builds a dictionary of theme data indexed by ID, with text and score for each assigned document.
-    """
+def build_theme_data_dict(allInfo, db_path="database/mydatabase.db"):
     theme_dict = {}
     topics_info = allInfo.get("Topics Info", {})
     topic_keys = list(topics_info.keys())
+
+    # Connect to DB
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
     for idx, topic_key in enumerate(topic_keys):
         topic_data = topics_info[topic_key]
@@ -273,12 +283,15 @@ def build_theme_data_dict(allInfo, doc_collection):
             first_doc_key = next(iter(top_docs))
             top_doc_text = top_docs[first_doc_key]
 
-        # Assigned Documents with Scores
         docs_prob = topic_data.get("Assigned Documents", {})
         assigned_results = []
+
         if docs_prob:
             ids = list(docs_prob.keys())
-            results = doc_collection.get(ids=ids, include=["documents"])
+            placeholders = ','.join('?' for _ in ids)
+            cursor.execute(f"SELECT id, document FROM documents WHERE id IN ({placeholders})", ids)
+            fetched = cursor.fetchall()
+
             assigned_results = [
                 {
                     "id": doc_id,
@@ -286,49 +299,44 @@ def build_theme_data_dict(allInfo, doc_collection):
                     "score": docs_prob.get(doc_id, 0.0),
                     "theme": topic_data.get("Label", f"Topic {idx}"),
                 }
-                for doc_id, text in zip(results["ids"], results["documents"])
+                for doc_id, text in fetched
             ]
 
-        
-
-        # Build theme data
         theme_data = {
             "id": theme_id,
             "label": topic_data.get("Label", f"Topic {idx}"),
             "prevalence": topic_data["Size"],
             "coherence": topic_data["Coherence (NPMI)"],
             "entropy": topic_data["Entropy"],
-            "size" : topic_data["Size"],
+            "size": topic_data["Size"],
             "keywords": topic_data["Keywords"].split(", "),
             "summary": topic_data["Summary"],
             "top_doc": top_doc_text,
             "theme_matches": len(docs_prob),
             "Coordinates": topic_data["Coordinates"],
             "similar_themes": topic_data.get("Similar Topics (Coocurring)", []),
-            "trend": [],  # Add if you compute this
+            "trend": [],
             "documents": assigned_results
         }
 
         theme_dict[theme_id] = theme_data
 
+    conn.close()
     return theme_dict
 
 
-def get_assigned_documents_with_scores(doc_collection, docs_prob):
-    """
-    Given a ChromaDB document collection and a dictionary of Assigned Documents
-    (with scores), return a list of {id, text, score} for each document.
-    """
+def get_assigned_documents_with_scores(docs_prob, db_path="database/mydatabase.db"):
     if not docs_prob:
         return []
 
     doc_ids = list(docs_prob.keys())
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
-    # Fetch document texts from ChromaDB
-    results = doc_collection.get(
-        ids=doc_ids,
-        include=["documents"]
-    )
+    placeholders = ','.join('?' for _ in doc_ids)
+    cursor.execute(f"SELECT id, document FROM documents WHERE id IN ({placeholders})", doc_ids)
+    results = cursor.fetchall()
+    conn.close()
 
     return [
         {
@@ -336,8 +344,9 @@ def get_assigned_documents_with_scores(doc_collection, docs_prob):
             "text": text,
             "score": docs_prob.get(doc_id, 0.0)
         }
-        for doc_id, text in zip(results["ids"], results["documents"])
+        for doc_id, text in results
     ]
+
 
 def extract_topic_summaries(allInfo):
     topic_info = allInfo.get("Topics Info", {})
@@ -346,12 +355,17 @@ def extract_topic_summaries(allInfo):
     for idx, (topic_key, topic_data) in enumerate(topic_info.items()):
         label = topic_data.get("Label", f"Topic {idx}")
         document_count = len(topic_data.get("Assigned Documents", []))
+        keywords = topic_data.get("Keywords")
 
         topic_summaries.append({
             "id": topic_key,
             "label": label,
-            "document_count": document_count
+            "document_count": document_count,
+            "keywords": keywords
+
         })
+
+        # print(keywords)
 
     return topic_summaries
 
@@ -390,7 +404,7 @@ def load_or_create_dashboard_json(path: str = "static/config/dashboardData.json"
     return data
 
 
-def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, path: str = "static/config/dashboardData.json") -> dict:
+def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, modelLevelMetrics,path: str = "static/config/dashboardData.json") -> dict:
     """
     Adds a new model entry to an existing dashboard JSON file.
 
@@ -411,7 +425,8 @@ def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, path: st
     # Add new model entry
     data[model_name] = {
         "Theme Summary": themeSummary,
-        "Theme Details": themeDetails
+        "Theme Details": themeDetails,
+        "Model-Level Metrics": modelLevelMetrics
     }
 
     # Write back to file
@@ -462,7 +477,7 @@ def extract_metrics_from_theme_details(theme_details: dict) -> list:
                 "theme": topic_data.get("label", topic_id),  # 👈 now uses 'theme'
                 "prevalence": prevalence,
                 "coherence": topic_data.get("coherence"),
-                "enthropy": topic_data.get("entropy")
+                "entropy": topic_data.get("entropy")
             })
         except Exception as e:
             print(f"Skipping topic {topic_id} due to error: {e}")
@@ -520,9 +535,14 @@ def get_thetas_by_doc_ids( doc_id, model):
 
 
 def format_theta_output_dict(thetas, theme_summary, rationale=None):
-    # Create a mapping from topic ID to label
+    # Create a mapping from topic ID to label and keywords
     label_lookup = {
         summary["id"].replace("t", ""): summary["label"]
+        for summary in theme_summary
+    }
+
+    keyword_lookup = {
+        summary["id"].replace("t", ""): summary.get("keywords", "")
         for summary in theme_summary
     }
 
@@ -532,12 +552,13 @@ def format_theta_output_dict(thetas, theme_summary, rationale=None):
         # Sort the topic probabilities in descending order
         sorted_topics = sorted(probs.items(), key=lambda x: -x[1])
 
-        # Build top themes with readable labels, IDs, and rounded scores
+        # Build top themes with readable labels, IDs, scores, and keywords
         top_themes = [
             {
-                "theme_id": f"t{tid}",
+                "theme_id": tid,
                 "label": label_lookup.get(tid, f"Theme {tid}"),
-                "score": round(score, 2)
+                "score": round(score, 2),
+                "keywords": keyword_lookup.get(tid, "No keywords")
             }
             for tid, score in sorted_topics
         ]
@@ -553,5 +574,74 @@ def format_theta_output_dict(thetas, theme_summary, rationale=None):
 
         results[doc_id] = doc_info
 
+        # print(results)
+
     return results
 
+
+import sqlite3
+
+def create_normalized_schema(db_path="database/mydatabase.db"):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Enable foreign key constraints
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    # Updated `corpus` table with `created_at`
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS corpus (
+        name TEXT PRIMARY KEY,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    """)
+
+    # `documents` table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        original_text_id TEXT,
+        document TEXT NOT NULL,
+        file_name TEXT,
+        corpus_name TEXT,
+        models_used TEXT DEFAULT '',
+        FOREIGN KEY (corpus_name) REFERENCES corpus(name)
+    );
+    """)
+
+    # `model_registry` table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS model_registry (
+        model_id TEXT PRIMARY KEY,
+        model_type TEXT NOT NULL,
+        num_topic INTEGER,
+        model_name TEXT,
+        trained_on TEXT,
+        description TEXT,
+        training_params TEXT  -- ← JSON string of training parameters
+    );
+""")
+
+
+    # `model_corpus_map` table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS model_corpus_map (
+        model_id TEXT,
+        corpus_name TEXT,
+        PRIMARY KEY (model_id, corpus_name),
+        FOREIGN KEY (model_id) REFERENCES model_registry(model_id),
+        FOREIGN KEY (corpus_name) REFERENCES corpus(name)
+    );
+    """)
+
+    conn.commit()
+    conn.close()
+    print("✅ Database schema with corpus timestamps created.")
+
+def get_model_corpora(model_id):
+    conn = sqlite3.connect("database/mydatabase.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT corpus_name FROM model_corpus_map WHERE model_id = ?", (model_id,))
+    corpora = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return ", ".join(sorted(corpora))

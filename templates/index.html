@@ -74,7 +74,7 @@
 
         </style>
 </head>
-<!-- Optimized Upload Page with Preview Before Validation -->
+
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
         <div class="container">
@@ -127,12 +127,17 @@
                                 <input class="form-control" type="file" id="files" name="files" webkitdirectory directory multiple required>
                             </div>
                             <div id="file-feedback" class="text-danger mb-3"></div>
-                            <div class="mb-3">
+                                <div class="mb-3">
                                 <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
                                 <select class="form-select" id="textColumn" name="text_column" required>
                                   <option value="" disabled selected>Select text column</option>
                                 </select>
-                              </div>
+
+                                <label for="idColumn" class="form-label">ID Column <span class="text-danger">*</span></label>
+                                <select class="form-select" id="idColumn" name="id_column" required>
+                                  <option value="" disabled selected>Select id column</option>
+                                </select>
+                                </div>
                               
                               <div class="mb-3">
                                 <label for="corpusName" class="form-label">Corpus Name</label>
@@ -347,18 +352,20 @@
 
             const textSelect = document.getElementById("textColumn");
             // const labelSelect = document.getElementById("labelColumn");
+            const idSelect = document.getElementById("idColumn");
+
 
             // Reset options
             textSelect.innerHTML = '<option value="" disabled selected>Select text column</option>';
-            // labelSelect.innerHTML = '<option value="" disabled selected>Select label column (optional)</option>';
+            idSelect.innerHTML = '<option value="" disabled selected>Select id column (optional)</option>';
 
             if (isAllTxt) {
                 textSelect.innerHTML += `<option value="content" selected>content</option>`;
-                // labelSelect.innerHTML += `<option value="">(none)</option>`;
+                idSelect.innerHTML += `<option value="">(none)</option>`;
             } else {
                 columnsSet.forEach(col => {
                 textSelect.innerHTML += `<option value="${col}">${col}</option>`;
-                // labelSelect.innerHTML += `<option value="${col}">${col}</option>`;
+                idSelect.innerHTML += `<option value="${col}">${col}</option>`;
                 });
             }
 
@@ -520,6 +527,7 @@
                 const feedback = document.getElementById('file-feedback');
                 const tbody = document.getElementById('selected-files-body');
                 const textColumn = document.getElementById("textColumn").value;
+                const idColumn = document.getElementById("idColumn").value;
                 const corpusName = document.getElementById("corpusName").value;
 
                 feedback.textContent = '';
@@ -576,6 +584,7 @@
                         const formData = new FormData();
                         formData.append('files', file);
                         formData.append("text_column", textColumn);
+                        formData.append("idColumn", idColumn);
 
                         try {
                             const response = await fetch('/validate', { method: 'POST', body: formData });
@@ -611,6 +620,7 @@
                     validFiles.forEach(file => formData.append('files', file));
                     formData.append('text_column', textColumn);
                     formData.append('corpusName', corpusName);
+                    formData.append("idColumn", idColumn)
 
 
                     await sendData(formData); // 🔁 Your upload function

@@ -20,6 +20,27 @@ margin-bottom: 4px !important;
 border-radius: 4px;
 }
 
+.truncate-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#docTableBody tr:hover {
+  background-color: #f9f9f9;
+  cursor: pointer;
+}
+
+.small-text {
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+.truncate-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 main {
   flex-grow: 1;
   display: flex;
@@ -88,13 +109,6 @@ main {
   }
 
   /* Make ID column narrower */
-th.id-col, td.id-col {
-  max-width: 60px;
-  width: 60px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 footer {
       background-color: #f1f3f5;
       text-align: center;
@@ -102,6 +116,8 @@ footer {
       font-size: 0.9rem;
       border-top: 1px solid #dee2e6;
     }
+  
+
 
   </style>
 </head>
@@ -118,10 +134,10 @@ footer {
         <span class="navbar-toggler-icon"></span>
       </button>
   
-      <!-- Navbar Items -->
+      <!-- Navbar Content -->
       <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav ms-auto d-flex align-items-center gap-3">
-          <!-- Navigation Links -->
+        <!-- Left-aligned Nav Links -->
+        <ul class="navbar-nav me-auto d-flex align-items-center gap-3">
           <li class="nav-item">
             <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Upload Data</a>
           </li>
@@ -131,8 +147,10 @@ footer {
           <li class="nav-item">
             <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Manage Models</a>
           </li>
+        </ul>
   
-          <!-- Functional Links (Modal Triggers) -->
+        <!-- Right-aligned Modal Links -->
+        <ul class="navbar-nav ms-auto d-flex align-items-center gap-3">
           <li class="nav-item">
             <a class="nav-link text-primary" role="button" onclick="showModelDetails('{{ model_name }}')">Model Info</a>
           </li>
@@ -146,6 +164,7 @@ footer {
       </div>
     </div>
   </nav>
+  
   
 
   <div hidden id="modelName">{{model_name}}</div>
@@ -164,6 +183,8 @@ footer {
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold mb-0">Theme Overview</h5>
             <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" onclick="openVisibleThemeChart()">View Full Chart</button>
+
               <button id="toggleChartBtn" class="btn btn-sm btn-outline-primary">Switch to Grid View</button>
             </div>
           </div>
@@ -216,7 +237,45 @@ footer {
           <h6 class="fw-bold mb-0">Documents</h6>
           <input type="text" id="docSearchInput" class="form-control form-control-sm w-50" placeholder="Search documents...">
         </div>
-        <p class="small text-muted mb-2" style="font-size: 0.75rem;">Click on text to view full text information</p>
+        <div class="d-flex flex-wrap align-items-end justify-content-between mb-3">
+          <!-- Instruction (left) -->
+          <div>
+            <p class="text-muted small mb-1" style="font-size: 0.75rem;">
+              Click on text to view full text information
+            </p>
+          </div>
+        
+          <!-- Filters (right) -->
+          <div class="d-flex flex-wrap gap-2 align-items-end ms-auto">
+            <!-- Theme Filter -->
+            <div class="form-group">
+              <label for="themeFilter" class="form-label mb-0 small">Theme</label>
+              <select id="themeFilter" class="form-select form-select-sm">
+                <option value="">All Themes</option>
+              </select>
+            </div>
+        
+            <!-- Min Score -->
+            <div class="form-group">
+              <label for="scoreMin" class="form-label mb-0 small">Min Score</label>
+              <input type="number" id="scoreMin" class="form-control form-control-sm" style="width: 100px;" placeholder="0.00" step="0.001">
+            </div>
+        
+            <!-- Max Score -->
+            <div class="form-group">
+              <label for="scoreMax" class="form-label mb-0 small">Max Score</label>
+              <input type="number" id="scoreMax" class="form-control form-control-sm" style="width: 100px;" placeholder="1.00" step="0.001">
+            </div>
+        
+            <!-- Apply Button -->
+            <div class="form-group">
+              <button id="filterBtn" class="btn btn-sm btn-primary">Apply Filters</button>
+            </div>
+          </div>
+        </div>
+        
+        
+        
         <div class="flex-grow-1 overflow-auto">
           <table class="table table-sm table-hover mb-0">
             <thead id="docTableHead" class="sticky-top bg-white"></thead>
@@ -233,9 +292,6 @@ footer {
   </footer>
 
 
-  
-
-  <!-- Modals -->
   <!-- Modal -->
 <div class="modal fade" id="modelInfoModal" tabindex="-1" aria-labelledby="modelInfoModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -277,7 +333,7 @@ footer {
   
         <!-- Inference Results -->
         <div  class="mt-6">
-            <h6 class="fw-bold mb-3">Inference Summary</h6>
+            <!-- <h6 class="fw-bold mb-3">Inference Summary</h6> -->
             <div id="textInputGroup" class="row">
             <!-- Left Column: Input Text Display -->
             <div id="textAreaSpace" class="col-md-12">
@@ -298,6 +354,12 @@ footer {
                 <strong>Top Theme:</strong>
                 <p id="inferredTheme" class="fw-semibold text-primary mb-0">–</p>
                 </div>
+
+                <div id="inferredKeywordsWrapper" class="mb-2">
+                  <strong>Theme Keywords:</strong>
+                  <p id="inferredKeywords" class="small text-muted mb-0" style="white-space: pre-wrap;"></p>
+                </div>
+                
         
                 <div class="mb-3">
                   <div id="inferredRationaleWrapper">
@@ -356,7 +418,7 @@ footer {
         </div>
   
         <div class="modal-body">
-            <h6 class="fw-bold mb-3">Inference Summary</h6>
+            <!-- <h6 class="fw-bold mb-3">Inference Summary</h6> -->
             <div class="row">
               <!-- Left Column: Full Text -->
               <div class="col-md-6">
@@ -373,7 +435,13 @@ footer {
                   <strong>Top Theme:</strong>
                   <p id="modalTheme" class="fw-semibold text-primary mb-0">–</p>
                 </div>
-          
+
+                <div>
+                  <strong>Theme Keywords:</strong>
+                  <pre id="modalKeywords" class="small-text mb-0"></pre>
+                </div>
+                
+
                 <!-- Rationale -->
                 <div id="rationalDiv" class="mb-3">
                   <strong>Rationale:</strong>
@@ -528,6 +596,22 @@ footer {
       </div>
     </div>
   </div>
+
+  <div class="modal fade" id="fullChartModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Full Chart View</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <canvas id="fullChartCanvas" width="1000" height="600"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  
   
   
 
@@ -537,13 +621,9 @@ footer {
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- Include this in your HTML HEAD or just before your script -->
-<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <script src="/static/js/dashboard.js"></script>
-  <!-- <script src="/static/js/infer.js"></script> -->
   <script>
     model_name = document.getElementById("modelName").textContent;
     console.log(model_name)
@@ -558,7 +638,7 @@ footer {
       },
       body: JSON.stringify({ model_name: modelName })
     });
-    console.log("this worked")
+    console.log("this worked");
 
     if (!res.ok) throw new Error("Failed to fetch model data");
 
@@ -566,6 +646,18 @@ footer {
     console.log("Fetched model data:", model);
 
     const modalBody = document.getElementById("modelDetailBody");
+
+    // 🔧 Format training_params into HTML rows
+    const trainingParamsHTML = model.training_params
+      ? Object.entries(model.training_params)
+          .map(([key, value]) => `
+            <div class="row mb-1">
+              <div class="col-4 text-muted small">${key}:</div>
+              <div class="col-8 small">${value}</div>
+            </div>
+          `)
+          .join("")
+      : `<div class="text-muted small">No training parameters found.</div>`;
 
     modalBody.innerHTML = `
       <div class="row mb-2">
@@ -588,11 +680,16 @@ footer {
         <div class="col-4 fw-semibold text-muted">Corpora Used:</div>
         <div class="col-8">${model.corpus_names}</div>
       </div>
+
       <hr />
       <p class="text-muted small">
         This model was trained on a cleaned dataset of unstructured documents using 
         <strong>${model.num_topics}-topic ${model.model_type}</strong>. Use the chart and panels below to explore the results.
       </p>
+
+      <hr />
+      <h6 class="fw-semibold">Training Parameters</h6>
+      ${trainingParamsHTML}
     `;
 
     const modalEl = document.getElementById("modelInfoModal");
@@ -605,22 +702,111 @@ footer {
   }
 }
 
-  
-    const barChart = document.getElementById("themeChart");
-    const gridChart = document.getElementById("themeChartGrid");
-    const toggleBtn = document.getElementById("toggleChartBtn");
+  const barChart = document.getElementById("themeChart");
+  const gridChart = document.getElementById("themeChartGrid");
+  const toggleBtn = document.getElementById("toggleChartBtn");
 
-    toggleBtn.addEventListener("click", () => {
-      const showingBar = !barChart.hidden;
+  toggleBtn.addEventListener("click", () => {
+    const showingBar = !barChart.hidden;
 
-      barChart.hidden = showingBar;
-      gridChart.hidden = !showingBar;
+    barChart.hidden = showingBar;
+    gridChart.hidden = !showingBar;
 
-      // Update button text
-      toggleBtn.textContent = showingBar ? "Switch to Bar Chart" : "Switch to Grid View";
+    // Update button text
+    toggleBtn.textContent = showingBar ? "Switch to Bar Chart" : "Switch to Grid View";
+  });
+  let fullChartInstance = null;
+
+
+  function openFullChart(originalChartId) {
+  const originalCanvas = document.getElementById(originalChartId);
+  const fullCanvas = document.getElementById('fullChartCanvas');
+  const fullModalEl = document.getElementById('fullChartModal');
+
+  if (!originalCanvas || !fullCanvas || !fullModalEl) return;
+
+  const originalChart = Chart.getChart(originalCanvas);
+  if (!originalChart) return;
+
+  // Clone chart data (labels and datasets)
+  let clonedData;
+  try {
+    clonedData = structuredClone(originalChart.config.data);
+  } catch (e) {
+    clonedData = JSON.parse(JSON.stringify(originalChart.config.data));
+  }
+
+  // Clone chart options
+  const originalOptions = originalChart.config.options || {};
+  const clonedOptions = {
+    ...originalOptions,
+    onClick: originalOptions.onClick || null,
+    plugins: {
+      ...originalOptions.plugins,
+      datalabels: {
+        anchor: 'end',
+        align: 'top',
+        font: {
+          weight: 'bold'
+        },
+        formatter: function(value, context) {
+          // Fallback: use chart.data.labels[] or dataset.data[i].label
+          const labels = context.chart.data.labels;
+          if (labels && labels[context.dataIndex]) {
+            return labels[context.dataIndex];
+          }
+          const point = context.dataset.data[context.dataIndex];
+          return point?.label || 'Label';
+        }
+      }
+    }
+  };
+
+  // Destroy any existing chart instance in modal
+  if (window.fullChartInstance) {
+    window.fullChartInstance.destroy();
+  }
+
+  // Initialize Bootstrap modal
+  const modal = new bootstrap.Modal(fullModalEl, {
+    backdrop: false,
+    focus: false
+  });
+
+  // Create chart after modal is fully shown
+  const onModalShown = () => {
+    window.fullChartInstance = new Chart(fullCanvas.getContext('2d'), {
+      type: originalChart.config.type,
+      data: clonedData,
+      options: clonedOptions,
+      plugins: [ChartDataLabels] // ⬅️ make sure the plugin is passed in
     });
 
-      </script>
+    // Clean up listener to avoid duplicates
+    fullModalEl.removeEventListener('shown.bs.modal', onModalShown);
+  };
+
+  fullModalEl.addEventListener('shown.bs.modal', onModalShown);
+  modal.show();
+}
+
+
+  function openVisibleThemeChart() {
+  const canvasA = document.getElementById('themeChart');
+  const canvasB = document.getElementById('themeChartGrid');
+
+  const visibleCanvas = !canvasA.hidden ? canvasA : !canvasB.hidden ? canvasB : null;
+
+  if (visibleCanvas) {
+    openFullChart(visibleCanvas.id);
+  } else {
+    console.warn('No visible chart found.');
+  }
+}
+
+
+  
+</script>
       
       
   
