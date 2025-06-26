@@ -7,19 +7,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let themeTrendChart = null;
 
     // Generate visually distinctive HSL colors using the Golden Angle
-function generateColors(count) {
-  const colors = [];
-  const goldenAngle = 137.508; // degrees
+  function generateColors(count) {
+    const colors = [];
+    const goldenAngle = 137.508; // degrees
 
-  for (let i = 0; i < count; i++) {
-    const hue = (i * goldenAngle) % 360;
-    const saturation = 70 + (i % 2) * 10;  // Slight variation
-    const lightness = 55 + (i % 3) * 5;    // Slight variation
-    colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
-  }
+    for (let i = 0; i < count; i++) {
+      const hue = (i * goldenAngle) % 360;
+      const saturation = 70 + (i % 2) * 10;  // Slight variation
+      const lightness = 55 + (i % 3) * 5;    // Slight variation
+      colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+    }
 
-  return colors;
-}
+    return colors;
+    }
 
     
     // Build Chart.js data object with meta
@@ -27,7 +27,7 @@ function generateColors(count) {
       return {
         labels: themes.map(t => t.label),
         ids: themes.map(t => t.id),
-        meta: themes.map(t => ({ id: t.id, color: t.color })), // ✅ keep color
+        meta: themes.map(t => ({ id: t.id, color: t.color, keywords: t.keywords })), // ✅ keep color
         datasets: [{
           data: themes.map(t => t.document_count),
           backgroundColor: themes.map(t => t.color || "#0d6efd")
@@ -68,7 +68,7 @@ function generateColors(count) {
       }
     }
     
-function lightenColor(hex, percent) {
+    function lightenColor(hex, percent) {
         const num = parseInt(hex.replace("#", ""), 16),
               amt = Math.round(2.55 * percent),
               R = (num >> 16) + amt,
@@ -78,155 +78,106 @@ function lightenColor(hex, percent) {
       }
       
       
-fetchThemes(modelName);
-    // Inject colors into each theme
-const colors = generateColors(themes.length);
+  fetchThemes(modelName);
+      // Inject colors into each theme
+    const colors = generateColors(themes.length);
 
-themes = themes.map((t, i) => ({ ...t, color: colors[i] }));
+    themes = themes.map((t, i) => ({ ...t, color: colors[i] }));
 
-// Build chart data and render
-const themeChartData = createThemeChartData(themes);
+    // Build chart data and render
+    const themeChartData = createThemeChartData(themes);
 
-// console.log(themeChartData)
-renderThemeChart(themeChartData);
-    
-function renderThemeChart(chartData) {
-  // Save theme colors for scatter plot later
-  themeColorMap = {}; // reset
-  chartData.meta.forEach(meta => {
-    themeColorMap[meta.id] = meta.color || "#0d6efd";
-  });
-      const canvas = document.getElementById("themeChart");
-      const ctx = canvas.getContext("2d");
-    
-      // Destroy old chart if exists
-      if (themeChartInstance) {
-        themeChartInstance.destroy();
-      }
-    
-      // Create and save new chart
-      themeChartInstance = new Chart(ctx, {
-        type: "bar",
-        data: chartData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-              mode: 'index',
-              intersect: false
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: ctx => `${ctx.parsed.y} documents`
-                }
-              }
-            },
-            scales: {
-              x: {
-                ticks: { maxRotation: 45, minRotation: 30 }
-              },
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: "Documents" }
-              }
-            },
-          
-            onClick: (e, elements) => {
-              if (elements.length > 0) {
-                const index = elements[0].index;
-                console.log("Clicked index:", index);
-                console.log("Meta array:", chartData.meta);
-            
-                const meta = chartData.meta?.[index];
-                if (!meta) {
-                  console.error("No meta found at this index.");
-                  return;
-                }
-            
-                const themeColor = meta.color || "#0d6efd";
-                loadThemeDetails(meta.id, themeColor, modelName);
-                new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
-              }
-            }
-            
-          
-        }
-      });
-    }
-
-
-function renderDocumentTable(docs = []) {
-  currentDocs = docs;
-
-  const thead = document.getElementById("docTableHead");
-  const tbody = document.getElementById("docTableBody");
-  thead.innerHTML = "";
-  tbody.innerHTML = "";
-
-  if (docs.length === 0) {
-    thead.innerHTML = `<tr><th>No data</th></tr>`;
-    tbody.innerHTML = `<tr><td class="text-muted">No documents to display.</td></tr>`;
-    return;
-  }
-
-  const baseColumns = ["id", "text", "theme", "score"];
-  const hasRationale = docs.some(doc => "rationale" in doc);
-  const columns = hasRationale
-    ? ["id", "text", "theme", "rationale", "score"]
-    : baseColumns;
-
-  // Create table header
-  const headerRow = document.createElement("tr");
-  columns.forEach(col => {
-    const th = document.createElement("th");
-    th.textContent = col.charAt(0).toUpperCase() + col.slice(1).replace(/_/g, " ");
-    th.classList.add("medium-text");
-    if (col === "id") th.style.width = "6%";
-    else if (col === "score") th.style.width = "8%";
-    else if (col === "rationale") th.style.width = "22%";
-    else th.style.width = "auto";
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-
-  // Create table rows
-  docs.forEach(doc => {
-    const row = document.createElement("tr");
-    row.dataset.search = Object.values(doc).join(" ").toLowerCase();
-    row.classList.add("medium-text");
-
-    row.addEventListener("click", () => showInferenceModal(doc));
-
-    columns.forEach(col => {
-      const td = document.createElement("td");
-      let value = doc[col] ?? "—";
-
-      if (col === "id" && typeof value === "string") {
-        td.textContent = value.slice(0, 4);
-        td.title = value;
-      } else if (col === "score" && typeof value === "number") {
-        td.textContent = value.toFixed(3);
-        td.title = value.toFixed(3);
-      } else {
-        td.textContent = value;
-        td.title = value;
-      }
-
-      td.classList.add("truncate-cell", "medium-text");
-      row.appendChild(td);
+  // console.log(themeChartData)
+  renderThemeChart(themeChartData);
+      
+  function renderThemeChart(chartData) {
+    // Save theme colors for scatter plot later
+    themeColorMap = {};
+    chartData.meta.forEach(meta => {
+      themeColorMap[meta.id] = meta.color || "#0d6efd";
     });
 
-    tbody.appendChild(row);
-  });
-}
-
+    console.log(chartData)
+  
+    const canvas = document.getElementById("themeChart");
+    const ctx = canvas.getContext("2d");
+  
+    if (themeChartInstance) {
+      themeChartInstance.destroy();
+    }
+  
+    themeChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const index = ctx.dataIndex;
+                const count = ctx.parsed.y;
+                const meta = chartData.meta?.[index];
+                const rawKeywords = meta?.keywords || "—";
+          
+                if (typeof rawKeywords !== "string") {
+                  return [`${count} documents`, "Keywords: —"];
+                }
+          
+                const words = rawKeywords.split(", ").map(word => word.trim());
+                const keywordLines = [];
+          
+                for (let i = 0; i < words.length; i += 5) {
+                  keywordLines.push(words.slice(i, i + 5).join(", "));
+                }
+          
+                return [`${count} documents`, "Keywords:"].concat(keywordLines);
+              }
+            }
+          }
+          
+        },
+        scales: {
+          x: {
+            ticks: { maxRotation: 45, minRotation: 30 }
+          },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: "Documents" }
+          }
+        },
+        onClick: (e, elements) => {
+          if (elements.length > 0) {
+            const index = elements[0].index;
+            const meta = chartData.meta?.[index];
+            if (!meta) {
+              console.error("No meta found at this index.");
+              return;
+            }
+  
+            const themeColor = meta.color || "#0d6efd";
+            loadThemeDetails(meta.id, themeColor, modelName);
+  
+            const modalEl = document.getElementById("themeDetailModal");
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+          }
+        }
+      }
+    });
+  }
+  
 
 
 
   async function showInferenceModal(doc) {
-    console.log(doc)
+    // console.log(doc)
     try {
       const response = await fetch("/text-info", {
         method: "POST",
@@ -235,12 +186,24 @@ function renderDocumentTable(docs = []) {
       });
   
       const result = await response.json();
-
-    //   console.log(result)
-  
+     
       // Populate modal
       document.getElementById("modalFullText").textContent = doc.text || "—";
-      document.getElementById("modalTheme").textContent = result.theme || "—";
+      document.getElementById("modalTheme").textContent = result.theme || "—";  // use result.theme
+
+      const topTheme = result.top_themes?.[0];  // use result, not doc
+      const keywordsRaw = topTheme?.keywords || "—";
+
+      const formattedKeywords = typeof keywordsRaw === "string"
+        ? keywordsRaw.split(", ").reduce((acc, word, idx) => {
+            const line = Math.floor(idx / 5);
+            acc[line] = acc[line] ? acc[line] + ", " + word : word;
+            return acc;
+          }, []).join("\n")
+        : keywordsRaw;
+
+      document.getElementById("modalKeywords").textContent = formattedKeywords;
+
       
       const rationale = result.rationale?.trim();
       const rationaleDiv = document.getElementById("rationalDiv");
@@ -281,12 +244,12 @@ function renderDocumentTable(docs = []) {
 
     //   console.log(result.top_themes)
       
-      console.log(result.top_themes)
+      // console.log(result.top_themes)
       renderDocInferenceChart(result.top_themes, modelName);
 
   
       const modal = new bootstrap.Modal(document.getElementById("docDetailModal"), {
-        backdrop: false,
+        backdrop: true,
         focus: true
       });
       modal.show();
@@ -297,8 +260,9 @@ function renderDocumentTable(docs = []) {
       alert("Failed to infer topic.");
     }
   }
+  
 
-
+  
   let docInferenceChart = null; // Global variable to track the chart instance
 
   function renderDocInferenceChart(topThemes = [], modelName = "") {
@@ -314,18 +278,15 @@ function renderDocumentTable(docs = []) {
       return;
     }
   
-    // 🔁 Destroy the existing chart instance if it exists
     if (docInferenceChart) {
       docInferenceChart.destroy();
     }
   
-    // 🎨 Safe color lookup function
     const getThemeColor = (id) =>
-      themeColorMap["t" + id] || themeColorMap[id] || "#0d6efd";
+      themeColorMap[Number(id)] || "#0d6efd";
   
     const backgroundColors = topThemes.map(t => getThemeColor(t.theme_id));
   
-    // ✅ Create and assign new chart
     docInferenceChart = new Chart(ctx, {
       type: "bar",
       data: {
@@ -348,20 +309,35 @@ function renderDocumentTable(docs = []) {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => `${(ctx.parsed.y * 100).toFixed(1)}%`
+              label: function (ctx) {
+                const theme = topThemes[ctx.dataIndex];
+                const score = (ctx.parsed.y * 100).toFixed(1);
+                const keywords = theme.keywords || "No keywords";
+          
+                // Split and chunk keywords
+                const words = keywords.split(", ").map(k => k.trim());
+                const chunked = [];
+                for (let i = 0; i < words.length; i += 5) {
+                  chunked.push(words.slice(i, i + 5).join(", "));
+                }
+          
+                return [`Score: ${score}%`, "Keywords:"].concat(chunked);
+              }
             }
           }
+          
+          
+          
         },
         onClick: (e, elements) => {
           if (elements.length > 0) {
             const index = elements[0].index;
             const theme = topThemes[index];
-            const themeId = theme.theme_id.startsWith("t") ? theme.theme_id : "t" + theme.theme_id;
+            const themeId = theme.theme_id;
             const color = getThemeColor(theme.theme_id);
   
             loadThemeDetails(themeId, color, modelName);
   
-            // Optional: update modal styling
             const modalHeader = document.querySelector("#themeDetailModal .modal-header");
             if (modalHeader) {
               modalHeader.style.borderBottom = `3px solid ${color}`;
@@ -372,110 +348,227 @@ function renderDocumentTable(docs = []) {
               themeLabel.style.color = color;
             }
   
-            new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
+            const modalEl = document.getElementById("themeDetailModal");
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
           }
         }
       }
     });
   }
   
-  
-  
-  
 
-document.getElementById("docSearchInput").addEventListener("input", function () {
-    const query = this.value.toLowerCase().trim();
-    const rows = document.querySelectorAll("#docTableBody tr");
-  
+  document.getElementById("filteredSearchInput").addEventListener("input", (e) => {
+    const term = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll("#filteredTableBody tr");
+
     rows.forEach(row => {
       const content = row.dataset.search || "";
-      row.style.display = content.includes(query) ? "" : "none";
+      row.style.display = content.includes(term) ? "" : "none";
     });
   });
-
-  let documents = [];
 
   async function fetchDocuments(modelName) {
-      try {
-        const response = await fetch("/api/documents", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ model: modelName })
-        });
-    
-        if (!response.ok) throw new Error("Failed to fetch documents.");
-    
-        const documents = await response.json();
-    
-        // console.log("Fetched documents:", documents);
-    
-        // Then render the table
-        renderDocumentTable(documents);
-      } catch (err) {
-        console.error("Document fetch error:", err);
-      }
+    try {
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelName })
+      });
+  
+      if (!response.ok) throw new Error("Failed to fetch documents.");
+  
+      return await response.json();
+    } catch (err) {
+      console.error("Document fetch error:", err);
+      return []; // fallback
     }
-  fetchDocuments(modelName);
-  renderDocumentTable(documents);
-
-
-function populateThemeDiagnosticsTable(themes = []) {
-  const tableHead = document.querySelector("#themeStatsTable thead");
-  const tableBody = document.querySelector("#themeStatsTable tbody");
-  const wrapper = document.querySelector("#themeStatsTable").parentElement;
-
-  if (!tableHead || !tableBody || !wrapper) {
-    return console.error("Theme diagnostics table or wrapper elements not found");
   }
 
-
-
-  tableHead.innerHTML = "";
-  tableBody.innerHTML = "";
-
-  if (themes.length === 0) {
-    tableHead.innerHTML = `<tr><th>No Data</th></tr>`;
-    tableBody.innerHTML = `<tr><td class="text-muted">No diagnostics available.</td></tr>`;
-    return;
-  }
-
-  const allKeys = Object.keys(themes[0]);
-  const dynamicKeys = allKeys.filter(k => k !== "theme");
-  const columns = ["theme", ...dynamicKeys];
-
-  const headerRow = document.createElement("tr");
-  columns.forEach(col => {
-    const th = document.createElement("th");
-    th.textContent = col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-    th.style.position = "sticky";
-    th.style.top = "0";
-    th.style.backgroundColor = "#fff";
-    th.style.zIndex = "1";
-    headerRow.appendChild(th);
+  fetchDocuments(model_name).then((docs) => {
+    documents = docs;
+    renderDocumentTable(documents);
+    populateThemeFilter(documents);
   });
-  tableHead.appendChild(headerRow);
 
-  themes.forEach(theme => {
-    const row = document.createElement("tr");
+  function renderDocumentTable(docs = []) {
+    currentDocs = docs;
+  
+    const thead = document.getElementById("docTableHead");
+    const tbody = document.getElementById("docTableBody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+  
+    if (docs.length === 0) {
+      thead.innerHTML = `<tr><th>No data</th></tr>`;
+      tbody.innerHTML = `<tr><td class="text-muted">No documents to display.</td></tr>`;
+      return;
+    }
+  
+    const hasRationale = docs.some(doc => "rationale" in doc);
+    const columns = hasRationale
+      ? ["id", "text", "theme", "rationale", "score"]
+      : ["id", "text", "theme", "score"];
+  
+    // Adjusted column width mappings
+    const columnWidths = hasRationale
+  ? {
+      id: "12%",
+      text: "38%",
+      theme: "20%",
+      rationale: "20%",
+      score: "3%"
+    }
+  : {
+      id: "10%",
+      text: "70%",
+      theme: "10%",
+      score: "3%"
+    };
+
+  
+    // Create table header
+    const headerRow = document.createElement("tr");
     columns.forEach(col => {
-      let value = theme[col];
-      if (typeof value === "number") {
-        value = col.toLowerCase().includes("prevalence")
-          ? `${(value * 100).toFixed(1)}%`
-          : value.toFixed(3);
-      }
-      const td = document.createElement("td");
-      td.title = value ?? "—";
-      td.textContent = value ?? "—";
-      row.appendChild(td);
+      const th = document.createElement("th");
+      th.textContent = col.charAt(0).toUpperCase() + col.slice(1).replace(/_/g, " ");
+      th.classList.add("small-text", "align-middle", "text-nowrap");
+      th.style.width = columnWidths[col] || "auto";
+      headerRow.appendChild(th);
     });
-    tableBody.appendChild(row);
+    thead.appendChild(headerRow);
+  
+    // Create table rows
+    docs.forEach(doc => {
+      const row = document.createElement("tr");
+      row.dataset.search = Object.values(doc).join(" ").toLowerCase();
+      row.classList.add("small-text");
+      row.addEventListener("click", () => showInferenceModal(doc));
+  
+      columns.forEach(col => {
+        const td = document.createElement("td");
+        let value = doc[col];
+  
+        if (col === "score" && typeof value === "number") {
+          td.textContent = value.toFixed(3);
+          td.title = value.toFixed(3);
+        } else {
+          td.textContent = value !== undefined && value !== null ? String(value) : "—";
+          td.title = td.textContent;
+        }
+  
+        td.classList.add("truncate-cell", "small-text");
+        td.style.width = columnWidths[col] || "auto";
+        row.appendChild(td);
+      });
+  
+      tbody.appendChild(row);
+    });
+  }
+  
+  
+  // Set up search listener once
+document.getElementById("docSearchInput").addEventListener("input", function () {
+  const query = this.value.toLowerCase().trim();
+  const rows = document.querySelectorAll("#docTableBody tr");
+
+  rows.forEach(row => {
+    const content = row.dataset.search || "";
+    row.style.display = content.includes(query) ? "" : "none";
   });
+});
+
+const filterBtn = document.getElementById("filterBtn");
+    filterBtn.onclick = applyFilters;
+
+
+function applyFilters() {
+  const theme = document.getElementById("themeFilter").value;
+  const minScore = parseFloat(document.getElementById("scoreMin").value);
+  const maxScore = parseFloat(document.getElementById("scoreMax").value);
+
+  const filtered = currentDocs.filter(doc => {
+    const matchTheme = !theme || doc.theme === theme;
+    const matchMin = isNaN(minScore) || doc.score >= minScore;
+    const matchMax = isNaN(maxScore) || doc.score <= maxScore;
+    return matchTheme && matchMin && matchMax;
+  });
+
+  renderDocumentTable(filtered); // This should update #docTableBody
+
+  // Optionally, re-trigger search to apply it on the filtered set
+  const searchEvent = new Event('input');
+  document.getElementById("docSearchInput").dispatchEvent(searchEvent);
 }
 
 
+  function populateThemeFilter(docs) {
+    const themeFilter = document.getElementById("themeFilter");
+    const themes = [...new Set(docs.map(doc => doc.theme).filter(Boolean))];
+    themes.forEach(theme => {
+      const opt = document.createElement("option");
+      opt.value = theme;
+      opt.textContent = theme;
+      themeFilter.appendChild(opt);
+    });
+}
+
+
+
+
+  function populateThemeDiagnosticsTable(themes = []) {
+    const tableHead = document.querySelector("#themeStatsTable thead");
+    const tableBody = document.querySelector("#themeStatsTable tbody");
+    const wrapper = document.querySelector("#themeStatsTable").parentElement;
+
+    if (!tableHead || !tableBody || !wrapper) {
+      return console.error("Theme diagnostics table or wrapper elements not found");
+    }
+
+
+
+    tableHead.innerHTML = "";
+    tableBody.innerHTML = "";
+
+    if (themes.length === 0) {
+      tableHead.innerHTML = `<tr><th>No Data</th></tr>`;
+      tableBody.innerHTML = `<tr><td class="text-muted">No diagnostics available.</td></tr>`;
+      return;
+    }
+
+    const allKeys = Object.keys(themes[0]);
+    const dynamicKeys = allKeys.filter(k => k !== "theme");
+    const columns = ["theme", ...dynamicKeys];
+
+    const headerRow = document.createElement("tr");
+    columns.forEach(col => {
+      const th = document.createElement("th");
+      th.textContent = col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      th.style.position = "sticky";
+      th.style.top = "0";
+      th.style.backgroundColor = "#fff";
+      th.style.zIndex = "1";
+      headerRow.appendChild(th);
+    });
+    tableHead.appendChild(headerRow);
+
+    themes.forEach(theme => {
+      const row = document.createElement("tr");
+      columns.forEach(col => {
+        let value = theme[col];
+        if (typeof value === "number") {
+          value = col.toLowerCase().includes("prevalence")
+            ? `${(value * 100).toFixed(1)}%`
+            : value.toFixed(3);
+        }
+        const td = document.createElement("td");
+        td.title = value ?? "—";
+        td.textContent = value ?? "—";
+        row.appendChild(td);
+      });
+      tableBody.appendChild(row);
+    });
+  }
 
   
   async function fetchDiagnostics(modelName) {
@@ -493,124 +586,106 @@ function populateThemeDiagnosticsTable(themes = []) {
   
   // Call the function on page load or when needed
   fetchDiagnostics(modelName);
-  
-
-// populateThemeDiagnosticsTable(diag);
 
 
+    async function populateThemeInsightsFromAPI(modelName) {
+      const container = document.getElementById("themeInsightsGrid");
+      container.innerHTML = "";
+      // console.log(modelName)
 
-async function populateThemeInsightsFromAPI() {
-  const container = document.getElementById("themeInsightsGrid");
-  container.innerHTML = "";
+      try {
+        const res = await fetch("/api/theme-metrics", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({model: modelName })
+        });
 
-  try {
-    const res = await fetch("/api/theme-metrics");
-    const data = await res.json();
-    const metrics = data.metrics;
+        const data = await res.json();
+        const metrics = data.metrics;
 
-    metrics.forEach((metric) => {
-      const col = document.createElement("div");
-      col.className = "col-md-6";
+        metrics.forEach((metric) => {
+          const col = document.createElement("div");
+          col.className = "col-md-6";
 
-      col.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light shadow-sm">
-          <div class="text-muted small fw-semibold">${metric.label}</div>
-          <div class="fw-bold text-dark small">
-            ${typeof metric.value === "number" ? metric.value.toFixed(2) : metric.value}
-          </div>
-        </div>
-      `;
+          col.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light shadow-sm">
+              <div class="text-muted small fw-semibold">${metric.label}</div>
+              <div class="fw-bold text-dark small">
+                ${typeof metric.value === "number" ? metric.value.toFixed(2) : metric.value}
+              </div>
+            </div>
+          `;
 
-      container.appendChild(col);
-    });
-  } catch (error) {
-    container.innerHTML = `<div class="text-danger small">⚠️ Failed to load theme insights.</div>`;
-    console.error("Error loading metrics:", error);
-  }
-}
-
-
-  
-  
-populateThemeInsightsFromAPI();
-    
-
-
-function renderFilteredTable(filters = []) {
-  currentDocs = filters;
-
-  const thead = document.getElementById("filteredTableHead");
-  const tbody = document.getElementById("filteredTableBody");
-  thead.innerHTML = "";
-  tbody.innerHTML = "";
-
-  if (filters.length === 0) {
-    thead.innerHTML = `<tr class="small"><th>No data</th></tr>`;
-    tbody.innerHTML = `<tr class="small"><td class="text-muted">No documents to display.</td></tr>`;
-    return;
-  }
-
-  const columns = ["id", "text", "score"];
-  const hasRationale = filters.some(f => f.hasOwnProperty("rationale"));
-  if (hasRationale) columns.push("rationale");
-
-  filters.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-
-  const headerRow = document.createElement("tr");
-  headerRow.classList.add("small");
-  columns.forEach(col => {
-    const th = document.createElement("th");
-    th.classList.add("small");
-    if (col === "id") {
-      th.classList.add("id-col");
-      th.style.width = "40px";
+          container.appendChild(col);
+        });
+      } catch (error) {
+        container.innerHTML = `<div class="text-danger small">⚠️ Failed to load theme insights.</div>`;
+        console.error("Error loading metrics:", error);
+      }
     }
-    th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
 
-  filters.forEach(filter => {
-    const row = document.createElement("tr");
-    row.classList.add("small");
-    row.dataset.search = Object.values(filter).join(" ").toLowerCase();
-    row.addEventListener("click", () => showInferenceModal?.(filter));
-
-    columns.forEach(col => {
-      const td = document.createElement("td");
-      td.classList.add("small", "truncate-cell");
-      let value = filter[col];
-
-      if (col === "score" && typeof value === "number") {
-        value = value.toFixed(3);
+    populateThemeInsightsFromAPI(modelName);
+    
+    function renderFilteredTable(filters = []) {
+      currentDocs = filters;
+    
+      const thead = document.getElementById("filteredTableHead");
+      const tbody = document.getElementById("filteredTableBody");
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+    
+      if (filters.length === 0) {
+        thead.innerHTML = `<tr class="small"><th>No data</th></tr>`;
+        tbody.innerHTML = `<tr class="small"><td class="text-muted">No documents to display.</td></tr>`;
+        return;
       }
-
-      if (col === "id" && typeof value === "string") {
-        value = value.slice(0, 4);
-        td.classList.add("id-col");
-      }
-
-      td.title = value ?? "—";
-      td.textContent = value ?? "—";
-      row.appendChild(td);
-    });
-
-    tbody.appendChild(row);
-  });
-}
-
-
-
-
-    document.getElementById("filteredSearchInput").addEventListener("input", (e) => {
-      const term = e.target.value.toLowerCase();
-      const rows = document.querySelectorAll("#filteredTableBody tr");
-
-      rows.forEach(row => {
-        const content = row.dataset.search || "";
-        row.style.display = content.includes(term) ? "" : "none";
+    
+      // Determine columns dynamically
+      const baseColumns = ["id", "text", "score"];
+      const hasRationale = filters.some(f => f.hasOwnProperty("rationale"));
+      const columns = hasRationale ? [...baseColumns, "rationale"] : baseColumns;
+    
+      // Sort filters by descending score
+      filters.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    
+      // Create table header
+      const headerRow = document.createElement("tr");
+      headerRow.classList.add("small");
+      columns.forEach(col => {
+        const th = document.createElement("th");
+        th.classList.add("small");
+        th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
+        headerRow.appendChild(th);
       });
-    });
+      thead.appendChild(headerRow);
+    
+      // Create table rows
+      filters.forEach(filter => {
+        const row = document.createElement("tr");
+        row.classList.add("small");
+        row.dataset.search = Object.values(filter).join(" ").toLowerCase();
+        row.addEventListener("click", () => showInferenceModal?.(filter));
+    
+        columns.forEach(col => {
+          const td = document.createElement("td");
+          td.classList.add("small", "truncate-cell");
+    
+          let value = filter[col];
+          if (col === "score" && typeof value === "number") {
+            value = value.toFixed(3);
+          }
+    
+          td.textContent = value ?? "—";
+          td.title = td.textContent;
+          row.appendChild(td);
+        });
+    
+        tbody.appendChild(row);
+      });
+    }
+    
 
     async function loadThemeDetails(themeId, themeColor, modelName) {
       const res = await fetch(`/api/theme/${themeId}?model=${encodeURIComponent(modelName)}`);
@@ -672,22 +747,23 @@ function renderFilteredTable(filters = []) {
     }
 
     function renderThemeSimilarityChart(similarThemes, modelName = "") {
+      console.log(themeColorMap)
       const canvas = document.getElementById("similarityDotPlot");
       if (!canvas) return console.error("Canvas with ID 'similarityDotPlot' not found.");
       const ctx = canvas.getContext("2d");
     
       // ✅ Sort by absolute distance from 0
       const processed = similarThemes
-        .map(t => ({
-          id: t.ID,
-          theme: `Theme ${t.ID}`,
-          similarity: parseFloat(t.Similarity)
-        }))
-        .sort((a, b) => Math.abs(a.similarity) - Math.abs(b.similarity));
-    
+      .map(t => ({
+        id: t.ID,
+        theme: `Theme ${t.ID}`,
+        similarity: parseFloat(t.Similarity)
+      }))
+      .sort((a, b) => Math.abs(b.similarity) - Math.abs(a.similarity)); // ⬅ sort by descending |similarity|
+
       const labels = processed.map(t => t.theme);
       const values = processed.map(t => t.similarity);
-      const backgroundColors = processed.map(t => themeColorMap["t" + t.id] || "#4B8DF8");
+      const backgroundColors = processed.map(t => themeColorMap[t.id] || "#4B8DF8");
     
       if (window.similarityDotPlot instanceof Chart) {
         window.similarityDotPlot.destroy();
@@ -709,13 +785,18 @@ function renderFilteredTable(filters = []) {
           responsive: true,
           scales: {
             x: {
-              beginAtZero: true,
+              min: -1,
+              max: 1,
               title: {
                 display: true,
-                text: "Similarity Score (Closer to 0 = More Similar)"
+                text: "Similarity Score - Correlation Between Main theme and other themes"
+              },
+              ticks: {
+                stepSize: 0.2
               }
             }
-          },
+          }
+          ,
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -728,7 +809,7 @@ function renderFilteredTable(filters = []) {
             if (elements.length > 0) {
               const index = elements[0].index;
               const theme = processed[index];
-              const themeId = "t" + theme.id;
+              const themeId = theme.id;
               const color = themeColorMap[themeId] || "#0d6efd";
     
               loadThemeDetails(themeId, color, modelName);
@@ -743,24 +824,24 @@ function renderFilteredTable(filters = []) {
                 themeLabel.style.color = color;
               }
     
-              new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
-            }
+              const modalEl = document.getElementById("themeDetailModal");
+              const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+              modal.show();
+              }
           }
         }
       });
     }
     
-    
 
-
-      document.getElementById("themeDetailModal").addEventListener("hidden.bs.modal", () => {
+    document.getElementById("themeDetailModal").addEventListener("hidden.bs.modal", () => {
         if (themeTrendChart instanceof Chart) {
           themeTrendChart.destroy();
           themeTrendChart = null;
         }
       });
 
-      async function fetchThemeCoordinates(modelName) {
+    async function fetchThemeCoordinates(modelName) {
         try {
           const response = await fetch('/api/theme-coordinates', {
             method: 'POST',
@@ -785,14 +866,13 @@ function renderFilteredTable(filters = []) {
         }
       }
       
-      fetchThemeCoordinates(modelName);
+    fetchThemeCoordinates(modelName);
 
+    let scatterChartInstance = null;
 
-      let scatterChartInstance = null;
+    function plotScatterChart(data, modelName) {
 
-
-
-      function plotScatterChart(data, modelName) {
+      // console.log(data)
         const ctx = document.getElementById("themeChartGrid").getContext("2d");
       
         const minSize = Math.min(...data.map(d => d.size));
@@ -809,21 +889,23 @@ function renderFilteredTable(filters = []) {
         if (scatterChartInstance) {
           scatterChartInstance.destroy();
         }
-          const scatterPoints = data.map(d => {
+        const scatterPoints = data.map(d => {
           const solidColor = themeColorMap[d.id] || "rgba(66, 133, 244, 1)";
           const fillColor = solidColor.replace("rgb(", "rgba(").replace(")", ", 0.2)");
-      
+        
           return {
             x: d.x,
             y: d.y,
-            r: normalizeSize(d.size),  // 👈 Used dynamically below
+            r: normalizeSize(d.size),
             label: d.label,
             id: d.id,
+            keywords: d.keywords || "—",  // ✅ Include keywords
             color: solidColor,
             backgroundColor: fillColor,
             borderColor: solidColor
           };
         });
+        
       
         const scatterData = {
           datasets: [
@@ -869,9 +951,22 @@ function renderFilteredTable(filters = []) {
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  label: ctx => ctx.raw.label
+                  label: function(ctx) {
+                    const point = scatterPoints[ctx.dataIndex];
+                    const label = point.label;
+                    const keywords = Array.isArray(point.keywords) ? point.keywords : [];
+              
+                    // Group keywords into lines of 5
+                    const keywordLines = [];
+                    for (let i = 0; i < keywords.length; i += 5) {
+                      keywordLines.push(keywords.slice(i, i + 5).join(", "));
+                    }
+              
+                    return [label, "Keywords:"].concat(keywordLines);
+                  }
                 }
               }
+              
             },
             elements: {
               point: {
@@ -903,7 +998,9 @@ function renderFilteredTable(filters = []) {
                   themeLabel.style.color = themeColor;
                 }
       
-                new bootstrap.Modal(document.getElementById("themeDetailModal")).show();
+                const modalEl = document.getElementById("themeDetailModal");
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
               }
             },
             scales: {
@@ -931,13 +1028,11 @@ function renderFilteredTable(filters = []) {
         });
       }
       
-      
-      
-      const toggleMetricBtn = document.getElementById("toggleMetricBtn");
-      const themeMetricsPanel = document.getElementById("themeMetricsPanel");
-      const modelMetricsPanel = document.getElementById("modelMetricsPanel");
-      
-      toggleMetricBtn.addEventListener("click", () => {
+    const toggleMetricBtn = document.getElementById("toggleMetricBtn");
+    const themeMetricsPanel = document.getElementById("themeMetricsPanel");
+    const modelMetricsPanel = document.getElementById("modelMetricsPanel");
+    
+    toggleMetricBtn.addEventListener("click", () => {
         const showingTheme = !themeMetricsPanel.classList.contains("d-none");
       
         themeMetricsPanel.classList.toggle("d-none", showingTheme);
@@ -980,35 +1075,49 @@ function renderFilteredTable(filters = []) {
   
         function renderInferenceResults(topThemes = [], rationale = "") {
           if (!topThemes || topThemes.length === 0) return;
-        
-          // Theme + rationale
-          document.getElementById("inferredTheme").textContent = topThemes[0].label || "–";
-          const rationaleDiv = document.getElementById("inferredRationaleWrapper");
-          const rationaleText = document.getElementById("inferredRationale");
-        
-          if (!rationale || rationale.trim() === "") {
-            rationaleDiv.style.display = "none";
-          } else {
-            rationaleText.textContent = rationale;
-            rationaleDiv.style.display = "block";
-          }
+
+        // Theme label
+        document.getElementById("inferredTheme").textContent = topThemes[0].label || "–";
+
+        // Rationale
+        const rationaleDiv = document.getElementById("inferredRationaleWrapper");
+        const rationaleText = document.getElementById("inferredRationale");
+
+        if (!rationale || rationale.trim() === "") {
+          rationaleDiv.style.display = "none";
+        } else {
+          rationaleText.textContent = rationale;
+          rationaleDiv.style.display = "block";
+        }
+
+        // Keywords
+        const keywordDiv = document.getElementById("inferredKeywordsWrapper");
+        const keywordText = document.getElementById("inferredKeywords");
+        const keywordsRaw = topThemes[0].keywords || "—";
+
+        if (!keywordsRaw || keywordsRaw.length === 0) {
+          keywordDiv.style.display = "none";
+        } else {
+          const formattedKeywords = keywordsRaw.split(", ").reduce((acc, word, idx) => {
+            const line = Math.floor(idx / 5);
+            acc[line] = acc[line] ? acc[line] + ", " + word : word;
+            return acc;
+          }, []).join("\n");
+
+          keywordText.textContent = formattedKeywords;
+          keywordDiv.style.display = "block";
+        }
+
         
           // Adjust layout
           document.getElementById("textAreaSpace").className = "col-md-6";
-        
-          // Show results block
           document.getElementById("inferredResults").style.display = "block";
         
-          // Get canvas context
           const ctx = document.getElementById("inferredThemeChart").getContext("2d");
           if (window.inferredChart) window.inferredChart.destroy();
         
-          // Get background colors from themeColorMap
-
-          
           const backgroundColors = topThemes.map(t => themeColorMap[t.theme_id] || "#0d6efd");
         
-          // Create chart
           window.inferredChart = new Chart(ctx, {
             type: "bar",
             data: {
@@ -1027,13 +1136,24 @@ function renderFilteredTable(filters = []) {
                 legend: { display: false },
                 tooltip: {
                   callbacks: {
-                    label: ctx => `${(ctx.parsed.y * 100).toFixed(1)}%`
+                    label: function (ctx) {
+                      const theme = topThemes[ctx.dataIndex];
+                      const score = (ctx.parsed.y * 100).toFixed(1);
+                      const keywords = theme.keywords || "No keywords";
+                      const words = keywords.split(", ").map(k => k.trim());
+                      const chunked = [];
+                      for (let i = 0; i < words.length; i += 5) {
+                        chunked.push(words.slice(i, i + 5).join(", "));
+                      }
+                      return [`Score: ${score}%`, "Keywords:"].concat(chunked);
+                    }
                   }
                 }
               }
             }
           });
         }
+        
         
 
   // console.log(modelName)
@@ -1062,14 +1182,5 @@ function renderFilteredTable(filters = []) {
         alert("Failed to perform inference.");
       }
     }); 
-
-      
-      
-
-      
-      console.log(themeColorMap)
-      
-
-
 
 });

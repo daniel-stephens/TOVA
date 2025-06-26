@@ -10,3 +10,4 @@ data
 .venv
 cache
 .env
+dashboardData.json
