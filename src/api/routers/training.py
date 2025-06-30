@@ -7,8 +7,8 @@ from fastapi import APIRouter, HTTPException # type: ignore
 
 from src.api.models.train_requests import TrainRequest, TrainFileRequest
 from src.utils.tm_utils import prepare_training_data, normalize_json_data
-from src.utils.common import init_logger
 from src.core.dispatchers import train_model_dispatch
+from src.api.logger import logger
 
 router = APIRouter()
 
@@ -55,8 +55,6 @@ def _train_via_api(
 @router.post("/json", tags=["Training"])
 def train_model_from_json(req: TrainRequest):
     
-    logger = init_logger(req.config_path)
-    
     normalized_data = normalize_json_data(
         raw_data = json.dumps([record.model_dump() for record in req.data]),
         id_col=req.id_col if req.id_col else None,
@@ -79,7 +77,7 @@ def train_model_from_file(req: TrainFileRequest):
     if not os.path.isfile(req.data_path):
         raise HTTPException(status_code=400, detail="Data file not found")
     
-    logger = init_logger(req.config_path)
+    print("this is just a test", flush=True)  # For debugging purposes, remove in production
 
     normalized_data = prepare_training_data(
         path=req.data_path,

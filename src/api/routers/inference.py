@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException # type: ignore
 
 from src.api.models.infer_requests import InferRequest, InferFileRequest
 from src.utils.tm_utils import prepare_training_data, normalize_json_data
-from src.utils.common import init_logger
+from src.api.logger import logger
 from src.core.dispatchers import infer_model_dispatch
 
 router = APIRouter()
@@ -49,9 +49,7 @@ def _infer_via_api(
 
 @router.post("/json", tags=["Inference"])
 def infer_from_json(req: InferRequest):
-    
-    logger = init_logger(req.config_path)
-    
+        
     normalized_data = normalize_json_data(
         raw_data = json.dumps([record.model_dump() for record in req.data]),
         id_col=req.id_col if req.id_col else None,
@@ -71,8 +69,6 @@ def infer_from_json(req: InferRequest):
 def infer_from_file(req: InferFileRequest):
     if not os.path.isfile(req.data_path):
         raise HTTPException(status_code=400, detail="Data file not found")
-
-    logger = init_logger(req.config_path)
     
     normalized_data = prepare_training_data(
         path=req.data_path,

@@ -2,9 +2,15 @@ import logging
 import pathlib
 import pickle
 from datetime import datetime
+import sys
 from typing import Dict, Optional
 
 import yaml
+
+class FlushingStreamHandler(logging.StreamHandler):
+    def emit(self, record):
+        super().emit(record)
+        self.flush()
 
 def log_or_print(
     message: str,
@@ -136,7 +142,9 @@ def init_logger(
         logger.addHandler(file_handler)
 
     if logger_config.get("console_log", True):
-        console_handler = logging.StreamHandler()
+        #console_handler = logging.StreamHandler()
+        console_handler = FlushingStreamHandler(sys.stdout)
+
         console_handler.setLevel(log_level)
         console_format = logging.Formatter(
             '%(name)s - %(levelname)s - %(message)s')
