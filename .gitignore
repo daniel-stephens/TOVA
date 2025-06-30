@@ -11,3 +11,4 @@ data
 cache
 .env
 dashboardData.json
+.venv_kumo

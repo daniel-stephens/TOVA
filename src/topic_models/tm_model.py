@@ -18,7 +18,7 @@ from gensim.corpora import Dictionary # type: ignore
 from gensim.models.coherencemodel import CoherenceModel # type: ignore
 import numpy as np
 import pandas as pd
-import rbo
+import rbo # type: ignore
 import scipy.sparse as sparse
 from ..prompter.prompter import Prompter
 

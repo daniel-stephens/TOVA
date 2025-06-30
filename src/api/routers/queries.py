@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException # type: ignore
 
 from src.api.models.query_requests import ModelInfoRequest, ThetasByDocsIdsRequest, TopicInfoRequest
 from src.core.dispatchers import get_model_info_dispatch, get_thetas_documents_by_id_dispatch, get_topic_info_dispatch
-from src.utils.common import init_logger
+from src.api.logger import logger
 
 router = APIRouter()
 
@@ -23,7 +23,6 @@ def get_model_info(req: ModelInfoRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
-        logger = init_logger(config_file=req.config_path)
         model_info = get_model_info_dispatch(
             model_path=req.model_path,
             config_path=req.config_path,
@@ -43,7 +42,6 @@ def get_topic_info(req: TopicInfoRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
-        logger = init_logger(config_file=req.config_path)
         topic_info = get_topic_info_dispatch(
             model_path=req.model_path,
             config_path=req.config_path,
@@ -63,7 +61,6 @@ def get_thetas_by_docs_ids(req: ThetasByDocsIdsRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
-        logger = init_logger(config_file=req.config_path)
         thetas_info = get_thetas_documents_by_id_dispatch(
             model_path=req.model_path,
             docs_ids=req.docs_ids.split(","),
