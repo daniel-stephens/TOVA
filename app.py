@@ -10,7 +10,8 @@ from zoneinfo import ZoneInfo
 import random
 from datetime import datetime
 import sqlite3
-
+import time
+import threading 
 
 server = Flask(__name__)
 server.secret_key = 'your-secret-key'
@@ -35,13 +36,57 @@ registry = client.get_or_create_collection("corpus_model_registry")
 ####################################################################
 # Render Pages
 
+
+
+
 # 1. Home Page
 @server.route('/')
 def home():
+    return render_template('homepage.html')
+
+
+@server.route('/save-env', methods=['POST'])
+def save_env():
+    data = request.get_json()
+    key = data.get('key')
+    value = data.get('value')
+
+    if not key or not value:
+        return jsonify(success=False, message="Invalid input"), 400
+
+    try:
+        env_file = Path('.env')
+        line = f'{key}="{value}"\n'  # Wrap value in double quotes
+
+        if env_file.exists():
+            lines = env_file.read_text().splitlines()
+            updated = False
+            for i, l in enumerate(lines):
+                if l.startswith(f"{key}="):
+                    lines[i] = line.strip()
+                    updated = True
+                    break
+            if not updated:
+                lines.append(line.strip())
+            env_file.write_text('\n'.join(lines) + '\n')
+        else:
+            env_file.write_text(line)
+
+        return jsonify(success=True)
+    except Exception as e:
+        return jsonify(success=False, message=str(e)), 500
+
+
+# This function makes you view your data before it is uploaded
+
+
+@server.route("/load-data-page/")
+def load_data_page():
     create_normalized_schema()
     return render_template('index.html')
 
-# This function makes you view your data before it is uploaded
+
+
 
 @server.route('/preview')
 def preview():
@@ -56,6 +101,7 @@ def preview():
         })
 
     return jsonify(data)
+
 
 
 # This Route Validates the selected files
@@ -482,6 +528,61 @@ def delete_model():
             "message": str(e)
         }), 500
 
+
+@server.route("/training/")
+def training_page():
+    model_name = request.args.get("modelName")
+    number_of_topics = int(request.args.get("numTopics"))
+    selectedCorpora = request.args.get("corpuses")
+    print(model_name)
+    print(number_of_topics)
+
+    output_path = f"static/data/output{model_name}.jsonl"
+
+    analyze_corpus_documents(selectedCorpora, n_clusters=number_of_topics, output_path=output_path, tfidf_info_path=f"static/data/tfidf_details{model_name}.jsonl", db_path="database/mydatabase.db")
+
+    return render_template('training.html')
+
+
+training_status = {
+    "progress": 0.0,
+    "message": "Initializing training…",
+    "eta": "2 min",
+    "done": False
+}
+
+def simulate_training():
+    print("⚙️ simulate_training STARTED")
+    total_steps = 120
+
+    for i in range(1, total_steps + 1):  # Include step 120
+        time.sleep(1)
+
+        training_status["progress"] = i / total_steps
+        training_status["message"] = "Training in progress…"
+        remaining = total_steps - i
+        mins, secs = divmod(remaining, 60)
+        training_status["eta"] = f"{mins}m {secs}s"
+
+        print(f"Step {i}: {training_status['progress']:.2%}")
+
+    training_status["progress"] = 1.0
+    training_status["done"] = True
+    training_status["eta"] = None
+    training_status["message"] = "Training complete."
+    print("✅ Training complete")
+
+
+@server.route("/start")
+def start_training():
+    print("🔥 /start endpoint hit")
+    threading.Thread(target=simulate_training, daemon=True).start()
+    return "Started"
+
+@server.route("/status")
+def get_status():
+    print("📡 Status check:", training_status["progress"])
+    return jsonify(training_status)
 
 ###################################################################################
 
@@ -1033,4 +1134,4 @@ def list_models():
 
 
 if __name__ == '__main__':
-    server.run(debug=True)
+    server.run(debug=True, use_reloader=False)

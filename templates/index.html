@@ -123,36 +123,56 @@
                     <div class="card-body">
                         <h2 class="card-title text-center mb-4">Upload Files</h2>
                         <form id="uploadForm" action="/validate" method="post" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <input class="form-control" type="file" id="files" name="files" webkitdirectory directory multiple required>
+                            <!-- Radio buttons -->
+                        <!-- Radio buttons -->
+                        <div class="mb-3">
+                            <label class="form-label">Upload Type <span class="text-danger">*</span></label><br>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="uploadType" id="uploadFile" value="file" checked>
+                                <label class="form-check-label" for="uploadFile">Single File</label>
                             </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="uploadType" id="uploadFolder" value="folder">
+                                <label class="form-check-label" for="uploadFolder">Folder</label>
+                            </div>
+                        </div>
+
+                        <!-- File input -->
+                        <div class="mb-3">
+                            <input class="form-control" type="file" id="fileInput" name="file">
+                        </div>
+
+                        <!-- Folder input -->
+                        <div class="mb-3">
+                            <input class="form-control" type="file" id="folderInput" name="files" webkitdirectory directory multiple style="display: none;">
+                        </div>
+
+
+                        
                             <div id="file-feedback" class="text-danger mb-3"></div>
-                                <div class="mb-3">
+                        
+                            <div class="mb-3">
                                 <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
                                 <select class="form-select" id="textColumn" name="text_column" required>
-                                  <option value="" disabled selected>Select text column</option>
+                                    <option value="" disabled selected>Select text column</option>
                                 </select>
-
+                        
                                 <label for="idColumn" class="form-label">ID Column <span class="text-danger">*</span></label>
                                 <select class="form-select" id="idColumn" name="id_column" required>
-                                  <option value="" disabled selected>Select id column</option>
+                                    <option value="" disabled selected>Select id column</option>
                                 </select>
-                                </div>
-                              
-                              <div class="mb-3">
+                            </div>
+                        
+                            <div class="mb-3">
                                 <label for="corpusName" class="form-label">Corpus Name</label>
                                 <input type="text" class="form-control" id="corpusName" name="corpusName" placeholder="Enter corpus name">
-                              </div>
-                              
-                              
-                            
-                              
+                            </div>
+                        
                             <div class="d-flex justify-content-center gap-2">
                                 <button type="submit" class="btn btn-primary">Validate</button>
-                                <!-- <button type="button" class="btn btn-secondary" onclick="loadPreview()" data-bs-toggle="modal" data-bs-target="#previewModal">
-                                    Preview File </button> -->
                             </div>
                         </form>
+                        
 
                         <div class="mt-4">
                             <h4>Selected Files:</h4>
@@ -300,7 +320,51 @@
         <!-- <script>"static/columns.js"</script> -->
 
         <script>
-            document.getElementById("files").addEventListener("change", getColumns); 
+            document.addEventListener("DOMContentLoaded", function () {
+                const fileRadio = document.getElementById("uploadFile");
+                const folderRadio = document.getElementById("uploadFolder");
+                const fileInput = document.getElementById("fileInput");
+                const folderInput = document.getElementById("folderInput");
+
+        function getActiveFileInput() {
+            return fileRadio.checked ? fileInput : folderInput;
+        }
+
+        function detachFileChangeListeners() {
+            fileInput.removeEventListener("change", getColumns);
+            folderInput.removeEventListener("change", getColumns);
+        }
+
+        function attachFileChangeListener() {
+            getActiveFileInput().addEventListener("change", getColumns);
+        }
+
+        function updateInputVisibility() {
+            detachFileChangeListeners();
+
+            if (fileRadio.checked) {
+                fileInput.style.display = "block";
+                folderInput.style.display = "none";
+            } else {
+                fileInput.style.display = "none";
+                folderInput.style.display = "block";
+            }
+
+            attachFileChangeListener();
+        }
+
+
+
+
+
+
+        // Attach listener to radio changes
+        fileRadio.addEventListener("change", updateInputVisibility);
+        folderRadio.addEventListener("change", updateInputVisibility);
+
+
+
+            getActiveFileInput().addEventListener("change", getColumns); 
 
             async function getColumns(event) {
             const files = event.target.files;
@@ -379,7 +443,7 @@
     let previewFiles = [];
         let previewIndex = 0;
 
-        document.getElementById('files').addEventListener('change', async function (e) {
+        getActiveFileInput().addEventListener('change', async function (e) {
             previewFiles = Array.from(e.target.files).slice(0, 6);
             previewIndex = 0;
 
@@ -523,7 +587,7 @@
 
             try {
                 const allowedExtensions = ['csv', 'xls', 'xlsx', 'json', 'jsonl', 'txt'];
-                const files = document.getElementById('files').files;
+                const files = getActiveFileInput().files;
                 const feedback = document.getElementById('file-feedback');
                 const tbody = document.getElementById('selected-files-body');
                 const textColumn = document.getElementById("textColumn").value;
@@ -730,7 +794,7 @@
         }
 
         
-    
+    });
 </script>
 
         

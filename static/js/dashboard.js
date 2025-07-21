@@ -1156,7 +1156,7 @@ function applyFilters() {
         
         
 
-  // console.log(modelName)
+  
     document.getElementById("inferBtn").addEventListener("click", async () => {
       const text = document.getElementById("inputText").value.trim();
       madeInference = true;
