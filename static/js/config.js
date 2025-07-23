@@ -34,66 +34,45 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById('confirmModelName').addEventListener('click', () => {
     const modelName = document.getElementById('modelNameInput').value.trim();
     const numTopics = document.getElementById('numTopics').value.trim();
-    const fullscreenLoader = document.getElementById('fullscreenLoader');
-    const corpus = document.getElementById("corpusName");
-    
 
     if (!modelName) {
         alert("Please provide a model name.");
         return;
     }
 
-
     const selectedCorpora = Array.from(
       document.querySelectorAll('input[name="corpusName"]:checked')
     ).map(cb => cb.value);
-    
 
-    // Collect advanced settings
-      const training_param = {};
-      const inputs = document.querySelectorAll("#modelParamsArea input");
-      inputs.forEach(input => {
-          const key = input.id;
-          const value = input.value.trim();
-          training_param[key] = input.type === "number" ? Number(value) : value;
-      });
-
-      // Move num_topics into advanced settings
-      training_param["num_topics"] = Number(document.getElementById("numTopics").value);
-
-      const requestData = {
-          model: modelSelect.value,               // Model selected
-          save_name: modelName,                   // Model name
-          training_params: training_param,    // ✅ Unified training params
-          corpuses: selectedCorpora,
-      };
-
-    console.log(requestData)
-    fullscreenLoader.style.display = 'flex';
-
-
-
-    fetch('/train_model', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData)
-    })
-    .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Model run failed.');
-        bootstrap.Modal.getInstance(document.getElementById('modelNameModal')).hide();
-        alert(data.message || 'Model run completed!');
-        window.location.href = "/trained-models";
-
-    })
-    .catch(err => {
-        alert("Error running model: " + err.message);
-        console.error("Model run error:", err);
-    })
-    .finally(() => {
-        fullscreenLoader.style.display = 'none';
+    const training_param = {};
+    const inputs = document.querySelectorAll("#modelParamsArea input");
+    inputs.forEach(input => {
+        const key = input.id;
+        const value = input.value.trim();
+        training_param[key] = input.type === "number" ? Number(value) : value;
     });
+
+    training_param["num_topics"] = Number(numTopics);
+
+    const requestData = {
+        model: modelSelect.value,
+        save_name: modelName,
+        training_params: training_param,
+        corpuses: selectedCorpora,
+    };
+
+    // Save to sessionStorage for frontend JS use after page load
+    sessionStorage.setItem("modelTrainingData", JSON.stringify(requestData));
+
+    // ✅ Redirect with query parameters so Flask can use them
+    const query = new URLSearchParams({
+        modelName: modelName,
+        numTopics: training_param["num_topics"],
+        corpuses: selectedCorpora,
+    });
+    window.location.href = `/training/?${query.toString()}`;
 });
+
 
 
   const modalElement = document.getElementById('modelNameModal');

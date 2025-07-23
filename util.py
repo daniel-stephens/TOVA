@@ -3,6 +3,23 @@ from datetime import datetime
 from langchain.document_loaders import (
     TextLoader, CSVLoader)
 import chromadb
+import json
+import sqlite3
+import numpy as np
+from collections import Counter
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD, PCA
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.stats import entropy as scipy_entropy
+from sklearn.preprocessing import normalize
+import os
+
+
+
+
+
+
 client = chromadb.PersistentClient(path="database/myDB")
 collection = client.get_or_create_collection(name="documents")
 registry = client.get_or_create_collection("corpus_model_registry")
@@ -645,3 +662,153 @@ def get_model_corpora(model_id):
     corpora = [row[0] for row in cursor.fetchall()]
     conn.close()
     return ", ".join(sorted(corpora))
+
+
+
+
+
+def analyze_corpus_documents(
+    corpus_name,
+    n_clusters=15,
+    output_path="static/data/final_output.json",
+    tfidf_info_path="static/data/tfidf_details.jsonl",
+    db_path="database/mydatabase.db"
+):
+    # === 1. Load documents ===
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, document FROM documents WHERE corpus_name = ?", (corpus_name,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        raise ValueError(f"No documents found for corpus '{corpus_name}'")
+
+    documents = [{"id": row[0], "raw_text": row[1]} for row in rows]
+    texts = [doc["raw_text"] for doc in documents]
+
+    # === 2. TF-IDF ===
+    vectorizer = TfidfVectorizer(max_features=1000, stop_words="english")
+    tfidf_matrix = vectorizer.fit_transform(texts)
+    feature_names = vectorizer.get_feature_names_out()
+
+    # === 3. LSI (SVD) ===
+    lsi = TruncatedSVD(n_components=min(200, tfidf_matrix.shape[1]), random_state=42)
+    lsi_matrix = lsi.fit_transform(tfidf_matrix)
+
+    # === 4. Clustering ===
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    clusters = kmeans.fit_predict(lsi_matrix)
+
+    # === 5. Cosine scores ===
+    centroids = kmeans.cluster_centers_
+    scores = [
+        cosine_similarity([lsi_matrix[i]], [centroids[clusters[i]]])[0][0]
+        for i in range(len(documents))
+    ]
+
+    # === 6. PCA projection ===
+    pca = PCA(n_components=2)
+    pca_coords = pca.fit_transform(lsi_matrix)
+
+    # === 7. TF-IDF Top Terms ===
+    tfidf_array = tfidf_matrix.toarray()
+    top_k = 50
+    tfidf_top_terms = []
+    doc_outputs = []
+
+    for i, row in enumerate(tfidf_array):
+        top_indices = row.argsort()[::-1][:top_k]
+        keywords = [{"term": feature_names[j], "score": float(row[j])} for j in top_indices if row[j] > 0]
+        tfidf_top_terms.append({"id": documents[i]["id"], "keywords": keywords})
+        doc_outputs.append({
+            "id": documents[i]["id"],
+            "text": documents[i]["raw_text"],
+            "cluster": int(clusters[i]),
+            "score": float(scores[i]),
+            "pca": [float(x) for x in pca_coords[i]],
+            "keywords": [kw["term"] for kw in keywords]
+        })
+
+    # === 8. Coherence + Entropy per cluster ===
+    def compute_cluster_metrics(tfidf, clusters):
+        result = {}
+        for c in sorted(set(clusters)):
+            indices = [i for i, label in enumerate(clusters) if label == c]
+            sub_matrix = tfidf[indices]
+            tfidf_sum = np.asarray(sub_matrix.sum(axis=0)).flatten()
+            top_indices = tfidf_sum.argsort()[::-1][:20]
+            keyword_vectors = sub_matrix[:, top_indices].T.toarray()
+
+            # Coherence: mean cosine similarity
+            sims = cosine_similarity(keyword_vectors)
+            if len(sims) > 1:
+                coherence = float(np.mean([sims[i, j] for i in range(len(sims)) for j in range(i + 1, len(sims))]))
+            else:
+                coherence = None
+
+            # Entropy: term distribution in sub-matrix
+            flattened = np.asarray(sub_matrix.sum(axis=0)).flatten()
+            p = flattened[flattened > 0]
+            p = p / p.sum() if p.sum() > 0 else p
+            ent = float(scipy_entropy(p, base=2)) if len(p) > 0 else 0
+
+            result[c] = {
+                "prevalence": len(indices),
+                "coherence": coherence,
+                "entropy": ent,
+                "proportion": len(indices) / len(documents)*100
+            }
+        return result
+
+    per_cluster_metrics = compute_cluster_metrics(tfidf_matrix, clusters)
+
+    # === 9. Global Metrics ===
+    prevalence = [v["prevalence"] for v in per_cluster_metrics.values()]
+    proportions = [v["proportion"] for v in per_cluster_metrics.values()]
+    global_entropy = float(scipy_entropy(proportions, base=2))
+
+    # Topic diversity (unique top terms across all clusters)
+    unique_terms = set()
+    for entry in tfidf_top_terms:
+        unique_terms.update([kw["term"] for kw in entry["keywords"][:top_k]])
+    topic_diversity = len(unique_terms) / (top_k * n_clusters)
+
+    average_coherence = float(np.mean([
+        v["coherence"] for v in per_cluster_metrics.values() if v["coherence"] is not None
+    ]))
+    average_entropy = float(np.mean([v["entropy"] for v in per_cluster_metrics.values()]))
+
+    irbo = 1 - (np.std(prevalence) / np.mean(prevalence)) if np.mean(prevalence) > 0 else 0
+
+    # === 10. Assemble output ===
+    metrics = {
+        "corpus": corpus_name,
+        "n_documents": len(documents),
+        "n_clusters": n_clusters,
+        "global": {
+            "average_coherence": average_coherence,
+            "average_entropy": average_entropy,
+            "topic_diversity": topic_diversity,
+            "irbo": irbo
+        },
+        "per_cluster": {
+            str(k): v for k, v in per_cluster_metrics.items()
+        },
+        "documents": doc_outputs
+    }
+
+    # Save outputs
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(tfidf_info_path), exist_ok=True)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+
+    with open(tfidf_info_path, "w", encoding="utf-8") as f:
+        for item in tfidf_top_terms:
+            json.dump(item, f)
+            f.write("\n")
+
+    print(f"✅ Saved metrics to {output_path}")
+    print(f"🧠 TF-IDF terms to {tfidf_info_path}")
