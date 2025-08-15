@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDER_IMAGE=tova-builder:dev
+ARG ASSETS_IMAGE=tova-assets:dev
+
+FROM ${BUILDER_IMAGE} AS wheel
+FROM ${ASSETS_IMAGE} AS static
+
+FROM python:3.12-slim-bookworm
+WORKDIR /app
+
+# Install runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy wheel from builder & install TOVA + API deps
+COPY --from=wheel /dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && \
+    rm -rf /tmp/*.whl
+
+COPY --from=static /static /app/static
+
+RUN mkdir -p /data/tmp
+
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "tova.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

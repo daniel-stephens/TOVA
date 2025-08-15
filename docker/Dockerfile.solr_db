@@ -1,0 +1,8 @@
+FROM solr:9.6.1
+
+# Put configsets into the image
+COPY solr/config/configsets /opt/solr/server/solr/configsets
+
+# Put your plugin jar into the standard shared lib
+COPY solr/plugins/solr-ewb-jensen-shanon-distance-plugin/solr-js-plugin/target/solr-js-plugin-1.0.0.jar \
+     /opt/solr/dist/plugins/solr-js-plugin-1.0.0.jar

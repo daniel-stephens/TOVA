@@ -59,6 +59,25 @@ topic_modeling:
     word_min_len: 0
 
 ################################
+#       PREPROCESSING          #
+################################
+nlp:
+  spacy_model: en_core_web_sm
+  spacy_disable: ["ner", "parser"]
+  valid_pos: ["VERB", "NOUN", "ADJ", "PROPN"]
+  extra_stopwords_files: ["./stopwords/custom.txt"]  # one token per line
+vectorization:
+  max_features: 20000
+  min_df: 2
+  max_df: 0.95
+  ngram_range: [1, 2]
+  binary: false
+embeddings:
+  model_name: all-MiniLM-L6-v2
+  normalize: true
+  batch_size: 32
+
+################################
 #          PROMPTER            #
 ################################
 llm:

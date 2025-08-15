@@ -1,0 +1,26 @@
+# docker/Dockerfile.ui
+# syntax=docker/dockerfile:1.4
+ARG ASSETS_IMAGE=tova-assets:dev
+FROM ${ASSETS_IMAGE} AS static
+
+FROM python:3.12-slim-bookworm AS builder
+WORKDIR /app
+
+# OS updates
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY ui/requirements.txt .
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn
+
+# Copy UI code and templates
+COPY templates /app/templates
+COPY ui/ /app
+
+# Copy shared static assets from the assets stage
+COPY --from=static /static /app/static
+
+ENV API_BASE_URL=http://api:8000
+EXPOSE 8080
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "app:server"]

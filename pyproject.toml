@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "build"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tova"
+version = "0.1.0"
+description = "Topic modeling toolkit"
+authors = [{ name = "Daniel Stephens & Lorena Calvo-Bartolomé" }]
+requires-python = ">=3.12,<4.0"
+readme = "README.md"
+license = { text = "MIT License" }
+
+dynamic = ["dependencies", "optional-dependencies"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# base requirements
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+# expose service-specific extras
+[tool.setuptools.dynamic.optional-dependencies]
+ui   = { file = ["ui/requirements.txt"] }
+solr   = { file = ["solr/solr-api/requirements.txt"] }

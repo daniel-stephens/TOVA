@@ -1,0 +1,108 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      args:
+        BUILDER_IMAGE: tova-builder:${VERSION}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+    #depends_on:
+    #  solr-api:
+    #    condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/data
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+      args:
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - API_BASE_URL=http://api:8000
+    volumes:
+    - ./data:/data
+
+  solr-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.solr_api
+      args:
+        BUILDER_IMAGE: tova-builder:${VERSION}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+    depends_on:
+      - solr
+    ports:
+      - 8001:8001
+    environment:
+      SOLR_URL: http://solr:8983
+    #healthcheck:
+    #  test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2).getcode()==200 else 1)"]
+    #  interval: 10s
+    #  timeout: 3s
+    #  retries: 5
+    #  start_period: 15s
+    volumes:
+      - ./data:/data
+
+  solr-initializer:
+    image: alpine
+    restart: "no"
+    entrypoint: |
+      /bin/sh -c "chown 8983:8983 /solr"
+    volumes:
+      - ./db/data/solr:/solr
+
+  zoo:
+    image: zookeeper:3.9
+    restart: always
+    ports: ["2180:8080", "2181:2181"]
+    environment:
+      - JVMFLAGS=-Djute.maxbuffer=50000000
+    volumes:
+      - ./db/data/zoo/data:/data
+      - ./db/data/zoo/logs:/datalog
+
+  solr:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.solr_db
+    container_name: solr
+    restart: always
+    depends_on: [zoo]
+    ports: ["8983:8983"]
+    environment:
+      - ZK_HOST=zoo:2181
+    volumes:
+      - ./db/data/solr:/var/solr
+    command: ["solr", "-f", "-c", "-z", "zoo:2181", "-a",
+              "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=1044 -Djute.maxbuffer=0x5000000"]
+
+  solr_config:
+    build: ./solr/config
+    depends_on: [solr, zoo]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./solr/config/bash_scripts:/bash_scripts
+      - ./db/data/solr:/db/data/solr
+    command: ["sh","-c","chmod +x /bash_scripts/init_config.sh && ls /bash_scripts && bash_scripts/init_config.sh /db/data/solr/data"]
+  
+volumes:
+  data:

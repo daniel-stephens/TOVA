@@ -1,4 +1,4 @@
 {
-    "tomotopyLDA": "src.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel"
+    "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel"
 }
 
