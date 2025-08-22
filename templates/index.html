@@ -1,802 +1,818 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corpus Upload with Validation</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Corpus Upload with Validation</title>
 
-    <!-- Bootstrap Icons CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Bootstrap CSS & Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
 
-    <style>
-        .tooltip-custom {
-        position: fixed;
-        background-color: #212529;        /* darker, modern tooltip */
-        color: #f8f9fa;                   /* soft white text */
-        border-radius: 8px;               /* more rounded corners */
-        padding: 12px 16px;
-        max-width: 600px;
-        white-space: pre-wrap;
-        z-index: 9999;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* subtle shadow */
-        display: none;
-        transition: opacity 0.2s ease-in-out;
-        opacity: 0.95;
-        }
+  <style>
+    .tooltip-custom {
+      position: fixed;
+      background-color: #212529;
+      color: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px 16px;
+      max-width: 600px;
+      white-space: pre-wrap;
+      z-index: 9999;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: none;
+      transition: opacity 0.2s ease-in-out;
+      opacity: 0.95;
+    }
+    .table td {
+      max-width: 300px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: top;
+      position: relative;
+    }
+    .table td:hover {
+      white-space: normal;
+      overflow: visible;
+      z-index: 1;
+      background: #fff;
+      box-shadow: 0 0 6px rgba(0,0,0,0.1);
+    }
+    .table th { vertical-align: top; white-space: nowrap; }
 
-        
-        /* ✅ Default state: truncate long content cleanly */
-        .table td {
-        max-width: 300px;               /* limits width of each column cell */
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        vertical-align: top;
-        position: relative;
-        }
-
-        /* ✅ Hover state: allow full text to show without breaking layout */
-        .table td:hover {
-        white-space: normal;
-        overflow: visible;
-        z-index: 1;
-        background: #ffffff;
-        box-shadow: 0 0 6px rgba(0,0,0,0.1); /* optional highlight */
-        }
-
-        /* Optional: fix header alignment too */
-        .table th {
-        vertical-align: top;
-        white-space: nowrap;
-        }
-        #loader-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: rgba(0, 0, 0, 0.6); /* semi-transparent dark overlay */
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        }
-
-        .spinner-container {
-        text-align: center;
-        }
-
-
-
-        </style>
+    #loader-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background-color: rgba(0, 0, 0, 0.6);
+      z-index: 9999; display: none; align-items: center; justify-content: center;
+    }
+    .spinner-container { text-align: center; }
+  </style>
 </head>
 
 <body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-        <div class="container">
-          <!-- Brand -->
-          <a class="navbar-brand fw-bold" href="/">TOVA</a>
-      
-          <!-- Mobile Toggler -->
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-            aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
+  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/">TOVA</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Upload Data</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Initiate Training</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Model Repository</a>
+          </li>
+        </ul>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-info btn-sm" id="previewSelectedBtn"
+                  data-bs-toggle="modal" data-bs-target="#filePreviewModal">
+            Preview Before Validation
           </button>
-      
-          <!-- Navbar Links + Buttons -->
-          <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-            <!-- Left nav links -->
-            <ul class="navbar-nav">
-              <li class="nav-item">
-                <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Upload Data</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Initiate Training</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Model Repository</a>
-              </li>
-            </ul>
-      
-            <!-- Right-side action buttons -->
-            <div class="d-flex gap-2">
-              <button type="button" class="btn btn-info btn-sm" id="previewSelectedBtn" data-bs-toggle="modal" data-bs-target="#filePreviewModal">
-                Preview Before Validation
-              </button>
-              <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#instructionModal">
-                Instructions
-              </button>
-            </div>
-          </div>
+          <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#instructionModal">
+            Instructions
+          </button>
         </div>
-      </nav>
-      
-
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card shadow">
-                    <div class="card-body">
-                        <h2 class="card-title text-center mb-4">Upload Files</h2>
-                        <form id="uploadForm" action="/validate" method="post" enctype="multipart/form-data">
-                            <!-- Radio buttons -->
-                        <!-- Radio buttons -->
-                        <div class="mb-3">
-                            <label class="form-label">Upload Type <span class="text-danger">*</span></label><br>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="uploadType" id="uploadFile" value="file" checked>
-                                <label class="form-check-label" for="uploadFile">Single File</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="uploadType" id="uploadFolder" value="folder">
-                                <label class="form-check-label" for="uploadFolder">Folder</label>
-                            </div>
-                        </div>
-
-                        <!-- File input -->
-                        <div class="mb-3">
-                            <input class="form-control" type="file" id="fileInput" name="file">
-                        </div>
-
-                        <!-- Folder input -->
-                        <div class="mb-3">
-                            <input class="form-control" type="file" id="folderInput" name="files" webkitdirectory directory multiple style="display: none;">
-                        </div>
-
-
-                        
-                            <div id="file-feedback" class="text-danger mb-3"></div>
-                        
-                            <div class="mb-3">
-                                <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
-                                <select class="form-select" id="textColumn" name="text_column" required>
-                                    <option value="" disabled selected>Select text column</option>
-                                </select>
-                        
-                                <label for="idColumn" class="form-label">ID Column <span class="text-danger">*</span></label>
-                                <select class="form-select" id="idColumn" name="id_column" required>
-                                    <option value="" disabled selected>Select id column</option>
-                                </select>
-                            </div>
-                        
-                            <div class="mb-3">
-                                <label for="corpusName" class="form-label">Corpus Name</label>
-                                <input type="text" class="form-control" id="corpusName" name="corpusName" placeholder="Enter corpus name">
-                            </div>
-                        
-                            <div class="d-flex justify-content-center gap-2">
-                                <button type="submit" class="btn btn-primary">Validate</button>
-                            </div>
-                        </form>
-                        
-
-                        <div class="mt-4">
-                            <h4>Selected Files:</h4>
-                            <table class="table table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>File Name</th>
-                                        <th>File Type</th>
-                                        <th>File Size (KB)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="selected-files-body">
-                                    <tr><td colspan="4" class="text-center">No files selected yet.</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <a href="/model" class="btn btn-primary disabled" id="continueBtn" tabindex="-1" aria-disabled="true">Continue</a>
-                          </div>
-                          
-                        
-                    </div>
-                    
-                </div>
-            </div>
-        </div>
-        
+      </div>
     </div>
+  </nav>
 
-    
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card shadow">
+          <div class="card-body">
+            <h2 class="card-title text-center mb-4">Upload Files</h2>
 
-    <!-- Instruction Modal -->
-    <div class="modal fade" id="instructionModal" tabindex="-1" aria-labelledby="instructionModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="instructionModalLabel">Instructions</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Follow these guidelines before uploading your files:</p>
-                    <ul>
-                        <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel, PDF</strong></li>
-                        <li>Ensure files contain:
-                            <ul>
-                                <li><strong>Document Number:</strong> Unique identifier</li>
-                                <li><strong>Content:</strong> Text to be analyzed</li>
-                            </ul>
-                        </li>
-                        <li>Optional field: <strong>Category</strong> for better organization</li>
-                        <li>Files must meet these requirements to proceed.</li>
-                    </ul>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- File Preview Modal -->
-    <div class="modal fade" id="filePreviewModal" tabindex="-1" aria-labelledby="filePreviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="filePreviewModalLabel">File Preview</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="preview-content" style="min-height: 300px;">
-                    <!-- dynamic preview goes here -->
-                </div>
-                <div class="modal-footer d-flex justify-content-between">
-                    <button type="button" id="prevFile" class="btn btn-outline-secondary">Previous</button>
-                    <span id="preview-counter"></span>
-                    <button type="button" id="nextFile" class="btn btn-outline-secondary">Next</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="previewModalLabel">Preview Uploaded Data</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-      
-            <div class="modal-body">
-              <!-- Search bar -->
+            <form id="uploadForm" action="/validate" method="post" enctype="multipart/form-data">
+              <!-- Upload Type -->
               <div class="mb-3">
-                <div class="input-group">
-                  <input type="text" class="form-control" id="search-input" placeholder="Search content..." oninput="filterTable()">
-                  <button class="btn btn-secondary" onclick="resetTableFilter()">Reset</button>
+                <label class="form-label">Upload Type <span class="text-danger">*</span></label><br/>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="uploadType" id="uploadFile" value="file" checked>
+                  <label class="form-check-label" for="uploadFile">Single File</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="uploadType" id="uploadFolder" value="folder">
+                  <label class="form-check-label" for="uploadFolder">Folder</label>
                 </div>
               </div>
-              <!-- Scrollable table container with horizontal scroll support -->
-            <!-- Scrollable vertically, but full width -->
-            <div style="max-height: 400px; overflow-y: auto; width: 100%;">
-                <table class="table table-bordered table-striped table-sm mb-0" style="width: 100%; table-layout: fixed;">
-                  <thead>
-                    <tr>
-                      <th style="width: 70%; white-space: normal; word-break: break-word;">Content</th>
-                      <!-- <th style="width: 30%; white-space: normal; word-break: break-word;">Label</th> -->
-                    </tr>
-                  </thead>
-                  <tbody id="preview-table-body">
-                    
 
-                    <tr>
-                      <td class="text-center" colspan="2" style="white-space: normal; word-break: break-word;">No data loaded.</td>
-                    </tr>
-                  </tbody>
-                </table>
+              <!-- Inputs -->
+              <div class="mb-3">
+                <input class="form-control" type="file" id="fileInput" name="file">
               </div>
-              
-              
-  
-  
+              <div class="mb-3">
+                <input class="form-control" type="file" id="folderInput" name="files" webkitdirectory directory multiple style="display: none;">
+              </div>
+
+              <div id="file-feedback" class="text-danger mb-3"></div>
+
+              <!-- Columns -->
+              <div class="mb-3">
+                <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
+                <select class="form-select" id="textColumn" name="text_column" required>
+                  <option value="" disabled selected>Select text column</option>
+                </select>
+
+                <label for="idColumn" class="form-label mt-3">ID Column <span class="text-danger">*</span></label>
+                <select class="form-select" id="idColumn" name="id_column" required>
+                  <option value="" disabled selected>Select id column</option>
+                </select>
+
+                <label for="labelColumn" class="form-label mt-3">Label Column <span class="text-danger">*</span></label>
+                <select class="form-select" id="labelColumn" name="label_column" required>
+                  <option value="" disabled selected>Select label column</option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label for="corpusName" class="form-label">Corpus Name</label>
+                <input type="text" class="form-control" id="corpusName" name="corpusName" placeholder="Enter corpus name">
+              </div>
+
+              <div class="d-flex justify-content-center gap-2">
+                <button type="submit" class="btn btn-primary">Validate</button>
+              </div>
+            </form>
+
+            <!-- Selected Files Table -->
+            <div class="mt-4">
+              <h4>Selected Files:</h4>
+              <table class="table table-bordered table-striped">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>File Name</th>
+                    <th>File Type</th>
+                    <th>File Size (KB)</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="selected-files-body">
+                  <tr><td colspan="5" class="text-center">No files selected yet.</td></tr>
+                </tbody>
+              </table>
             </div>
-      
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+
+            <div class="d-flex justify-content-end">
+              <a href="/model" class="btn btn-primary disabled" id="continueBtn" tabindex="-1" aria-disabled="true">Continue</a>
             </div>
+
           </div>
         </div>
       </div>
-      <div id="loader-overlay" style="display: none;">
-        <div class="spinner-container">
-          <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-          <p class="text-light mt-3">Processing... Please wait.</p>
+    </div>
+  </div>
+
+  <!-- Instruction Modal -->
+  <div class="modal fade" id="instructionModal" tabindex="-1" aria-labelledby="instructionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="instructionModalLabel">Instructions</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Follow these guidelines before uploading your files:</p>
+          <ul>
+            <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel, PDF</strong></li>
+            <li>Ensure files contain:
+              <ul>
+                <li><strong>Document Number:</strong> Unique identifier</li>
+                <li><strong>Content:</strong> Text to be analyzed</li>
+              </ul>
+            </li>
+            <li>Optional field: <strong>Category</strong> for better organization</li>
+            <li>Files must meet these requirements to proceed.</li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>
         </div>
       </div>
-      
-      
-      <div id="hoverTooltip" class="tooltip-custom"></div>
+    </div>
+  </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-        <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <!-- File Preview Modal (pre-validation quick peek) -->
+  <div class="modal fade" id="filePreviewModal" tabindex="-1" aria-labelledby="filePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="filePreviewModalLabel">File Preview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="preview-content" style="min-height: 300px;"></div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" id="prevFile" class="btn btn-outline-secondary">Previous</button>
+          <span id="preview-counter"></span>
+          <button type="button" id="nextFile" class="btn btn-outline-secondary">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-        <!-- Bootstrap JS for modal functionality -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-        <!-- <script>"static/columns.js"</script> -->
+  <!-- Post-Validation Results Modal (automatic after submit) -->
+  <div class="modal fade" id="validationResultsModal" tabindex="-1" aria-labelledby="validationResultsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="validationResultsLabel">Validation Results</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
 
-        <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                const fileRadio = document.getElementById("uploadFile");
-                const folderRadio = document.getElementById("uploadFolder");
-                const fileInput = document.getElementById("fileInput");
-                const folderInput = document.getElementById("folderInput");
+        <div class="modal-body">
+          <div id="validation-summary" class="mb-3"></div>
+          <div id="validation-tabs"></div>
+        </div>
 
-        function getActiveFileInput() {
-            return fileRadio.checked ? fileInput : folderInput;
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <a href="/model" id="proceedBtn" class="btn btn-primary disabled" tabindex="-1" aria-disabled="true">Proceed</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Data Modal (from backend /preview endpoint) -->
+  <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="previewModalLabel">Preview Uploaded Data</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <div class="input-group">
+              <input type="text" class="form-control" id="search-input" placeholder="Search content..." oninput="filterTable()">
+              <button class="btn btn-secondary" onclick="resetTableFilter()">Reset</button>
+            </div>
+          </div>
+
+          <div style="max-height: 400px; overflow-y: auto; width: 100%;">
+            <table class="table table-bordered table-striped table-sm mb-0" style="width: 100%; table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th style="width: 70%; white-space: normal; word-break: break-word;">Content</th>
+                </tr>
+              </thead>
+              <tbody id="preview-table-body">
+                <tr>
+                  <td class="text-center" colspan="2" style="white-space: normal; word-break: break-word;">No data loaded.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay -->
+  <div id="loader-overlay">
+    <div class="spinner-container">
+      <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="text-light mt-3">Processing... Please wait.</p>
+    </div>
+  </div>
+
+  <div id="hoverTooltip" class="tooltip-custom"></div>
+
+  <!-- Libs -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const fileRadio   = document.getElementById("uploadFile");
+      const folderRadio = document.getElementById("uploadFolder");
+      const fileInput   = document.getElementById("fileInput");
+      const folderInput = document.getElementById("folderInput");
+
+      const textSelect  = document.getElementById("textColumn");
+      const idSelect    = document.getElementById("idColumn");
+      const labelSelect = document.getElementById("labelColumn");
+
+      const loader      = document.getElementById('loader-overlay');
+      const selectedTbody = document.getElementById('selected-files-body');
+      const continueBtn = document.getElementById("continueBtn");
+
+      function getActiveFileInput() {
+        return fileRadio.checked ? fileInput : folderInput;
+      }
+
+      function detachFileChangeListeners() {
+        fileInput.removeEventListener("change", getColumns);
+        folderInput.removeEventListener("change", getColumns);
+      }
+
+      function attachFileChangeListener() {
+        getActiveFileInput().addEventListener("change", getColumns);
+      }
+
+      function updateInputVisibility() {
+        detachFileChangeListeners();
+        if (fileRadio.checked) {
+          fileInput.style.display = "block";
+          folderInput.style.display = "none";
+        } else {
+          fileInput.style.display = "none";
+          folderInput.style.display = "block";
         }
+        attachFileChangeListener();
+      }
 
-        function detachFileChangeListeners() {
-            fileInput.removeEventListener("change", getColumns);
-            folderInput.removeEventListener("change", getColumns);
-        }
+      // Radio change handlers
+      fileRadio.addEventListener("change", updateInputVisibility);
+      folderRadio.addEventListener("change", updateInputVisibility);
+      updateInputVisibility(); // initialize
 
-        function attachFileChangeListener() {
-            getActiveFileInput().addEventListener("change", getColumns);
-        }
+      // Populate column selects from first selected file(s)
+      getActiveFileInput().addEventListener("change", getColumns);
 
-        function updateInputVisibility() {
-            detachFileChangeListeners();
+      async function getColumns(event) {
+        const files = event.target.files;
+        const columnsSet = new Set();
+        let isAllTxt = true;
 
-            if (fileRadio.checked) {
-                fileInput.style.display = "block";
-                folderInput.style.display = "none";
-            } else {
-                fileInput.style.display = "none";
-                folderInput.style.display = "block";
-            }
+        for (const file of files) {
+          if (file.name.startsWith("~$")) continue;  // skip Excel temp
+          const ext = file.name.split('.').pop().toLowerCase();
 
-            attachFileChangeListener();
-        }
-
-
-
-
-
-
-        // Attach listener to radio changes
-        fileRadio.addEventListener("change", updateInputVisibility);
-        folderRadio.addEventListener("change", updateInputVisibility);
-
-
-
-            getActiveFileInput().addEventListener("change", getColumns); 
-
-            async function getColumns(event) {
-            const files = event.target.files;
-            const columnsSet = new Set();
-            let isAllTxt = true;
-
-            for (const file of files) {
-                if (file.name.startsWith("~$")) continue;  // ✅ Skip Excel temp files
-
-                const fileExt = file.name.split('.').pop().toLowerCase();
-                const text = await file.text();
-
-                if (fileExt === "csv") {
-                isAllTxt = false;
-                const firstLine = text.split('\n')[0];
-                const headers = firstLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-                headers.forEach(col => columnsSet.add(col));
-                } else if (["json", "jsonl"].includes(fileExt)) {
-                isAllTxt = false;
-                try {
-                    const lines = fileExt === "jsonl" ? text.split('\n') : [text];
-                    const firstObj = JSON.parse(lines.find(line => line.trim()));
-                    Object.keys(firstObj).forEach(col => columnsSet.add(col));
-                } catch (err) {
-                    console.error("JSON parse error:", err);
-                }
-                } else if (["xls", "xlsx"].includes(fileExt)) {
-                isAllTxt = false;
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const workbook = XLSX.read(arrayBuffer, { type: "array" });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                    const headers = jsonData[0] || [];
-                    headers.forEach(col => {
-                    if (col) columnsSet.add(col.toString().trim());
-                    });
-                } catch (err) {
-                    console.error("Excel parse error:", err);
-                }
-                } else if (fileExt === "txt") {
-                continue; // still assume txt means "content"
-                } else {
-                isAllTxt = false;
-                }
-            }
-
-            const textSelect = document.getElementById("textColumn");
-            // const labelSelect = document.getElementById("labelColumn");
-            const idSelect = document.getElementById("idColumn");
-
-
-            // Reset options
-            textSelect.innerHTML = '<option value="" disabled selected>Select text column</option>';
-            idSelect.innerHTML = '<option value="" disabled selected>Select id column (optional)</option>';
-
-            if (isAllTxt) {
-                textSelect.innerHTML += `<option value="content" selected>content</option>`;
-                idSelect.innerHTML += `<option value="">(none)</option>`;
-            } else {
-                columnsSet.forEach(col => {
-                textSelect.innerHTML += `<option value="${col}">${col}</option>`;
-                idSelect.innerHTML += `<option value="${col}">${col}</option>`;
-                });
-            }
-
-            console.log("🔍 Columns detected:", [...columnsSet]);
-            }
-
-    let files = null; // GLOBAL so both functions can use it
-    const n = 5; // number of documents or lines to preview
-    // Disable the Continue button initially
-    document.getElementById("continueBtn").disabled = true;
-    let previewFiles = [];
-        let previewIndex = 0;
-
-        getActiveFileInput().addEventListener('change', async function (e) {
-            previewFiles = Array.from(e.target.files).slice(0, 6);
-            previewIndex = 0;
-
-            if (previewFiles.length === 0) {
-                alert("No files selected.");
-                return;
-            }
-
-            await showPreview(previewIndex);
-            const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
-            modal.show();
-        });
-
-        async function showPreview(index) {
-            const file = previewFiles[index];
-            const extension = file.name.split('.').pop().toLowerCase();
-            const previewContainer = document.getElementById('preview-content');
-            previewContainer.innerHTML = '';
-
-            document.getElementById('filePreviewModalLabel').textContent = `Preview - ${file.name}`;
-            document.getElementById('preview-counter').textContent = `File ${index + 1} of ${previewFiles.length}`;
-
-            // === CSV or Excel ===
-            if (['csv'].includes(extension)) {
-                const content = await file.text();
-                const parsed = Papa.parse(content, { header: true });
-                const headers = parsed.meta.fields || [];
-                const rows = parsed.data.slice(0, 5); // show first 5 rows
-
-                if (headers.length) {
-                    const table = document.createElement('table');
-                    table.className = 'table table-bordered table-striped table-sm';
-                    table.innerHTML = `
-                        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-                        <tbody>
-                            ${rows.map(row => `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`).join('')}
-                        </tbody>
-                    `;
-                    previewContainer.appendChild(table);
-                } else {
-                    previewContainer.innerHTML = '<p class="text-muted">No valid CSV data found.</p>';
-                }
-                
-
-            // === JSON ===
-            } else if (extension === 'json') {
-                const content = await file.text();
-                try {
-                    const jsonData = JSON.parse(content);
-                    previewContainer.innerHTML = `<pre>${JSON.stringify(Array.isArray(jsonData) ? jsonData.slice(0, 5) : jsonData, null, 2)}</pre>`;
-                } catch {
-                    previewContainer.innerHTML = `<pre class="text-danger">Invalid JSON format</pre>`;
-                }
-
-            // === JSONL ===
-            } else if (extension === 'jsonl') {
-                const lines = (await file.text()).trim().split('\n').slice(0, 5);
-                const parsed = lines.map(line => JSON.parse(line));
-                previewContainer.innerHTML = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
-
-            // === TXT ===
-            } else if (extension === 'txt') {
-                const content = await file.text();
-                const lines = content.split('\n').slice(0, 20); // first 20 lines
-                previewContainer.innerHTML = `<pre>${lines.join('\n')}</pre>`;
-
-            } 
-            
-            // Excel preview using SheetJS
-        else if (['xls', 'xlsx'].includes(extension)) {
-            const arrayBuffer = await file.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: "array" });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-            if (jsonData.length) {
-                const headers = jsonData[0];
-                const rows = jsonData.slice(1, 6); // show first 5 rows
-
-                const wrapper = document.createElement('div');
-                wrapper.style.overflowX = 'auto';
-                wrapper.style.maxWidth = '100%';
-
-                const table = document.createElement('table');
-                table.className = 'table table-bordered table-striped table-sm';
-                table.innerHTML = `
-                    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-                    <tbody>
-                        ${rows.map(row => `<tr>${headers.map((_, i) => `<td>${row[i] || ''}</td>`).join('')}</tr>`).join('')}
-                    </tbody>
-                `;
-
-                wrapper.appendChild(table);
-                previewContainer.appendChild(wrapper);
-            } else {
-                previewContainer.innerHTML = '<p class="text-muted">No valid Excel data found.</p>';
-            }
-        }
-
-            else {
-                previewContainer.innerHTML = '<p class="text-muted">Unsupported format.</p>';
-            }
-
-            // Control buttons
-            document.getElementById('prevFile').style.display = (index === 0) ? 'none' : 'inline-block';
-            document.getElementById('nextFile').style.display = (index === previewFiles.length - 1) ? 'none' : 'inline-block';
-        }
-
-        document.getElementById('prevFile').addEventListener('click', () => {
-            if (previewIndex > 0) {
-                previewIndex--;
-                showPreview(previewIndex);
-            }
-        });
-
-        document.getElementById('nextFile').addEventListener('click', () => {
-            if (previewIndex < previewFiles.length - 1) {
-                previewIndex++;
-                showPreview(previewIndex);
-            }
-        });
-
-
-        function enableContinueButton() {
-            const btn = document.getElementById("continueBtn");
-            btn.classList.remove("disabled");
-            btn.removeAttribute("aria-disabled");
-            btn.removeAttribute("tabindex");
-            }
-
-
-
-
-            document.getElementById('uploadForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-
-            const loader = document.getElementById('loader-overlay');
-            loader.style.display = 'flex';  // show overlay
-
-
+          if (ext === "csv") {
+            isAllTxt = false;
+            const text = await file.text();
+            const firstLine = text.split('\n')[0] || "";
+            const headers = firstLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+            headers.forEach(col => col && columnsSet.add(col));
+          } else if (["json", "jsonl"].includes(ext)) {
+            isAllTxt = false;
+            const text = await file.text();
             try {
-                const allowedExtensions = ['csv', 'xls', 'xlsx', 'json', 'jsonl', 'txt'];
-                const files = getActiveFileInput().files;
-                const feedback = document.getElementById('file-feedback');
-                const tbody = document.getElementById('selected-files-body');
-                const textColumn = document.getElementById("textColumn").value;
-                const idColumn = document.getElementById("idColumn").value;
-                const corpusName = document.getElementById("corpusName").value;
-
-                feedback.textContent = '';
-                feedback.classList.remove('text-success', 'text-danger');
-                tbody.innerHTML = '';
-
-                if (files.length === 0) {
-                    feedback.classList.add('text-danger');
-                    feedback.textContent = "Please select at least one file.";
-                    return;
-                }
-
-                let validFiles = [];
-
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const extension = file.name.split('.').pop().toLowerCase();
-                    let validationStatus = "✅ Passed";
-                    let isValid = true;
-
-                    if (!allowedExtensions.includes(extension)) {
-                        validationStatus = "❌ Invalid file type";
-                        isValid = false;
-                    }
-                    else if (extension === 'csv') {
-                        const csvContent = await file.text();
-                        const parsed = Papa.parse(csvContent, { header: true });
-                        if (!parsed.meta.fields.includes(textColumn)) {
-                            validationStatus = `❌ Missing '${textColumn}' column`;
-                            isValid = false;
-                        }
-                    }
-                    else if (['json', 'jsonl'].includes(extension)) {
-                        const jsonContent = await file.text();
-                        try {
-                            const jsonData = extension === 'json'
-                                ? JSON.parse(jsonContent)
-                                : jsonContent.split('\n').map(JSON.parse);
-
-                            const hasContent = Array.isArray(jsonData)
-                                ? jsonData.every(obj => textColumn in obj)
-                                : (textColumn in jsonData);
-
-                            if (!hasContent) {
-                                validationStatus = `❌ Missing '${textColumn}' field`;
-                                isValid = false;
-                            }
-                        } catch (err) {
-                            validationStatus = "❌ Invalid JSON format";
-                            isValid = false;
-                        }
-                    }
-                    else if (['xls', 'xlsx'].includes(extension)) {
-                        const formData = new FormData();
-                        formData.append('files', file);
-                        formData.append("text_column", textColumn);
-                        formData.append("idColumn", idColumn);
-
-                        try {
-                            const response = await fetch('/validate', { method: 'POST', body: formData });
-                            const result = await response.json();
-                            if (response.status !== 200 || result.status !== 'success') {
-                                validationStatus = `❌ ${result.message}`;
-                                isValid = false;
-                            }
-                        } catch (err) {
-                            validationStatus = "❌ Server validation error";
-                            isValid = false;
-                        }
-                    }
-
-                    if (isValid) {
-                        validFiles.push(file);
-                    }
-
-                    tbody.innerHTML += `<tr>
-                        <td>${i + 1}</td>
-                        <td>${file.name}</td>
-                        <td>${extension}</td>
-                        <td>${(file.size / 1024).toFixed(2)}</td>
-                        <td>${validationStatus}</td>
-                    </tr>`;
-                }
-
-                if (validFiles.length > 0) {
-                    feedback.classList.add('text-success');
-                    feedback.textContent = `${validFiles.length} file(s) passed validation!`;
-
-                    const formData = new FormData();
-                    validFiles.forEach(file => formData.append('files', file));
-                    formData.append('text_column', textColumn);
-                    formData.append('corpusName', corpusName);
-                    formData.append("idColumn", idColumn)
-
-
-                    await sendData(formData); // 🔁 Your upload function
-                    enableContinueButton();
-                } else {
-                    feedback.classList.add('text-danger');
-                    feedback.textContent = 'No files passed validation. Please fix the issues.';
-                }
+              const lines = ext === "jsonl" ? text.split('\n').filter(Boolean) : [text];
+              const firstObj = JSON.parse(lines.find(line => line.trim()));
+              Object.keys(firstObj).forEach(col => columnsSet.add(col));
             } catch (err) {
-                console.error('Upload error:', err);
-                const feedback = document.getElementById('file-feedback');
-                feedback.classList.add('text-danger');
-                feedback.textContent = "Unexpected error occurred. Please try again.";
-            } finally {
-                loader.style.display = 'none'; // ✅ Hide loader no matter what
+              console.error("JSON parse error:", err);
             }
-        });
-
-
-
-    // ✅ Final version of sendData()
-    async function sendData(formData) {
-        try {
-            const response = await fetch('/loadDB', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-            alert(result.message);
-        } catch (err) {
-            alert('Something went wrong while sending data.');
+          } else if (["xls", "xlsx"].includes(ext)) {
+            isAllTxt = false;
+            try {
+              const arrayBuffer = await file.arrayBuffer();
+              const workbook = XLSX.read(arrayBuffer, { type: "array" });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              const headers = jsonData[0] || [];
+              headers.forEach(col => col && columnsSet.add(col.toString().trim()));
+            } catch (err) {
+              console.error("Excel parse error:", err);
+            }
+          } else if (ext === "txt") {
+            // Assume 'content' exists, columns won't apply
+            continue;
+          } else {
+            isAllTxt = false;
+          }
         }
-    }
 
-    async function loadPreview() {
+        // Reset options
+        textSelect.innerHTML  = '<option value="" disabled selected>Select text column</option>';
+        idSelect.innerHTML    = '<option value="" disabled selected>Select id column</option>';
+        labelSelect.innerHTML = '<option value="" disabled selected>Select label column</option>';
+
+        if (isAllTxt) {
+          textSelect.innerHTML  += `<option value="content" selected>content</option>`;
+          idSelect.innerHTML    += `<option value="id">id</option>`;
+          labelSelect.innerHTML += `<option value="category">category</option>`;
+        } else {
+          columnsSet.forEach(col => {
+            textSelect.innerHTML  += `<option value="${col}">${col}</option>`;
+            idSelect.innerHTML    += `<option value="${col}">${col}</option>`;
+            labelSelect.innerHTML += `<option value="${col}">${col}</option>`;
+          });
+        }
+        console.log("🔍 Columns detected:", [...columnsSet]);
+      }
+
+      // ====== QUICK PREVIEW BEFORE VALIDATION ======
+      let previewFiles = [];
+      let previewIndex = 0;
+
+      getActiveFileInput().addEventListener('change', async function (e) {
+        previewFiles = Array.from(e.target.files).slice(0, 6);
+        previewIndex = 0;
+
+        if (previewFiles.length === 0) return;
+
+        await showPreview(previewIndex);
+        const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
+        modal.show();
+      });
+
+      async function showPreview(index) {
+        const file = previewFiles[index];
+        const extension = file.name.split('.').pop().toLowerCase();
+        const previewContainer = document.getElementById('preview-content');
+        previewContainer.innerHTML = '';
+
+        document.getElementById('filePreviewModalLabel').textContent = `Preview - ${file.name}`;
+        document.getElementById('preview-counter').textContent = `File ${index + 1} of ${previewFiles.length}`;
+
+        if (['csv'].includes(extension)) {
+          const content = await file.text();
+          const parsed = Papa.parse(content, { header: true });
+          const headers = parsed.meta.fields || [];
+          const rows = parsed.data.slice(0, 5);
+          if (headers.length) {
+            const table = document.createElement('table');
+            table.className = 'table table-bordered table-striped table-sm';
+            table.innerHTML = `
+              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+              <tbody>${rows.map(row => `<tr>${headers.map(h => `<td>${row[h] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+            previewContainer.appendChild(table);
+          } else {
+            previewContainer.innerHTML = '<p class="text-muted">No valid CSV data found.</p>';
+          }
+
+        } else if (extension === 'json') {
+          const content = await file.text();
+          try {
+            const jsonData = JSON.parse(content);
+            previewContainer.innerHTML = `<pre>${JSON.stringify(Array.isArray(jsonData) ? jsonData.slice(0, 5) : jsonData, null, 2)}</pre>`;
+          } catch { previewContainer.innerHTML = `<pre class="text-danger">Invalid JSON format</pre>`; }
+
+        } else if (extension === 'jsonl') {
+          const lines = (await file.text()).trim().split('\n').slice(0, 5);
+          const parsed = lines.map(line => JSON.parse(line));
+          previewContainer.innerHTML = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+
+        } else if (['xls', 'xlsx'].includes(extension)) {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: "array" });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          if (jsonData.length) {
+            const headers = jsonData[0];
+            const rows = jsonData.slice(1, 6);
+            const wrapper = document.createElement('div');
+            wrapper.style.overflowX = 'auto'; wrapper.style.maxWidth = '100%';
+            const table = document.createElement('table');
+            table.className = 'table table-bordered table-striped table-sm';
+            table.innerHTML = `
+              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+              <tbody>${rows.map(row => `<tr>${headers.map((_, i) => `<td>${row[i] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+            wrapper.appendChild(table);
+            previewContainer.appendChild(wrapper);
+          } else {
+            previewContainer.innerHTML = '<p class="text-muted">No valid Excel data found.</p>';
+          }
+        } else if (extension === 'txt') {
+          const content = await file.text();
+          const lines = content.split('\n').slice(0, 20);
+          previewContainer.innerHTML = `<pre>${lines.join('\n')}</pre>`;
+        } else {
+          previewContainer.innerHTML = '<p class="text-muted">Unsupported format.</p>';
+        }
+
+        document.getElementById('prevFile').style.display = (index === 0) ? 'none' : 'inline-block';
+        document.getElementById('nextFile').style.display = (index === previewFiles.length - 1) ? 'none' : 'inline-block';
+      }
+
+      document.getElementById('prevFile').addEventListener('click', () => {
+        if (previewIndex > 0) { previewIndex--; showPreview(previewIndex); }
+      });
+      document.getElementById('nextFile').addEventListener('click', () => {
+        if (previewIndex < previewFiles.length - 1) { previewIndex++; showPreview(previewIndex); }
+      });
+
+      function setContinueEnabled(enabled) {
+        const btn = continueBtn;
+        if (enabled) {
+          btn.classList.remove("disabled");
+          btn.removeAttribute("aria-disabled");
+          btn.removeAttribute("tabindex");
+        } else {
+          btn.classList.add("disabled");
+          btn.setAttribute("aria-disabled", "true");
+          btn.setAttribute("tabindex", "-1");
+        }
+      }
+
+      // =======================
+      // SUBMIT → CALL /validate
+      // =======================
+      document.getElementById('uploadForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        loader.style.display = 'flex';
+
+        const allowedExtensions = ['csv', 'xls', 'xlsx', 'json', 'jsonl', 'txt'];
+        const active = getActiveFileInput();
+        const files = active.files;
+        const feedback = document.getElementById('file-feedback');
+        const textColumn = textSelect.value;
+        const idColumn = idSelect.value;
+        const labelColumn = labelSelect.value;
+        const corpusName = document.getElementById("corpusName").value;
+
+        feedback.textContent = '';
+        feedback.classList.remove('text-success', 'text-danger');
+        selectedTbody.innerHTML = '';
+
+        if (!files.length) {
+          feedback.classList.add('text-danger');
+          feedback.textContent = "Please select at least one file.";
+          loader.style.display = 'none';
+          return;
+        }
+
+        // Light client-side type check + table fill
+        let allTypesOK = true;
+        Array.from(files).forEach((file, i) => {
+          const ext = (file.name.split('.').pop() || '').toLowerCase();
+          const isOk = allowedExtensions.includes(ext);
+          allTypesOK = allTypesOK && isOk;
+          selectedTbody.innerHTML += `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${file.name}</td>
+              <td>${ext}</td>
+              <td>${(file.size / 1024).toFixed(2)}</td>
+              <td>${isOk ? '⏳ pending' : '❌ invalid type'}</td>
+            </tr>`;
+        });
+        if (!allTypesOK) {
+          feedback.classList.add('text-danger');
+          feedback.textContent = 'One or more files have unsupported types.';
+          loader.style.display = 'none';
+          return;
+        }
+
+        // Build payload for backend validation
+        // Your Flask route should proxy this to FastAPI:
+        // - Single file -> /validate/single
+        // - Multiple files -> /validate/multiple (with text_columns JSON list)
+        const formData = new FormData();
+        Array.from(files).forEach(f => formData.append('files', f));
+        formData.append('text_column', textColumn);
+        formData.append('id_column', idColumn);
+        formData.append('label_column', labelColumn);
+        formData.append('corpusName', corpusName);
+
+        try {
+          const response = await fetch('/validate', { method: 'POST', body: formData });
+          const result = await response.json();
+
+          // Show results modal automatically
+          showValidationResults(result);
+
+          // Success → enable Continue / Proceed
+          const ok = response.ok && result && (result.status === 'success');
+          setContinueEnabled(ok);
+          setProceedEnabled(ok);
+
+          // Update table last column to success/failure
+          const rows = selectedTbody.querySelectorAll('tr');
+          rows.forEach(r => r.cells[4].textContent = ok ? '✅ validated' : '❌ failed');
+
+          if (!ok) {
+            feedback.classList.add('text-danger');
+            feedback.textContent = (result && (result.error || result.message)) || 'Validation failed.';
+          } else {
+            feedback.classList.add('text-success');
+            feedback.textContent = 'Validation passed!';
+          }
+        } catch (err) {
+          console.error('Validation error:', err);
+          setContinueEnabled(false);
+          setProceedEnabled(false);
+          feedback.classList.add('text-danger');
+          feedback.textContent = "Unexpected error occurred during validation.";
+        } finally {
+          loader.style.display = 'none';
+        }
+      });
+
+      // After validation, you might still want to load to DB; keep your existing function if needed.
+      async function sendData(formData) {
+        try {
+          const response = await fetch('/loadDB', { method: 'POST', body: formData });
+          const result = await response.json();
+          alert(result.message);
+        } catch (err) {
+          alert('Something went wrong while sending data.');
+        }
+      }
+
+      // ===== BACKEND PREVIEW (OPTIONAL) =====
+      async function loadPreview() {
         const tbody = document.getElementById("preview-table-body");
         tbody.innerHTML = '<tr><td class="text-center">Loading...</td></tr>';
-
         try {
-            const res = await fetch('/preview');
-            const data = await res.json();
-
-
-            console.log(data)
-
-            if (Array.isArray(data) && data.length) {
-                renderPreviewTable(data);  // ✅ Use your defined rendering function
-            } else {
+          const res = await fetch('/preview');
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) {
+            renderPreviewTable(data);
+          } else {
             tbody.innerHTML = '<tr><td class="text-center">No data found.</td></tr>';
-            }
+          }
         } catch (err) {
-            console.error(err);
-            tbody.innerHTML = '<tr><td class="text-danger text-center">Error loading data.</td></tr>';
+          console.error(err);
+          tbody.innerHTML = '<tr><td class="text-danger text-center">Error loading data.</td></tr>';
         }
-        }
+      }
 
-
-    function filterTable() {
+      function filterTable() {
         const input = document.getElementById('search-input').value.toLowerCase();
         const rows = document.querySelectorAll('#preview-table-body tr');
-
         rows.forEach(row => {
-            const content = row.textContent.toLowerCase();
-            row.style.display = content.includes(input) ? '' : 'none';
+          const content = row.textContent.toLowerCase();
+          row.style.display = content.includes(input) ? '' : 'none';
         });
-        }
+      }
 
-        function resetTableFilter() {
+      function resetTableFilter() {
         document.getElementById('search-input').value = '';
         filterTable();
-        }
+      }
 
-    function renderPreviewTable(data) {
+      function renderPreviewTable(data) {
         const tbody = document.getElementById('preview-table-body');
         tbody.innerHTML = '';
         const tooltip = document.getElementById('hoverTooltip');
 
         data.forEach(item => {
-            const row = document.createElement('tr');
-            const cell = document.createElement('td');
-            const isLong = item.content.length > 300;
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          const isLong = (item.content || '').length > 300;
 
-            if (isLong) {
-                cell.classList.add('truncate-cell');
-                cell.textContent = item.content.slice(0, 300) + '...';
-            } else {
-                cell.textContent = item.content;
-            }
+          cell.textContent = isLong ? (item.content.slice(0, 300) + '...') : (item.content || '');
 
-            // Tooltip hover logic
-            cell.addEventListener('mouseenter', function (e) {
-                tooltip.textContent = item.content;
-                tooltip.style.display = 'block';
-            });
-            cell.addEventListener('mousemove', function (e) {
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-            });
-            cell.addEventListener('mouseleave', function () {
-                tooltip.style.display = 'none';
-            });
+          // Tooltip hover
+          cell.addEventListener('mouseenter', function () {
+            tooltip.textContent = item.content || '';
+            tooltip.style.display = 'block';
+          });
+          cell.addEventListener('mousemove', function (e) {
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+          });
+          cell.addEventListener('mouseleave', function () {
+            tooltip.style.display = 'none';
+          });
 
-            row.appendChild(cell);
-            tbody.appendChild(row);
-            });
+          row.appendChild(cell);
+          tbody.appendChild(row);
+        });
+      }
 
+      // ===== Validation Results Modal helpers =====
+      function setProceedEnabled(enabled) {
+        const btn = document.getElementById('proceedBtn');
+        if (enabled) {
+          btn.classList.remove('disabled');
+          btn.removeAttribute('aria-disabled');
+          btn.removeAttribute('tabindex');
+        } else {
+          btn.classList.add('disabled');
+          btn.setAttribute('aria-disabled', 'true');
+          btn.setAttribute('tabindex', '-1');
+        }
+      }
+
+      function showValidationResults(result) {
+        const modalEl = document.getElementById('validationResultsModal');
+        const modal = new bootstrap.Modal(modalEl);
+        const summary = document.getElementById('validation-summary');
+        const tabsContainer = document.getElementById('validation-tabs');
+
+        // Clear old
+        summary.innerHTML = '';
+        tabsContainer.innerHTML = '';
+
+        if (!result || result.status !== 'success') {
+          const errorMsg = (result && (result.error || result.message)) || 'Validation failed.';
+          summary.innerHTML = `<div class="alert alert-danger mb-0"><strong>Validation Error:</strong> ${errorMsg}</div>`;
+          modal.show();
+          return;
         }
 
-        
-    });
-</script>
+        // Success — build tabs with previews
+        summary.innerHTML = `<div class="alert alert-success mb-3"><strong>Validation Passed.</strong> Showing first 5 rows from each file.</div>`;
 
-        
+        // Normalize for single/multiple API shapes:
+        // - single: { status:'success', preview:[{...},{...}] }
+        // - multiple: { status:'success', previews: { filename: [{...}] } }
+        let previewsMap = {};
+        if (Array.isArray(result.preview)) {
+          previewsMap['Uploaded File'] = result.preview;
+        } else if (result.previews && typeof result.previews === 'object') {
+          previewsMap = result.previews;
+        }
+
+        const fileNames = Object.keys(previewsMap);
+        if (!fileNames.length) {
+          tabsContainer.innerHTML = `<div class="text-muted">No preview rows returned.</div>`;
+          modal.show();
+          return;
+        }
+
+        // Build Bootstrap tabs
+        const navId = 'val-nav-' + Date.now();
+        const contentId = 'val-content-' + Date.now();
+
+        const nav = document.createElement('ul');
+        nav.className = 'nav nav-tabs';
+        nav.id = navId;
+        nav.role = 'tablist';
+
+        const content = document.createElement('div');
+        content.className = 'tab-content pt-3';
+        content.id = contentId;
+
+        fileNames.forEach((fname, idx) => {
+          const tabId = 'tab-' + idx + '-' + Date.now();
+          const paneId = 'pane-' + idx + '-' + Date.now();
+
+          // Tab
+          const li = document.createElement('li');
+          li.className = 'nav-item';
+          const btn = document.createElement('button');
+          btn.className = 'nav-link' + (idx === 0 ? ' active' : '');
+          btn.id = tabId;
+          btn.setAttribute('data-bs-toggle', 'tab');
+          btn.setAttribute('data-bs-target', '#' + paneId);
+          btn.type = 'button';
+          btn.role = 'tab';
+          btn.ariaControls = paneId;
+          btn.ariaSelected = (idx === 0 ? 'true' : 'false');
+          btn.textContent = fname;
+          li.appendChild(btn);
+          nav.appendChild(li);
+
+          // Pane
+          const pane = document.createElement('div');
+          pane.className = 'tab-pane fade' + (idx === 0 ? ' show active' : '');
+          pane.id = paneId;
+          pane.role = 'tabpanel';
+          pane.ariaLabelledby = tabId;
+
+          const rows = previewsMap[fname] || [];
+          if (!rows.length) {
+            pane.innerHTML = '<div class="text-muted">No rows to preview.</div>';
+          } else {
+            // Collect headers from union of keys (first 5 rows)
+            const headers = Array.from(rows.reduce((s, r) => {
+              Object.keys(r || {}).forEach(k => s.add(k));
+              return s;
+            }, new Set()));
+
+            const table = document.createElement('table');
+            table.className = 'table table-bordered table-striped table-sm';
+            table.innerHTML = `
+              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+              <tbody>
+                ${rows.map(r => `<tr>${headers.map(h => `<td>${(r && r[h] !== undefined) ? r[h] : ''}</td>`).join('')}</tr>`).join('')}
+              </tbody>`;
+            pane.appendChild(table);
+          }
+          content.appendChild(pane);
+        });
+
+        tabsContainer.appendChild(nav);
+        tabsContainer.appendChild(content);
+
+        modal.show();
+      }
+
+      // Optional external preview trigger
+      document.getElementById('previewSelectedBtn').addEventListener('click', () => {
+        // If you want to preload /preview endpoint results here:
+        // loadPreview();
+      });
+
+    }); // DOMContentLoaded
+  </script>
 </body>
 </html>

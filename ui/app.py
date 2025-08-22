@@ -11,7 +11,8 @@ import random
 from datetime import datetime
 import sqlite3
 import time
-import threading 
+import threading
+import json
 
 server = Flask(__name__)
 server.secret_key = 'your-secret-key'
@@ -93,59 +94,62 @@ def save_env():
 
 @server.route("/load-data-page/")
 def load_data_page():
-    create_normalized_schema()
+    # create_normalized_schema()
     return render_template('index.html')
 
 
 
 
-@server.route('/preview')
-def preview():
-    results = collection.get(include=['documents', 'metadatas'])
-    data = []
+# @server.route('/preview')
+# def preview():
+#     results = collection.get(include=['documents', 'metadatas'])
+#     data = []
 
-    for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
-        data.append({
-            "id": id_,
-            "processed_text": doc,
-            "content": meta.get("original_content", ""),
-        })
+#     for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
+#         data.append({
+#             "id": id_,
+#             "processed_text": doc,
+#             "content": meta.get("original_content", ""),
+#         })
 
-    return jsonify(data)
+#     return jsonify(data)
 
 
-
-# This Route Validates the selected files
 
 @server.route('/validate', methods=['POST'])
 def validate_route():
-    file = request.files.get('files')
+    # Get files from form
+    files = request.files.getlist('files') or [request.files.get('file')]
     text_column = request.form.get('text_column')
-    label_column = request.form.get('label_column')
+    id_column = request.form.get('id_column')
+    label_column = request.form.get('label_column', 'label')  # default fallback
 
-    if not file:
-        return jsonify({
-            "status": "error",
-            "message": "No file uploaded."
-        }), 400
+    # Determine if it's a single file or multiple
+    if not files or not files[0]:
+        return jsonify({"status": "error", "message": "No file(s) uploaded."}), 400
 
-    if not file.filename.endswith(('.xls', '.xlsx')):
-        return jsonify({
-            "status": "error",
-            "message": "Only Excel files are supported for validation here."
-        }), 400
+    is_single = len(files) == 1
 
     try:
-        # Call your validation utility and pass column names
-        result = excel_confirmation(file, text_column, label_column)
-        status_code = 200 if result["status"] == "success" else 400
-        return jsonify(result), status_code
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Validation failed: {str(e)}"
-        }), 500
+        if is_single:
+            # Single file validation
+            file = files[0]
+            files_payload = {'file': (file.filename, file.stream, file.mimetype)}
+            response = requests.post(f"{API}/validate/single", files=files_payload)
+        else:
+            # Multiple files validation
+            files_payload = [('files', (f.filename, f.stream, f.mimetype)) for f in files]
+            data_payload = {
+                'text_columns': json.dumps([text_column]),
+                'id_column': id_column,
+                'label_column': label_column
+            }
+            response = requests.post(f"{API}/validate/multiple", files=files_payload, data=data_payload)
 
+        return jsonify(response.json()), response.status_code
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # This is called when you when the data has been validated to insert data into the vector database
