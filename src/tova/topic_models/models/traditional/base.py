@@ -20,6 +20,7 @@ class TradTMmodel(BaseTMModel, ABC):
     
     def __init__(
         self,
+        model_name: str,
         model_path: str = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
@@ -29,7 +30,7 @@ class TradTMmodel(BaseTMModel, ABC):
         Initialize the TradTMmodel class.
         """
         
-        super().__init__(model_path, logger, config_path, load_model)
+        super().__init__(model_name, model_path, logger, config_path, load_model)
         
         # Load parameters from config specific to traditional models
         self.num_topics = int(self.config.get("traditional", {}).get("num_topics", 50))

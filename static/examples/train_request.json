@@ -4009,5 +4009,5 @@
     "num_topics": 50
   },
   "config_path": "static/config/config.yaml",
-  "output": "models/sample_run"
+  "model_name": "sample_run"
 }

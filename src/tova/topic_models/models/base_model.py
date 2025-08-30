@@ -19,6 +19,7 @@ class BaseTMModel(ABC):
 
     def __init__(
         self,
+        model_name: str,
         model_path: str = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
@@ -31,6 +32,8 @@ class BaseTMModel(ABC):
         ----------
         model_path : str, optional
             Path to save the trained model.
+        model_name : str, optional
+            Name of the model.
         logger : logging.Logger, optional
             Logger object to log activity.
         config_path : pathlib.Path, optional
@@ -57,6 +60,7 @@ class BaseTMModel(ABC):
             # Create a fresh model path
             self.model_path.mkdir(parents=True, exist_ok=True)
 
+        self.model_name = model_name
 
         # load config
         self.config = load_yaml_config_file(config_path, "topic_modeling", logger)
@@ -131,8 +135,9 @@ class BaseTMModel(ABC):
         json_path = path or (self.model_path / 'model_config.json')
 
         model_info = {
-            "name": self.model_path.name,
-            "model_type": f"{self.__class__.__module__}.{self.__class__.__name__}",
+            "name": self.model_name,
+            "path": self.model_path.as_posix(),
+            "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "creation_date": str(pathlib.Path().resolve()),
             "tr_params": self.to_dict(),
         }

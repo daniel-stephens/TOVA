@@ -20,6 +20,7 @@ class TomotopyLDATMmodel(TradTMmodel):
 
     def __init__(
         self,
+        model_name: str = None,
         model_path: str = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
@@ -41,7 +42,9 @@ class TomotopyLDATMmodel(TradTMmodel):
             Override configuration parameters with explicit arguments.
         """
 
-        super().__init__(model_path, logger, config_path, load_model)
+        model_name = model_name if model_name else f"{self.__class__.__name__}_{int(time.time())}"
+        
+        super().__init__(model_name, model_path, logger, config_path, load_model)
 
         # Load parameters from config
         tomotopy_config = self.config.get("tomotopy", {})

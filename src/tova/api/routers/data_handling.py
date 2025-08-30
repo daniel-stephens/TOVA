@@ -6,13 +6,18 @@ from typing import List, Dict
 from fastapi import APIRouter, HTTPException # type: ignore
 
 from tova.api.logger import logger
-from tova.api.models.data_schemas import Corpus, Document, Draft, ModelMeta, QueryRequest, QueryResult
+from tova.api.models.data_schemas import Corpus, Draft, ModelMeta
 
 router = APIRouter()
 
 # -----------------------
 # API Routes
 # -----------------------
+# the user trains a model. Once the training is done, we ask the user whether he wants to save the model. If yes, we create a new model entry in the database.
+# in the meanwhile, he can inspect the model because it is stored temporarily.
+# once the model has been indexed succesfully, the model folder is deleted and all the information about such a model is removed from the temporary store.
+
+# same applies for the corpus
 
 # --- Corpora ---
 @router.get("/corpora", response_model=List[Corpus], tags=["Corpora"])

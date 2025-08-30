@@ -38,6 +38,7 @@ def train_model_dispatch(
     model: str,
     data: List[Dict],
     output: str,
+    model_name: str,
     config_path: Path = Path("./static/config/config.yaml"),
     do_preprocess: bool = False,
     tr_params: Optional[Union[Dict, defaultdict]] = None,
@@ -56,6 +57,7 @@ def train_model_dispatch(
     tr_params = tr_params or {}
 
     tm_model = model_cls(
+        model_name=model_name,
         model_path=output,
         config_path=config_path,
         load_model=False,

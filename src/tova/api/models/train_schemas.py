@@ -14,8 +14,8 @@ class TrainRequest(BaseModel):
         None, description="Custom model hyperparameters", example={"num_topics": 50, "alpha": 0.1}
     )
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to YAML config file", example="static/config/config.yaml")
-    output: str = Field(..., description="Directory where model results will be saved", example="data/models/tomotopy_run1")
-
+    model_name: Optional[str] = Field("tomotopyLDA", description="Name of the model", example="tomotopyLDA")
+    
     class Config:
         json_schema_extra = {
             "example": TRAIN_REQUEST_EXAMPLE

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 import uuid
 from typing import Dict, List, Optional
 
@@ -17,7 +18,8 @@ from tova.utils.cancel import CancellationToken, CancelledError
 from tova.utils.tm_utils import normalize_json_data
 
 router = APIRouter(tags=["Training"])
-
+path_save = Path("/data/models") # folder to save the models
+path_save.mkdir(parents=True, exist_ok=True)
 
 async def _run_training_job(
     *,
@@ -25,6 +27,7 @@ async def _run_training_job(
     model: str,
     data: List[Dict],
     output: str,
+    model_name: str,
     config_path: str,
     do_preprocess: bool,
     training_params: Optional[Dict],
@@ -54,6 +57,7 @@ async def _run_training_job(
                 model=model,
                 data=data,
                 output=output,
+                model_name=model_name,
                 config_path=config_path,
                 logger=logger,
                 do_preprocess=do_preprocess,
@@ -81,7 +85,7 @@ async def _enqueue_training_job(
     *,
     model: str,
     data: List[Dict],
-    output: str,
+    model_name: str,
     config_path: str,
     do_preprocess: bool,
     training_params: Optional[Dict],
@@ -104,7 +108,8 @@ async def _enqueue_training_job(
         cancel=token,
         model=model,
         data=data,
-        output=output,
+        output = path_save.joinpath(model_id).as_posix(),
+        model_name=model_name,
         config_path=config_path,
         do_preprocess=do_preprocess,
         training_params=training_params,
@@ -132,7 +137,7 @@ async def train_model_from_json(req: TrainRequest, bg: BackgroundTasks, response
         train_response: TrainResponse = await _enqueue_training_job(
             model=req.model,
             data=normalized_data,
-            output=req.output,
+            model_name=req.model_name,
             config_path=req.config_path,
             do_preprocess=req.do_preprocess,
             training_params=req.training_params,
