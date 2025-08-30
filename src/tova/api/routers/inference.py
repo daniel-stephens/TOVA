@@ -5,8 +5,8 @@ from typing import List, Dict
 
 from fastapi import APIRouter, HTTPException # type: ignore
 
-from tova.api.models.infer_requests import InferRequest, InferFileRequest
-from tova.utils.tm_utils import prepare_training_data, normalize_json_data
+from tova.api.models.infer_requests import InferRequest
+from tova.utils.tm_utils import normalize_json_data
 from tova.api.logger import logger
 from tova.core.dispatchers import infer_model_dispatch
 
@@ -57,27 +57,6 @@ def infer_from_json(req: InferRequest):
         logger=logger
         
     )
-    return _infer_via_api(
-        model_path=req.model_path,
-        data=normalized_data,
-        logger=logger,
-        config_path=req.config_path
-    )
-
-
-@router.post("/file", tags=["Inference"])
-def infer_from_file(req: InferFileRequest):
-    if not os.path.isfile(req.data_path):
-        raise HTTPException(status_code=400, detail="Data file not found")
-    
-    normalized_data = prepare_training_data(
-        path=req.data_path,
-        logger=logger,
-        text_col=req.text_col,
-        id_col=req.id_col if req.id_col else None,
-        get_embeddings=True
-    )
-    
     return _infer_via_api(
         model_path=req.model_path,
         data=normalized_data,

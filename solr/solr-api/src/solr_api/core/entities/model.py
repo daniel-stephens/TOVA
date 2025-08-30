@@ -1,24 +1,27 @@
 """
-This module is a class implementation to manage and hold all the information associated with a TMmodel. It provides methods to retrieve information about the model such as topic distribution over documents, topic-word probabilities, and betas. 
+This module implements a class to manage and hold all the information associated with a TMmodel. It provides methods to retrieve information about the model such as topic distribution over documents, topic-word probabilities, and betas. 
 
 Note:
 -----
-This module assumes that the topic model has been trained using the TMmodel class from the same package.
+- This module assumes that the topic model has been as an associated TMmodel object (tova.topic_models.tm_model.TMmodel).
+- This module assumes that the TMmodel folder has already been created.
 
 Author: Lorena Calvo-Bartolomé
 Date: 27/03/2023
+Modified: 26/08/2025 (Updated for TOVA Project)
 """
 
 
 import configparser
 import json
+import logging
 import os
 import pathlib
 from typing import List
 
 import numpy as np
 import pandas as pd
-# from tm_model import TMmodel
+from tova.topic_models.tm_model import TMmodel  # type: ignore
 from solr_api.core.entities.utils import sum_up_to
 # from utils import sum_up_to
 
@@ -28,20 +31,20 @@ class Model(object):
     A class to manage and hold all the information associated with a TMmodel so it can be indexed in Solr.
     """
 
-    def __init__(self,
-                 path_to_model: pathlib.Path,
-                 logger=None,
-                 config_file: str = "/config/config.cf") -> None:
+    def __init__(
+        self,
+        path_to_model: str,
+        logger: logging.Logger | None = None,
+        #config_file: str = "/config/config.cf"
+    ) -> None:
         """Init method.
 
         Parameters
         ----------
-        path_to_model: pathlib.Path
+        path_to_model: str
             Path to the TMmodel folder.
-        logger : logging.Logger
-            The logger object to log messages and errors.
-        config_file: str
-            Path to the configuration file.
+        logger : logging.Logger | None
+            Logger to use; if None, a module-level logger is created.
         """
 
         if logger:
@@ -51,9 +54,11 @@ class Model(object):
             logging.basicConfig(level='INFO')
             self._logger = logging.getLogger('Entity Model')
 
-        if not os.path.isdir(path_to_model):
-            self._logger.error(
-                '-- -- The provided model path does not exist.')
+        path_to_model = pathlib.Path(path_to_model)
+        if not path_to_model.is_dir():
+            err = f"Model path is not a directory: {path_to_model}"
+            self._logger.error(err)
+            raise FileNotFoundError(err)
         self.path_to_model = path_to_model
 
         # Get model and corpus names

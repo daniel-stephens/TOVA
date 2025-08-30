@@ -19,3 +19,17 @@ class DataRecord(BaseModel):
         description="Optional Bag-of-Words representation of the document",
         example="[0, 1, 5]",
     )
+    
+class Corpus(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+
+class ModelMeta(BaseModel):
+    id: str
+    corpus_id: str
+    status: str  # queued|training|ready|failed
+    
+class Draft(BaseModel):
+    id: str
+    payload: dict

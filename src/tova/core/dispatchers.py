@@ -3,11 +3,12 @@ import json
 import importlib
 import logging
 from pathlib import Path
-import pandas as pd # type: ignore
 from typing import Dict, List, Optional, Union
 
 from tova.topic_models.tm_model import TMmodel
+from tova.utils.cancel import CancellationToken
 from tova.utils.common import init_logger, load_yaml_config_file
+from tova.utils.progress import ProgressCallback
 
 # -------------------- #
 # AUXILIARY FUNCTIONS  #
@@ -40,15 +41,18 @@ def train_model_dispatch(
     config_path: Path = Path("./static/config/config.yaml"),
     do_preprocess: bool = False,
     tr_params: Optional[Union[Dict, defaultdict]] = None,
-    logger: Optional[logging.Logger] = None
+    logger: Optional[logging.Logger] = None,
+    progress_callback: Optional[ProgressCallback] = None,
+    cancel: Optional[CancellationToken] = None,
 ) -> float:
+
+    # instantiate model type based on the registered classes
     model_cls = MODEL_REGISTRY.get(model)
     if model_cls is None:
         raise ValueError(f"Unknown model: {model}")
-    
-    _ = do_preprocess # @lcalvobartolome: TODO: implement preprocessing
 
-    # Use empty dict if no training params provided
+    _ = do_preprocess  # TODO: implement preprocessing
+
     tr_params = tr_params or {}
 
     tm_model = model_cls(
@@ -59,7 +63,7 @@ def train_model_dispatch(
         **tr_params
     )
     
-    return tm_model.train_model(data)
+    return tm_model.train_model(data, progress_callback=progress_callback, cancel=cancel)
 
 def infer_model_dispatch(
     model_path: str,

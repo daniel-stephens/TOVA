@@ -1,9 +1,10 @@
 """
-This module is a class implementation to manage and hold all the information associated with a logical corpus.
+This module implements a class to manage and hold all the information associated with a logical corpus.
 
 Author: Lorena Calvo-Bartolomé
 Date: 27/03/2023
-Modifed: 24/01/2024 (Updated for NP-Solr-Service (NextProcurement Project))
+Modified: 24/01/2024 (Updated for NP-Solr-Service (NextProcurement Project))
+Modified: 15/08/2025 (Updated for TOVA Project)
 """
 
 from typing import Iterable, List, Union

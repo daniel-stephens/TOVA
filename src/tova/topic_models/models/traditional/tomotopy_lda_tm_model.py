@@ -1,11 +1,15 @@
 import logging
 import pathlib
 import time
+from typing import Optional
 
 import numpy as np
 import tomotopy as tp  # type: ignore
 from sklearn.preprocessing import normalize  # type: ignore
-from tqdm import tqdm  # type: ignore
+from tqdm import tqdm
+
+from tova.utils.cancel import CancellationToken, check_cancel
+from tova.utils.progress import ProgressCallback  # type: ignore
 
 from .base import TradTMmodel
 
@@ -55,7 +59,7 @@ class TomotopyLDATMmodel(TradTMmodel):
             f"{self.__class__.__name__} initialized with num_topics={self.num_topics}, num_iters={self.num_iters}, alpha={self.alpha}, eta={self.eta}.")
         
 
-    def train_core(self) -> float:
+    def train_core(self, prs: Optional[ProgressCallback] = None, cancel: Optional[CancellationToken] = None) -> float:
         """
         Train the topic model and save the data to the specified path.
 
@@ -68,25 +72,38 @@ class TomotopyLDATMmodel(TradTMmodel):
         if not hasattr(self, "train_data"):
             raise RuntimeError("Training data not set. Call train_model(data) with normalized input first.")
 
-        t_start = time.perf_counter()
-
-        self._logger.info("Creating TomotopyLDA object and adding docs...")
+        t_start = time.time()
+        
+        # 1. CREATE TOMOTOPY OBJECT (0-2%)
+        check_cancel(cancel, self._logger)
+        prss = prs.report_subrange(0.0, 0.02) if prs else None
+        prss.report(0.0, "Creating TomotopyLDA object")
         self.model = tp.LDAModel(
             k=self.num_topics, tw=tp.TermWeight.ONE, alpha=self.alpha, eta=self.eta)
+        prss.report(1.0, "TomotopyLDA object created")
         
+        # 2. ADD DOCUMENTS TO TOMO OBJECT (2-30%)
+        check_cancel(cancel, self._logger)
+        prss = prs.report_subrange(0.02, 0.3) if prs else None
+        prss.report(0.02, "Adding documents to TomotopyLDA object")
         [self.model.add_doc(doc) for doc in self.train_data]
+        prss.report(0.3, "Documents added to TomotopyLDA object")
 
-        self._logger.info(f"Training TomotopyLDA model with {self.num_topics} topics...")
+        # 3. TRAIN MODEL (30-90%)
+        prss = prs.report_subrange(0.3, 0.9) if prs else None
         pbar = tqdm(total=self.num_iters, desc='Training Progress')
         for i in range(0, self.num_iters, self.iter_interval):
+            check_cancel(cancel, self._logger)
             self.model.train(self.iter_interval)
             pbar.update(self.iter_interval)
-            if i % 300 == 0 and i > 0:
-                topics = self.print_topics(verbose=False)
-                pbar.write(f'Iteration: {i}, Log-likelihood: {self.model.ll_per_word}, Perplexity: {self.model.perplexity}')
+            prss.report(i / self.num_iters, f"Training iteration {i}/{self.num_iters}, Log-likelihood: {self.model.ll_per_word}, Perplexity: {self.model.perplexity}")
         pbar.close()
+        prss.report(1.0, "Training complete")
 
-        self._logger.info("Calculating topics and distributions...")
+        # 4. CALCULATE TOPICS AND DISTRIBUTIONS (90-100%)
+        check_cancel(cancel, self._logger)
+        prss = prs.report_subrange(0.9, 1.0) if prs else None
+        prss.report(0.9, "Calculating topics and distributions...")
         probs = [d.get_topic_dist() for d in self.model.docs]
         thetas = np.array(probs)
         self._logger.info(f"Thetas shape: {thetas.shape}")
@@ -101,10 +118,9 @@ class TomotopyLDATMmodel(TradTMmodel):
             fout.write('\n'.join([' '.join(topic) for topic in keys]))
         self.maked_docs = [self.model.make_doc(doc) for doc in self.train_data]
         vocab = [word for word in self.model.used_vocabs]
+        prss.report(1.0, "Topics and distributions calculated")
         
-        t_end = time.perf_counter() - t_start
-        
-        return t_end, thetas, betas, vocab
+        return time.time() - t_start, thetas, betas, vocab
         
 
     def print_topics(self, verbose: bool = False) -> list:

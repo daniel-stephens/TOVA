@@ -1,18 +1,19 @@
 import logging
 import pathlib
-from abc import ABC, abstractmethod
 import time
-from typing import Dict, List, Tuple
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
 
+import matplotlib.pyplot as plt # type: ignore
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import sparse
-from sklearn.preprocessing import normalize  # type: ignore
+from sklearn.preprocessing import normalize
 
-from ..base_model import BaseTMModel
+from tova.utils.cancel import CancellationToken, check_cancel
+from tova.utils.progress import ProgressCallback, ProgressReporter  # type: ignore
+
 from ...tm_model import TMmodel
-import matplotlib
- # option 1
+from ..base_model import BaseTMModel
 
 
 class TradTMmodel(BaseTMModel, ABC):
@@ -110,24 +111,54 @@ class TradTMmodel(BaseTMModel, ABC):
         
         return tm
                     
-    def train_model(self, data: List[Dict]):
-        
-        # we put this here as it may require preprocessing
-        self.set_training_data(data)
-        # self.preprocess(data)
-        
-        tr_time, thetas, betas, vocab = self.train_core()
+    def train_model(
+        self, 
+        data: List[Dict],
+        progress_callback: Optional[ProgressCallback] = None,
+        cancel: Optional[CancellationToken] = None
+        ):
         
         t_start = time.time()
-        self._logger.info("Creating TMmodel object...")
-        self._createTMmodel(thetas, betas, vocab)
-        self._logger.info("TMmodel object created!")
+        pr = ProgressReporter(callback=progress_callback, logger=self._logger)
+        pr.report(0, "Starting training")
+        
+        # 1. PREPROCESSING (0-20%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.0, 0.2)
+        prs.report(0.0, "Preprocessing")
+        # self.preprocess(data) # @TODO
+        self.set_training_data(data)
+        prs.report(1.0, "Preprocessing completed")
 
+        # 2. TRAIN CORE (depends on the underlying topic modeling algorithm)
+        # (20-70%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.2, 0.7)
+        prs.report(0.0, "Training core")
+        tr_core, thetas, betas, vocab = self.train_core(
+            prs=prs,
+            cancel=cancel
+        )
+        prs.report(1.0, "Training core completed in {:.2f} minutes".format(tr_core / 60))
+
+        # 3. TM_MODEL CREATION (metrics calculation, etc.)
+        # (70-90%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.7, 0.9)
+        prs.report(0.0, "Creating TMmodel object")
+        self._createTMmodel(thetas, betas, vocab)
+        prs.report(1.0, "TMmodel object created")
+
+        # 4. SAVE MODEL
+        # (90-100%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.9, 1.0)
+        prs.report(0.0, "Saving topic model")
         self.save_to_json()
         self.save_model()
-        t_end = time.time() - t_start
+        prs.report(1.0, "Topic model saved")
 
-        return tr_time + t_end
+        return time.time() - t_start
     
     def infer(self, data: List[Dict]):
         
@@ -136,9 +167,12 @@ class TradTMmodel(BaseTMModel, ABC):
         return self.infer_core(infer_data, df_infer, embeddings_infer)
         
     @abstractmethod
-    def train_core(self) -> float: pass
-    
+    def train_core(
+        self, 
+        prs: Optional[ProgressCallback] = None,
+        cancel: Optional[CancellationToken] = None
+    ) -> float: pass
+
     @abstractmethod
     def infer_core(self, infer_data, df_infer, embeddings_infer) -> Tuple[np.ndarray, float]:
         pass
-    
