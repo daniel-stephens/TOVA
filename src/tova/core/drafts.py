@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from tova.api.models.data_schemas import Draft, DraftType
 
@@ -52,17 +52,53 @@ def list_drafts(type: Optional[DraftType] = None) -> List[Draft]:
     return drafts
 
 
-def get_draft(draft_id: str) -> Optional[Draft]:
+def get_draft_metadata(draft_id: str) -> Optional[Draft]:
     """
     Load a single draft by ID, or None if not found.
     """
-    path_draft = DRAFTS_SAVE / draft_id
+
+    meta_path = DRAFTS_SAVE / draft_id / "metadata.json"
+    
+    metadata = {}
+    if meta_path.exists():
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    return Draft(
+            id=draft_id,
+            type=DraftType.model if draft_id.startswith("m_") else DraftType.corpus,
+            path=str(dir),
+            metadata=metadata,
+        )
+
+def get_draft_data(draft_id: str, kind: DraftType) -> Optional[Dict[str, Any]]:
+    """
+    Load the draft data from a draft by ID and kind, or None if not found.
+    """
+    if kind == DraftType.corpus:
+        return get_corpus_draft_data(draft_id)
+    else:
+        return get_model_draft_data(draft_id)
+
+def get_corpus_draft_data(draft_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Load the corpus data from a draft by ID, or None if not found.
+    """
+    path_draft = DRAFTS_SAVE / draft_id / "data.json"
     if not path_draft.exists():
         return None
     with open(path_draft, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return Draft(**data)
+    return data
 
+def get_model_draft_data(draft_id: str):
+    """
+    Load the model data from a draft by ID, or None if not found.
+    """
+    # TODO
+    pass
 
 def delete_draft(draft_id: str) -> bool:
     """

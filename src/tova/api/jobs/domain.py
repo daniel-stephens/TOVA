@@ -13,6 +13,8 @@ class JobStatus(str, Enum):
 class JobType(str, Enum):
     train_model = "train_model"
     inference = "inference"
+    index_corpus = "index_corpus"
+    index_model = "index_model"
 
 @dataclass
 class Job:

@@ -21,6 +21,7 @@ services:
       start_period: 15s
     environment:
       - PYTHONUNBUFFERED=1
+      - API_SOLR_URL=http://solr-api:8001
       - DRAFTS_SAVE=/data/drafts
     volumes:
       - ./data:/data
