@@ -10,7 +10,7 @@ from tova.api.jobs.domain import JobStatus
 from tova.api.jobs.store import job_store
 from tova.api.jobs.tokens import cancellation_tokens
 from tova.api.models.job_schemas import JobDTO
-from tova.api.routers import inference, queries, training, validating
+from tova.api.routers import inference, queries, training, validating, data_handling
 from tova.utils.common import init_logger
 
 # Centralized logger initialization
@@ -112,6 +112,7 @@ async def health_check():
 ################################################################################
 #                            TOVA API ENDPOINTS                                #
 ################################################################################
+app.include_router(data_handling.router, prefix="/data", tags=["Data Handling"])
 app.include_router(training.router, prefix="/train", tags=["Training"])
 app.include_router(inference.router, prefix="/infer", tags=["Inference"])
 app.include_router(queries.router, prefix="/queries", tags=["Queries"])

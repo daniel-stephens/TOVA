@@ -1,6 +1,7 @@
 environ
 __pycache__
 data
+data_test
 database
 myData
 topic

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Literal
 from pydantic import BaseModel, Field # type: ignore
 from enum import Enum
 
@@ -42,7 +42,14 @@ class ModelMeta(BaseModel):
     created_at: str
     status: str  # queued|training|ready|failed @TODO: check if keep (e.g., for listing models being trained)
     training_params: Dict[str, Any]
+
+
+class DraftType(str, Enum):
+    model = "model"
+    corpus = "corpus"
     
 class Draft(BaseModel):
     id: str
-    payload: dict
+    type: DraftType
+    owner_id: str | None = None
+    metadata: Dict[str, Any] | None = None

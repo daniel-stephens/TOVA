@@ -21,6 +21,7 @@ services:
       start_period: 15s
     environment:
       - PYTHONUNBUFFERED=1
+      - DRAFTS_SAVE=/data/drafts
     volumes:
       - ./data:/data
 

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 import uuid
 from typing import Dict, List, Optional
@@ -18,8 +19,9 @@ from tova.utils.cancel import CancellationToken, CancelledError
 from tova.utils.tm_utils import normalize_json_data
 
 router = APIRouter(tags=["Training"])
-path_save = Path("/data/models") # folder to save the models
-path_save.mkdir(parents=True, exist_ok=True)
+
+# paths to temporary storage
+DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))
 
 async def _run_training_job(
     *,
@@ -108,7 +110,7 @@ async def _enqueue_training_job(
         cancel=token,
         model=model,
         data=data,
-        output = path_save.joinpath(model_id).as_posix(),
+        output=DRAFTS_SAVE.joinpath(model_id).as_posix(),
         model_name=model_name,
         config_path=config_path,
         do_preprocess=do_preprocess,

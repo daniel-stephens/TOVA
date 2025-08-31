@@ -132,7 +132,7 @@ class BaseTMModel(ABC):
             and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel))}
             
     def save_to_json(self, path: pathlib.Path = None):
-        json_path = path or (self.model_path / 'model_config.json')
+        json_path = path or (self.model_path / 'metadata.json')
 
         model_info = {
             "name": self.model_name,
