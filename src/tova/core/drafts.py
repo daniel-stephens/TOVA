@@ -27,6 +27,9 @@ def list_drafts(type: Optional[DraftType] = None) -> List[Draft]:
             draft_type = DraftType.model
         elif dir.name.startswith("c_"):
             draft_type = DraftType.corpus
+
+        elif dir.name.startswith("d_"):
+            draft_type = DraftType.dataset
         else:
             continue
 
@@ -79,6 +82,10 @@ def get_draft_data(draft_id: str, kind: DraftType) -> Optional[Dict[str, Any]]:
     """
     if kind == DraftType.corpus:
         return get_corpus_draft_data(draft_id)
+    
+    elif kind == DraftType.dataset:
+        return get_dataset_draft_data(draft_id)
+
     else:
         return get_model_draft_data(draft_id)
 
@@ -87,6 +94,17 @@ def get_corpus_draft_data(draft_id: str) -> Optional[Dict[str, Any]]:
     Load the corpus data from a draft by ID, or None if not found.
     """
     path_draft = DRAFTS_SAVE / draft_id / "data.json"
+    if not path_draft.exists():
+        return None
+    with open(path_draft, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
+
+def get_dataset_draft_data(draft_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Load the corpus data from a draft by ID, or None if not found.
+    """
+    path_draft = DRAFTS_SAVE / draft_id / "dataset.json"
     if not path_draft.exists():
         return None
     with open(path_draft, "r", encoding="utf-8") as f:

@@ -15,3 +15,6 @@ def get_corpus(corpus_id: str):
 
 def delete_corpus():
     pass
+
+def create_corpus():
+    pass

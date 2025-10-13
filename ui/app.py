@@ -1,27 +1,15 @@
-from flask import Flask, request, jsonify, render_template, abort
-import os, tempfile, traceback
-import chromadb
+from flask import Flask, request, jsonify, render_template, current_app, send_from_directory
+import os
 from util import *
 import requests
-import uuid
-import shutil
 from flask import session
-from zoneinfo import ZoneInfo
-import random
-from datetime import datetime
-import sqlite3
-import time
-import threading
 import json
+from flask import render_template, Response
+from pathlib import Path
 
 server = Flask(__name__)
+
 server.secret_key = 'your-secret-key'
-#dashboard_data = load_or_create_dashboard_json()
-
-
-# Open and load the file
-#with open("static/config/modelRegistry.json", "r") as f:
-#    model_registry = json.load(f)
     
 API = os.getenv("API_BASE_URL", "http://api:8000")
 
@@ -30,13 +18,6 @@ modelurl = f"{API}/model"
 inferurl = f"{API}/infer/json"
 topicinfourl = f"{API}/queries/model-info"
 textinfourl = f"{API}/queries/thetas-by-docs-ids"
-
-#client = chromadb.PersistentClient(path="database/myDB")
-#collection = client.get_or_create_collection(name="documents")
-#registry = client.get_or_create_collection("corpus_model_registry")
-
-####################################################################
-# Render Pages
 
 
 
@@ -57,339 +38,354 @@ def check_backend():
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
-@server.route('/save-env', methods=['POST'])
-def save_env():
-    data = request.get_json()
-    key = data.get('key')
-    value = data.get('value')
-
-    if not key or not value:
-        return jsonify(success=False, message="Invalid input"), 400
-
-    try:
-        env_file = Path('.env')
-        line = f'{key}="{value}"\n'  # Wrap value in double quotes
-
-        if env_file.exists():
-            lines = env_file.read_text().splitlines()
-            updated = False
-            for i, l in enumerate(lines):
-                if l.startswith(f"{key}="):
-                    lines[i] = line.strip()
-                    updated = True
-                    break
-            if not updated:
-                lines.append(line.strip())
-            env_file.write_text('\n'.join(lines) + '\n')
-        else:
-            env_file.write_text(line)
-
-        return jsonify(success=True)
-    except Exception as e:
-        return jsonify(success=False, message=str(e)), 500
-
-
-# This function makes you view your data before it is uploaded
-
 
 @server.route("/load-data-page/")
 def load_data_page():
-    # create_normalized_schema()
     return render_template('index.html')
 
 
+@server.route("/trained-models")
+def trained_models():
 
-
-# @server.route('/preview')
-# def preview():
-#     results = collection.get(include=['documents', 'metadatas'])
-#     data = []
-
-#     for id_, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
-#         data.append({
-#             "id": id_,
-#             "processed_text": doc,
-#             "content": meta.get("original_content", ""),
-#         })
-
-#     return jsonify(data)
+    return render_template("trained_models.html")
 
 
 
-@server.route('/validate', methods=['POST'])
-def validate_route():
-    # Get files from form
-    files = request.files.getlist('files') or [request.files.get('file')]
-    text_column = request.form.get('text_column')
-    id_column = request.form.get('id_column')
-    label_column = request.form.get('label_column', 'label')  # default fallback
 
-    # Determine if it's a single file or multiple
-    if not files or not files[0]:
-        return jsonify({"status": "error", "message": "No file(s) uploaded."}), 400
+@server.route("/get-trained-models", methods=["GET"])
+def get_trained_models():
+    try:
+        resp = requests.get(f"{API}/data/drafts", params={"type": "model"}, timeout=10)
+    except requests.Timeout:
+        return jsonify({"error": "Upstream request timed out"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
 
-    is_single = len(files) == 1
+    # Pass through JSON when possible
+    content_type = resp.headers.get("Content-Type", "")
+    if "application/json" in content_type.lower():
+        try:
+            data = resp.json()
+        except ValueError:
+            return jsonify({"error": "Invalid JSON from upstream"}), 502
+        return jsonify(data), resp.status_code
+
+    # Fallback: return raw content with original content type
+    return Response(resp.content, status=resp.status_code, headers={"Content-Type": content_type})
+
+
+@server.route("/draft/create/corpus/", methods=["POST"])
+def create_corpus():
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"error": "No JSON payload received"}), 400
 
     try:
-        if is_single:
-            # Single file validation
-            file = files[0]
-            files_payload = {'file': (file.filename, file.stream, file.mimetype)}
-            response = requests.post(f"{API}/validate/single", files=files_payload)
-        else:
-            # Multiple files validation
-            files_payload = [('files', (f.filename, f.stream, f.mimetype)) for f in files]
-            data_payload = {
-                'text_columns': json.dumps([text_column]),
-                'id_column': id_column,
-                'label_column': label_column
-            }
-            response = requests.post(f"{API}/validate/multiple", files=files_payload, data=data_payload)
+        upstream = requests.post(
+            f"{API}/data/drafts/corpus/save",  # <-- note: "corpus" not "dataset"
+            json=payload,
+            timeout=(3.05, 30),
+        )
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
-        return jsonify(response.json()), response.status_code
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    print(upstream)
+    return Response(
+        upstream.content,
+        status=upstream.status_code,
+        mimetype=upstream.headers.get("Content-Type", "application/json"),
+    )
 
 
-# This is called when you when the data has been validated to insert data into the vector database
 
-@server.route('/loadDB', methods=['POST'])
-def loadDB_route():
-    files = request.files.getlist('files')
-    text_column = request.form.get('text_column')
-    corpus_name = request.form.get('corpusName')
-    original_id_column = request.form.get('originalID')  # Optional
 
-    if not files:
-        return jsonify({"status": "error", "message": "No files received."}), 400
+@server.route("/train/corpus/<corpus_id>/tfidf/", methods=["POST"])
+def train_tfidf_corpus(corpus_id):
+    payload = request.get_json(silent=True) or {}
+    payload.setdefault("n_clusters", 15)
 
-    inserted = 0
+    try:
+        upstream = requests.post(
+            f"{API}/train/corpus/{corpus_id}/tfidf/",
+            json=payload,
+            timeout=(3.05, 60),
+        )
+        upstream.raise_for_status()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
-    # Connect to SQLite
-    conn = sqlite3.connect("database/mydatabase.db")
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON;")
+    try:
+        return jsonify(upstream.json()), upstream.status_code
+    except ValueError:
+        return Response(
+            upstream.content,
+            status=upstream.status_code,
+            mimetype=upstream.headers.get("Content-Type", "application/json"),
+        )
+    
 
-    # Insert corpus (if it doesn't exist)
-    cursor.execute("""
-        INSERT OR IGNORE INTO corpus (name) VALUES (?)
-    """, (corpus_name,))
+@server.route("/training/", methods=["GET"])
+def training_page():
+    corpus_id = request.args.get("corpus_id")  # e.g. "c_93e37bf9"
+    return render_template("training.html", corpus_id=corpus_id)
 
-    for file in files:
-        # print("📥", file.filename)
-        ext = os.path.splitext(file.filename)[1].lower().replace('.', '')
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-            tmp.write(file.read())
-            tmp_path = tmp.name
+
+@server.route("/train/corpus/<corpus_id>/tfidf/", methods=["GET"])
+def proxy_corpus_tfidf(corpus_id):
+    try:
+        up = requests.get(f"{API}/train/corpus/{corpus_id}/tfidf/", timeout=(3.05, 30))
+        return Response(up.content, status=up.status_code,
+                        mimetype=up.headers.get("Content-Type", "application/json"))
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
+
+
+@server.route("/corpus/<corpus_id>/tfidf/", methods=["GET"])
+def get_tfidf_data(corpus_id):
+    try:
+        # forward any query params (e.g., n_clusters=…)
+        upstream = requests.get(
+            f"{API}/train/corpus/{corpus_id}/tfidf/",
+            params=request.args,          # forward ?n_clusters=…
+            timeout=(3.05, 60),
+        )
+        upstream.raise_for_status()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
+
+    # Prefer JSON if the upstream sent JSON
+    try:
+        return jsonify(upstream.json()), upstream.status_code
+    except ValueError:
+        # Not JSON? Return raw body with the upstream content-type.
+        return Response(
+            upstream.content,
+            status=upstream.status_code,
+            mimetype=upstream.headers.get("Content-Type", "application/json"),
+        )
+
+
+@server.route("/train/trainingInfo/<corpus_id>/", methods=["GET"])
+def replay_training_from_saved(corpus_id):
+    try:
+        # 1) Fetch saved training params/payload from upstream
+        up = requests.get(f"{API}/train/trainingInfo/{corpus_id}/", timeout=(3.05, 30))
+        up.raise_for_status()
 
         try:
-            # Load file into DataFrame
-            df = processFile(
-                file_path=tmp_path,
-                file_type=ext,
-                text_column=text_column
+            payload = up.json()
+        except ValueError:
+            return jsonify({"error": "Upstream returned non-JSON training payload"}), 502
+
+        # --- FIX #1: unwrap training_config if upstream wraps it ---
+        if isinstance(payload, dict) and "training_config" in payload and isinstance(payload["training_config"], dict):
+            payload = payload["training_config"]
+
+        # --- FIX #2 (defensive): normalize data records to TrainRequest shape ---
+        # Expected: payload["data"] is a list of {id: ..., raw_text: ...}
+        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            normalized = []
+            for rec in payload["data"]:
+                if not isinstance(rec, dict):
+                    continue
+                rid = rec.get("id")
+                # some sources use "text" instead of "raw_text"
+                rtxt = rec.get("raw_text", rec.get("text"))
+                if rid is not None and rtxt is not None:
+                    normalized.append({"id": str(rid), "raw_text": str(rtxt)})
+            payload["data"] = normalized
+
+        # 2) Forward (POST) to upstream training endpoint
+        headers = {}
+        auth = request.headers.get("Authorization")
+        if auth:
+            headers["Authorization"] = auth
+
+        tr = requests.post(
+            f"{API}/train/json",
+            json=payload,
+            headers=headers,
+            timeout=(3.05, 30),
+        )
+
+        # If validation failed, surface the upstream error body to help debugging
+        if tr.status_code == 422:
+            # Return exactly what upstream said (Pydantic error details)
+            return Response(
+                tr.content,
+                status=tr.status_code,
+                mimetype=tr.headers.get("Content-Type", "application/json"),
             )
-            print("Processed Complete")
 
-            if "Context" not in df.columns:
-                raise ValueError(f"'Context' column not found in file. Found columns: {list(df.columns)}")
+        # 3) Build Flask response mirroring upstream body/status
+        resp = Response(
+            tr.content,
+            status=tr.status_code,
+            mimetype=tr.headers.get("Content-Type", "application/json"),
+        )
+        # Propagate Location header (FastAPI sets: /status/jobs/<job_id>)
+        loc = tr.headers.get("Location")
+        if loc:
+            resp.headers["Location"] = loc
 
-            documents = df["Context"].astype(str).tolist()
-            original_ids = (
-                df[original_id_column].astype(str).tolist()
-                if original_id_column and original_id_column in df.columns
-                else [None] * len(documents)
-            )
+        return resp
 
-            file_name = getattr(file, "filename", str(file))
-            ids = [f"{file_name}_{i}" for i in range(len(documents))]
-
-            assert len(ids) == len(documents) == len(original_ids), "Length mismatch"
-
-            # Prepare and insert data
-            insert_query = """
-                INSERT OR IGNORE INTO documents (
-                    id, original_text_id, document, file_name, corpus_name, models_used
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """
-            data_to_insert = list(zip(
-                ids,
-                original_ids,
-                documents,
-                [file_name] * len(documents),
-                [corpus_name] * len(documents),
-                [''] * len(documents)  # models_used
-            ))
-            cursor.executemany(insert_query, data_to_insert)
-            conn.commit()
-            print("Inserted into documents")
-            inserted += len(documents)
-
-        except Exception as e:
-            print(f"❌ Failed to insert file {file.filename}: {str(e)}")
-            traceback.print_exc()
-
-        finally:
-            os.remove(tmp_path)
-
-    conn.close()
-
-    return jsonify({
-        "status": "success",
-        "message": f"{inserted} document(s) processed and added."
-    }), 200
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.HTTPError as e:
+        # Bubble up details from the initial GET
+        return jsonify({
+            "error": f"Upstream GET returned {e.response.status_code}",
+            "detail": e.response.text
+        }), e.response.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
 
+# Accept either /status/jobs/<job_id> or /status/jobs/?job_id=...
+@server.route("/status/jobs/<job_id>", methods=["GET"])
+@server.route("/status/", methods=["GET"])
+def get_status(job_id=None):
+    # 1) Resolve job_id from path or query/header
+    job_id = job_id or request.args.get("job_id") or request.headers.get("X-Job-Id")
+    if not job_id:
+        return jsonify({"error": "Missing job_id"}), 400
 
-# 2. Select Model Page
+    # 2) Optional auth passthrough
+    headers = {}
+    auth = request.headers.get("Authorization")
+    if auth:
+        headers["Authorization"] = auth
+
+    # 3) Call upstream status endpoint
+    upstream_url = f"{API}/status/jobs/{job_id}"
+    try:
+        up = requests.get(upstream_url, headers=headers, timeout=(3.05, 30))
+        # Proxy upstream response body + status + content-type
+        return Response(
+            up.content,
+            status=up.status_code,
+            mimetype=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502   
+
+
+
+
+
+
+
+# # 2. Select Model Page
 @server.route('/model')
 def loadModel():
     
     return render_template('loadModel.html')
 
 
-
-# This function trains the selected model on the data selected
-@server.route('/train_model', methods=['POST'])
-def run_model():
+@server.route("/drafts/corpus", methods=["GET"])
+def get_unique_corpus_names():
+    """
+    Return a deduped (case-insensitive), A→Z list of corpus names.
+    Prefers the most recent 'created_at' when duplicates exist.
+    """
     try:
-        data = request.get_json()
+        r = requests.get(f"{API}/data/drafts", timeout=10)
+        r.raise_for_status()
+        items = r.json()
+    except requests.RequestException:
+        server.logger.exception("Failed to fetch drafts from upstream")  # note: server.logger
+        return jsonify({"error": "Upstream drafts service failed"}), 502
 
-        model_name = data.get("model")
-        save_name = data.get("save_name")
-        corpuses = data.get("corpuses")
-        training_params = data.get("training_params")
-        num_topics = training_params.get("num_topics")
+    pick = {}  # lower(name) -> {"name": original, "created_at": ts}
+    for d in items or []:
+        meta = (d or {}).get("metadata") or {}
+        name = (meta.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        created = meta.get("created_at") or ""
+        if key not in pick or created > pick[key]["created_at"]:
+            pick[key] = {"name": name, "created_at": created}
 
-        if not model_name:
-            return jsonify({"status": "error", "message": "Missing 'model_name'."}), 400
+    names = sorted((v["name"] for v in pick.values()), key=str.casefold)
+    return jsonify(names), 200
 
-        if model_name not in model_registry:
-            return jsonify({"status": "error", "message": f"Model '{model_name}' not found in registry."}), 400
-
-        if not save_name:
-            return jsonify({"status": "error", "message": "Missing 'save_name'."}), 400
-
+@server.route("/getallcorpuses", methods=["GET"])
+def getallcorpuses():
+    """
+    Pulls both /data/drafts and /data/corpus from the upstream API,
+    normalizes them into a single list of items:
+      { id, name, is_draft, created_at }
+    and returns JSON for the frontend to render.
+    """
+    def _safe_get(url):
         try:
-            num_topics = int(num_topics)
-            if num_topics < 2:
-                return jsonify({"status": "error", "message": "'num_topics' must be >= 2."}), 400
-        except (ValueError, TypeError):
-            return jsonify({"status": "error", "message": "'num_topics' must be an integer."}), 400
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            return r.json() or []
+        except requests.RequestException:
+            server.logger.exception("Failed fetching %s", url)
+            return []
 
-        # Connect to SQLite
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
+    drafts_raw = _safe_get(f"{API}/data/drafts?type=dataset")
+    # corpus_raw = _safe_get(f"{API}/data/corpora/")
 
-        final_output = []
-
-        for corpus in corpuses:
-            cursor.execute("SELECT id, document FROM documents WHERE corpus_name = ?", (corpus,))
-            rows = cursor.fetchall()
-
-            # print(f"Found {len(rows)} documents in corpus '{corpus}'.")
-            for doc_id, doc_text in rows:
-                final_output.append({
-                    "id": doc_id,
-                    "raw_text": doc_text
-                })
-
-        if not final_output:
-            return jsonify({"status": "error", "message": "No documents found for selected corpora."}), 400
-
-        # Payload for model training API
-        payload = {
-            "config_path": "static/config/config.yaml",
-            "model": model_name,
-            "output": f"models/{save_name}",
-            "text_col": "raw_text",
-            "data": final_output,
-            "training_params": training_params,
-            "do_preprocess": True,
-            "id_col": "id"
+    def _norm_draft(d):
+        meta = (d or {}).get("metadata") or {}
+        return {
+            "id": d.get("id") or meta.get("draft_id") or "",
+            "name": (meta.get("name") or "").strip(),
+            "is_draft": True,
+            "created_at": meta.get("created_at") or "",
         }
 
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
+    def _norm_corpus(c):
+        # Support a couple of shapes: flat or metadata-based
+        name = (c.get("name") or (c.get("metadata") or {}).get("name") or "").strip()
+        created = c.get("created_at") or (c.get("metadata") or {}).get("created_at") or ""
+        return {
+            "id": c.get("id") or (c.get("metadata") or {}).get("id") or name,  # fallback to name
+            "name": name,
+            "is_draft": False,
+            "created_at": created,
         }
 
-        response = requests.post(modelurl + "train/json", json=payload, headers=headers)
+    drafts = [_norm_draft(d) for d in drafts_raw if (d.get("metadata") or {}).get("name")]
+    # corpuses = [_norm_corpus(c) for c in corpus_raw if (c.get("name") or (c.get("metadata") or {}).get("name"))]
 
-        print("Status Code:", response.status_code)
-        # print("Response JSON:", response.json())
+    # Optional: within each category, dedupe by name (case-insensitive), keeping latest created_at
+    def _dedupe(items):
+        pick = {}
+        for it in items:
+            key = it["name"].lower()
+            if not it["name"]:
+                continue
+            if key not in pick or it["created_at"] > pick[key]["created_at"]:
+                pick[key] = it
+        return list(pick.values())
 
-        trained_on = datetime.utcnow().isoformat()
-        joined_corpuses = ", ".join(corpuses)
-        joined_id = "_".join(corpuses)
-        model_id = f"{model_name}_{joined_id}_{trained_on}"
+    drafts = _dedupe(drafts)
+    # corpuses = _dedupe(corpuses)
 
-        # Insert model metadata
-        # Insert model metadata
-        cursor.execute("""
-            INSERT INTO model_registry (
-                model_id, model_type, num_topic, model_name, trained_on, description, training_params
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            model_id,
-            model_name,
-            num_topics,
-            save_name,
-            trained_on,
-            f"Trained {model_name} on {joined_corpuses}",
-            json.dumps(training_params)  # 👈 Serialize training params to JSON
-        ))
+    # Merge (we KEEP both if same name exists in both; drafts will be marked on the UI)
+    combined = drafts #+ corpuses
 
+    # Sort: by name A→Z, and show drafts first for the same name
+    combined.sort(key=lambda x: (x["name"].lower(), not x["is_draft"]))
 
-        # Map model to each corpus
-        model_corpus_pairs = [(model_id, corpus) for corpus in corpuses]
-        cursor.executemany("""
-            INSERT INTO model_corpus_map (model_id, corpus_name)
-            VALUES (?, ?)
-        """, model_corpus_pairs)
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({
-            "status": "success",
-            "message": f"Model '{model_name}' trained and saved as '{save_name}'."
-        }), 200
-
-    except Exception as e:
-        print("❌ Error in run_model:", str(e))
-        return jsonify({
-            "status": "error",
-            "message": f"Model run failed: {str(e)}"
-        }), 500
-
-
-@server.route('/corpora')
-def get_corpus_names():
-    print("Looking for corpus names...")
-
-    try:
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-
-        # Get all corpus names from the corpus table
-        cursor.execute("SELECT name FROM corpus")
-        rows = cursor.fetchall()
-
-        # Extract and sort
-        unique_corpora = sorted(row[0] for row in rows)
-
-        return jsonify(unique_corpora)
-
-    except Exception as e:
-        print(f"❌ Error fetching corpus names: {e}")
-        return jsonify({"status": "error", "message": "Failed to retrieve corpus names"}), 500
-
-    finally:
-        conn.close()
-
+    return jsonify(combined), 200
 
 
 # This function gets the configuration file for the Models
@@ -407,746 +403,90 @@ def get_model_registry():
 
 
 
-@server.route('/delete-corpus/', methods=['POST'])
-def delete_corpus():
+##########################################################
+
+@server.route("/get-models-names", methods=["GET"])
+def get_model_names():
     try:
-        data = request.get_json()
-        print("Received request to delete corpus:")
+        r = requests.get(f"{API}/data/drafts", params={"type": "model"}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list):
+            return jsonify({"error": "Unexpected response format"}), 502
 
-        corpus_name = data.get("corpus_name")
-        if not corpus_name:
-            return jsonify({"status": "error", "message": "No corpus_name provided."}), 400
+        names = []
+        for item in data:
+            # Defensive access
+            meta = item.get("metadata") or {}
+            tr   = meta.get("tr_params") or {}
+            name = tr.get("model_name")
+            if isinstance(name, str) and name.strip():
+                names.append(name.strip())
 
-        # Connect to database
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
+        # Deduplicate (case-insensitive), preserve first occurrence casing
+        seen = set()
+        unique = []
+        for n in names:
+            key = n.lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(n)
 
-        # First delete all documents that belong to the corpus
-        cursor.execute("DELETE FROM documents WHERE corpus_name = ?", (corpus_name,))
+        return jsonify({"models": unique})
 
-        # Then delete the corpus itself
-        cursor.execute("DELETE FROM corpus WHERE name = ?", (corpus_name,))
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({
-            "status": "success",
-            "message": f"Corpus '{corpus_name}' and its documents deleted."
-        })
-
+    except requests.Timeout:
+        return jsonify({"error": "Upstream request timed out"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream request failed: {e}"}), 502
     except Exception as e:
-        print("Error during corpus deletion:", str(e))
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 
-##################################################################################
-# 3. Trained Models
-from zoneinfo import ZoneInfo
-from datetime import datetime
-import sqlite3
-from flask import render_template, jsonify
-
-@server.route("/trained-models")
-def trained_models():
-    try:
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT * FROM model_registry")
-        rows = cursor.fetchall()
-
-        # Get column names so we can access fields by name (safer if schema changes)
-        columns = [desc[0] for desc in cursor.description]
-
-        models = []
-        for row in rows:
-            row_dict = dict(zip(columns, row))
-
-            # Format timestamp
-            try:
-                dt = datetime.fromisoformat(row_dict["trained_on"]).replace(tzinfo=ZoneInfo("UTC"))
-                local_time = dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
-            except Exception:
-                local_time = row_dict["trained_on"]
-
-            models.append({
-                "model_id": row_dict["model_id"],
-                "document": row_dict["description"],
-                "model_type": row_dict["model_type"],
-                "model_name": row_dict["model_name"],
-                "num_topics": row_dict["num_topic"],
-                "training_params": json.loads(row_dict["training_params"]) if row_dict.get("training_params") else {},
-                "corpus_names": get_model_corpora(row_dict["model_id"]),
-                "trained_on": local_time
-            })
-
-        return render_template("trained_models.html", models=models)
-
-    except Exception as e:
-        print("❌ Error fetching trained models:", str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-    finally:
-        conn.close()
-
-
-@server.route('/delete-model/', methods=['POST'])
+    
+    
+@server.route("/delete-model", methods=["POST"])
 def delete_model():
-    data = request.get_json()
-    model_id = data.get("model_id")
-    model_name = data.get("model_name")
-    modelpath = f"./models/{model_name}"
+    """
+    Body (JSON):
+      { "model_id": "...", "corpus_id": "..." }  # corpus_id optional
+    If corpus_id is missing, we search all corpora to find the model, then delete.
+    """
 
-    # ✅ Delete model folder (if exists)
-    if os.path.exists(modelpath) and os.path.isdir(modelpath):
-        shutil.rmtree(modelpath)
-        print(f"✅ Deleted model folder: {modelpath}")
-    else:
-        print(f"⚠️ Model path does not exist: {modelpath}")
+##########################################################
+    
 
+
+@server.post("/get-dashboard-data")
+def get_dashboard_data():
+    payload = request.get_json(silent=True) or {}
+    model_id = payload.get("model_id")
     if not model_id:
-        return jsonify({"status": "error", "message": "No model_id provided"}), 400
+        return jsonify({"error": "model_id is required"}), 400
+
+    # keep the file inside your app directory, not CWD
+    base = Path(current_app.root_path) / "static" / "config"
+    file_path = base / "dashboardData.json"   # or f"{model_id}.dashboardData.json" (see below)
 
     try:
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
+        with file_path.open(encoding="utf-8") as f:
+            data = json.load(f)
+            
+        return jsonify(data)
+    except FileNotFoundError:
+        return jsonify({"error": f"File not found: {file_path}"}), 404
+    except json.JSONDecodeError as e:
+        return jsonify({"error": f"Invalid JSON in {file_path}: {e}"}), 500
+    except OSError as e:
+        return jsonify({"error": f"File read error: {e}"}), 500
 
-        # ✅ Delete from model_corpus_map first (due to FK constraints)
-        cursor.execute("DELETE FROM model_corpus_map WHERE model_id = ?", (model_id,))
-        # ✅ Delete from model_registry
-        cursor.execute("DELETE FROM model_registry WHERE model_id = ?", (model_id,))
-        conn.commit()
-        conn.close()
 
-        # ✅ Optionally update dashboard data
-        dashboard_data = read_dashboard_json()
-        if model_name in dashboard_data:
-            del dashboard_data[model_name]
-            with open('data.json', 'w') as file:
-                json.dump(dashboard_data, file, indent=4)
 
-        return jsonify({
-            "status": "success",
-            "message": f"Model '{model_id}' deleted."
-        })
 
-    except Exception as e:
-        print("❌ Error deleting model:", str(e))
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+@server.route("/dashboard/<modelId>", methods=["GET", "POST"])
+def dashboard(modelId):
 
+    modelId = modelId
+    return render_template("dashboard.html", model_id=modelId)
 
-@server.route("/training/")
-def training_page():
-    model_name = request.args.get("modelName")
-    number_of_topics = int(request.args.get("numTopics"))
-    selectedCorpora = request.args.get("corpuses")
-    print(model_name)
-    print(number_of_topics)
 
-    output_path = f"static/data/output{model_name}.jsonl"
 
-    analyze_corpus_documents(selectedCorpora, n_clusters=number_of_topics, output_path=output_path, tfidf_info_path=f"static/data/tfidf_details{model_name}.jsonl", db_path="database/mydatabase.db")
-
-    return render_template('training.html')
-
-
-training_status = {
-    "progress": 0.0,
-    "message": "Initializing training…",
-    "eta": "2 min",
-    "done": False
-}
-
-def simulate_training():
-    print("⚙️ simulate_training STARTED")
-    total_steps = 120
-
-    for i in range(1, total_steps + 1):  # Include step 120
-        time.sleep(1)
-
-        training_status["progress"] = i / total_steps
-        training_status["message"] = "Training in progress…"
-        remaining = total_steps - i
-        mins, secs = divmod(remaining, 60)
-        training_status["eta"] = f"{mins}m {secs}s"
-
-        print(f"Step {i}: {training_status['progress']:.2%}")
-
-    training_status["progress"] = 1.0
-    training_status["done"] = True
-    training_status["eta"] = None
-    training_status["message"] = "Training complete."
-    print("✅ Training complete")
-
-
-@server.route("/start")
-def start_training():
-    print("🔥 /start endpoint hit")
-    threading.Thread(target=simulate_training, daemon=True).start()
-    return "Started"
-
-@server.route("/status")
-def get_status():
-    print("📡 Status check:", training_status["progress"])
-    return jsonify(training_status)
-
-###################################################################################
-
-# 4. Visualization and Inferences
-@server.route("/dashboard/<model_name>", methods=["GET", "POST"])
-def dashboard(model_name):
-
-    # print("Model Name (from URL):", model_name)
-
-    themeSummary, themeDetails, modelMetrics = fetch_and_process_model_info(model_path=model_name)
-    add_model_to_dashboard(model_name, themeSummary=themeSummary, themeDetails=themeDetails, modelLevelMetrics=modelMetrics)
-    # print(model_name)
-    return render_template("dashboard.html", model_name=model_name)
-
-
-
-@server.route("/api/themes", methods=["POST"])
-def get_themes():
-    try:
-        data = request.get_json(force=True)  # 🔁 force=True to parse even without header
-        # print("Raw JSON from request:", data)
-
-        if not data or "model" not in data:
-            return jsonify({"error": "Missing 'model' in request body"}), 400
-
-        model_name = data["model"]
-
-        dashboard_data = read_dashboard_json()
-        model_data = dashboard_data.get(model_name)
-
-        if not model_data:
-            return jsonify({"error": f"No data found for model '{model_name}'"}), 404
-
-        summary = model_data.get("Theme Summary", [])
-        return jsonify(summary)
-
-    except Exception as e:
-        print("Exception:", str(e))
-        return jsonify({"error": "Invalid JSON or server error"}), 400
-
-
-
-@server.route("/text-info", methods=["POST"])
-def text_info():
-    
-    data = request.get_json()
-    text = data.get("text", "").strip()
-    text_id = data.get("id", "").strip()
-    model_name = data.get("model", "").strip()
-
-    if not text or not model_name:
-        return jsonify({"error": "Both 'text' and 'model' are required."}), 400
-
-    dashboard_data = read_dashboard_json()
-
-    thetas = get_thetas_by_doc_ids(text_id, model_name)
-
-    textData = format_theta_output_dict(thetas, dashboard_data[model_name]["Theme Summary"])
-
-    return jsonify(textData[text_id])
-
-
-@server.route("/api/theme/<theme_id>", methods=["GET"])
-def get_theme_detail(theme_id):
-    model_name = request.args.get("model")
-    if not model_name:
-        return jsonify({"error": "Missing model name"}), 400
-
-    dashboard = read_dashboard_json()
-    model_data = dashboard.get(model_name)
-
-    if not model_data:
-        return jsonify({"error": f"No model found for '{model_name}'"}), 404
-
-    theme_details = model_data.get("Theme Details", {})
-    theme = theme_details.get(theme_id)
-
-    if not theme:
-        return jsonify({"error": f"No theme '{theme_id}' found for model '{model_name}'"}), 404
-
-    return jsonify(theme)
-
-@server.route("/infer-text", methods=["POST"])
-def infer_text():
-    try:
-        data = request.get_json()
-        text = data.get("text", "").strip()
-        text_id = data.get("id", "").strip()
-        model_name = data.get("model", "").strip()
-
-        if not text or not model_name:
-            return jsonify({"error": "Both 'text' and 'model' are required."}), 400
-
-        model_path = "models/" + model_name
-
-        # Step 1: Call inference API
-        infer_payload = {
-            "config_path": "static/config/config.yaml",
-            "model_path": model_path,
-            "id_col": text_id,
-            "text_col": "raw_text",
-            "data": [{"id": text_id, "raw_text": text}]
-        }
-
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        }
-
-        infer_response = requests.post(inferurl, json=infer_payload, headers=headers)
-        infer_response.raise_for_status()
-        inference_result = infer_response.json()
-        dashboard_data = read_dashboard_json()
-
-        model_data = dashboard_data.get(model_name)
-        if not model_data:
-            return jsonify({"error": f"No data found for model '{model_name}'"}), 404
-
-        theme_summary = model_data.get("Theme Summary", [])
-
-        # ✅ Build lookup maps
-        theme_map = {
-            item["id"]: {
-                "label": item.get("label", item["id"]),
-                "keywords": item.get("keywords", "")
-            }
-            for item in theme_summary
-        }
-
-        # ✅ Process inference results
-        theta = inference_result["thetas"][0]["id"]
-        all_themes = [
-            {
-                "theme_id": tid,
-                "label": theme_map.get(tid, {}).get("label", tid),
-                "score": round(score, 4),
-                "keywords": theme_map.get(tid, {}).get("keywords", "")
-            }
-            for tid, score in theta.items()
-        ]
-
-        # Sort and pick top theme
-        all_themes.sort(key=lambda x: x["score"], reverse=True)
-        top_theme = all_themes[0]["label"]
-
-        return jsonify({
-            "theme": top_theme[:5],
-            "top_themes": all_themes[:5]
-        })
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@server.route('/api/documents', methods = ["POST"])
-def get_documents():
-
-    data = request.get_json()
-    modelName = data.get("model", "").strip()
-    data = read_dashboard_json()
-    allDocuments = [
-    {
-        **doc,
-        "theme": details.get("label", theme),
-        "model": modelName
-    }
-    for theme, details in data[modelName]["Theme Details"].items()
-    for doc in details.get("documents", [])
-]
-    # random.shuffle(allDocuments)
-
-    return jsonify(allDocuments)
-
-
-
-
-
-@server.route("/api/model-info", methods=["POST"])
-def model_info():
-    data = request.get_json()
-    model_name = data.get("model_name", "")
-    print(f"Requested model_name: {model_name}")
-
-    if not model_name:
-        return jsonify({"status": "error", "message": "Missing model_name"}), 400
-
-    try:
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT model_id, model_type, num_topic, model_name, trained_on, description, training_params
-            FROM model_registry
-            WHERE model_name = ?
-            LIMIT 1
-        """, (model_name,))
-        row = cursor.fetchone()
-        conn.close()
-
-        if not row:
-            return jsonify({"status": "error", "message": "Model not found."}), 404
-
-        model_id, model_type, num_topic, model_name, trained_on, description, training_params_json = row
-
-        # Format training date
-        try:
-            trained_on_dt = datetime.fromisoformat(trained_on).replace(tzinfo=ZoneInfo("UTC"))
-            trained_on_local = trained_on_dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
-        except Exception:
-            trained_on_local = trained_on
-
-        # Get corpus names
-        conn = sqlite3.connect("database/mydatabase.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT corpus_name FROM model_corpus_map WHERE model_id = ?", (model_id,))
-        corpus_rows = cursor.fetchall()
-        conn.close()
-
-        corpus_names = ", ".join(row[0] for row in corpus_rows)
-
-        try:
-            training_params = json.loads(training_params_json) if training_params_json else {}
-        except Exception:
-            training_params = {}
-
-        model = {
-            "model_id": model_id,
-            "document": description,
-            "model_type": model_type,
-            "model_name": model_name,
-            "num_topics": num_topic,
-            "corpus_names": corpus_names,
-            "trained_on": trained_on_local,
-            "training_params": training_params
-        }
-
-        return jsonify(model)
-
-    except Exception as e:
-        print("❌ Error in /api/model-info:", str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-
-@server.route('/api/theme-metrics', methods=["POST", "GET"])
-def get_theme_metrics():
-    data = request.get_json()
-    # print(data)
-    model_name = data.get("model", "")
-    dashboard_data = read_dashboard_json()
-    model_metrics = dashboard_data[model_name]["Model-Level Metrics"]
-    converted_metrics = {
-    "metrics": []
-    }
-
-    for key, value in model_metrics.items():
-        metric_entry = {
-            "label": key,
-            "value": value,
-            "id": key.lower()
-                    .replace("(", "")
-                    .replace(")", "")
-                    .replace(" ", "_")
-                    .replace("-", "_")
-        }
-        converted_metrics["metrics"].append(metric_entry)
-    return jsonify(converted_metrics)
-
-
-
-
-
-@server.route("/api/diagnostics", methods=["GET"])
-def get_diagnostics():
-    model_name = request.args.get("model")
-    if not model_name:
-        return jsonify({"error": "Missing model name"}), 400
-
-    dashboard = read_dashboard_json()
-    theme_details = dashboard.get(model_name, {}).get("Theme Details", {})
-
-    metrics = extract_metrics_from_theme_details(theme_details)
-    return jsonify(metrics)
-
-
-
-
-@server.route("/api/theme-coordinates", methods=["POST"])
-def get_theme_coordinates():
-    data = request.get_json()
-    model_name = data.get("model")
-
-    if not model_name:
-        return abort(400, description="Missing 'model' in request body")
-
-    dashboard_data = read_dashboard_json()
-    model_data = dashboard_data.get(model_name)
-
-    if not model_data:
-        return abort(404, description=f"No data found for model: {model_name}")
-
-    theme_entries = model_data.get("Theme Details", {})
-
-    theme_coords = []
-    for key, entry in theme_entries.items():
-        coords = entry.get("Coordinates", [None, None])
-        theme_coords.append({
-            "id": entry.get("topic_id") or entry.get("id"),
-            "label": entry.get("label") or entry.get("theme"),
-            "size": float(entry.get("size")[:-1]) or float(entry.get("prevalence")[:-1]),
-            "x": coords[0],
-            "y": coords[1],
-            "keywords":entry.get("keywords")
-        })
-
-        # print(theme_coords)
-
-    return jsonify(theme_coords)
-
-
-####################################################################################
-
-# 5. Inference Page
-@server.route("/infer-page")
-def infer_page():
-    return render_template("inference.html")
-
-@server.route('/get_model_info', methods=['POST'])  # Change to POST to accept JSON
-def get_model_info():
-    try:
-        data = request.get_json()
-        modelName = data.get("model", "").strip()
-        if not modelName:
-            return jsonify({"error": "Model name is required."}), 400
-
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        }
-
-        topicJson = {
-            "config_path": "static/config/config.yaml",
-            "model_path": f"data/models/{modelName}"
-        }
-
-        # Call your external topic-info URL (replace with your real endpoint)
-        response = requests.post(topicinfourl, json=topicJson, headers=headers)
-
-        # print(response)
-
-        if response.status_code != 200:
-            return jsonify({"error": "Failed to retrieve model info."}), 500
-
-        topic_info = response.json()
-        # print(topic_info)
-        return jsonify(topic_info)
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-    
-@server.route('/infer', methods=['POST'])  # ✅ POST supports JSON
-def infer_topic():
-    
-    try:
-        data = request.get_json()
-        text = data.get("text", "").strip()
-        modelName = data.get("model").strip()
-
-        payload =  {
-            "config_path": "static/config/config.yaml",
-            "data": [
-                {"id": "myid",
-                "raw_text" : text}],
-            "id_col": "id",
-            "model_path": "models/"+modelName,
-            "text_col": "raw_text"
-            }
-        if not text:
-            return jsonify({"error": "Text input is required."}), 400
-
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        response = requests.post(inferurl, json=payload, headers=headers)
-
-        topicJson = {
-            "config_path": "static/config/config.yaml",
-            "model_path": "data/models/"+modelName
-            }
-
-        topic_info = requests.post(topicinfourl, json=topicJson).json()
-
-
-        inference_result = response.json()
-                # Step 3: Format the top 5 predictions
-        theta = inference_result["thetas"][0]["myid"]
-
-        top_topics = sorted(
-            [{"id": tid, "score": score} for tid, score in theta.items()],
-            key=lambda x: x["score"],
-            reverse=True
-        )[:7]  # Get top 5
-
-        # Step 4: Merge with metadata
-        enriched = []
-        for topic in top_topics:
-            tid = topic["id"]
-            info = topic_info.get(tid, {})
-            enriched.append({
-                "label": info.get("tpc_labels", tid),
-                "score": round(topic["score"], 4),
-                "text": text,
-            })
-
-        # Final output for frontend
-        response = {"topics": enriched}
-
-
-        return jsonify(response)
-
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-        
-
-
-@server.route('/infer-file', methods=['POST'])
-def infer_file():
-    try:
-        file = request.files.get("file")
-        id_col = request.form.get("id_col", "").strip()
-        text_col = request.form.get("text_col", "").strip()
-        modelName = request.form.get("model", "").strip()
-
-        if not file or not id_col or not text_col or not modelName:
-            return jsonify({"error": "Missing file, id_col, text_col, or model name"}), 400
-
-        # Load file
-        filename = file.filename.lower()
-        if filename.endswith(".csv"):
-            df = pd.read_csv(file)
-        elif filename.endswith(".json"):
-            df = pd.read_json(file)
-        elif filename.endswith((".xls", ".xlsx")):
-            df = pd.read_excel(file)
-        else:
-            return jsonify({"error": "Unsupported file type"}), 400
-
-        # Validate columns
-        if id_col not in df.columns or text_col not in df.columns:
-            return jsonify({"error": f"'{id_col}' or '{text_col}' not found in file"}), 400
-
-        # Create input data for inference
-        records = [
-            {"id": str(row[id_col]), "raw_text": str(row[text_col])}
-            for _, row in df.iterrows()
-            if pd.notna(row[id_col]) and pd.notna(row[text_col])
-        ]
-        id_to_text = {r["id"]: r["raw_text"] for r in records}
-
-        payload = {
-            "config_path": "static/config/config.yaml",
-            "data": records,
-            "id_col": "id",
-            "model_path": f"models/{modelName}",
-            "text_col": "raw_text"
-        }
-
-        headers = {"accept": "application/json", "Content-Type": "application/json"}
-        response = requests.post(inferurl, json=payload, headers=headers)
-        inference_result = response.json()
-
-        # Topic metadata
-        topic_metadata = requests.post(topicinfourl, json={
-            "config_path": "static/config/config.yaml",
-            "model_path": f"models/{modelName}"
-        }, headers=headers).json()
-
-        # Format output
-        final_output = []
-        for theta_entry in inference_result["thetas"]:
-            for doc_id, topic_scores in theta_entry.items():
-                top_topics = sorted(
-                    [{"id": tid, "score": score} for tid, score in topic_scores.items()],
-                    key=lambda x: x["score"],
-                    reverse=True
-                )[:3]
-
-                enriched = []
-                for topic in top_topics:
-                    tid = topic["id"]
-                    info = topic_metadata.get(tid, {})
-                    enriched.append({
-                        "label": info.get("tpc_labels", tid),
-                        "score": round(topic["score"], 4),
-                        "keywords": info.get("tpc_descriptions", "").split(", ")
-                    })
-
-                final_output.append({
-                    "doc_id": doc_id,
-                    "text": id_to_text.get(doc_id, ""),
-                    "top_topics": enriched
-                })
-
-        return jsonify({"topics": final_output})
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@server.route("/inference/<model_id>")
-def inference_page(model_id):
-    return render_template("inference_page.html", model_id=model_id)
-
-    
-######################################################################################
-
-
-# This function displays the available models
-@server.route('/get_models', methods=['GET'])
-def list_models():
-    model_dir = os.path.join("models")
-    
-    if not os.path.exists(model_dir):
-        return jsonify([])  # Return empty if no directory
-
-    # List all directories/files inside model_dir
-    models = [
-        name for name in os.listdir(model_dir)
-        if os.path.isdir(os.path.join(model_dir, name))
-    ]
-    # print(models)
-
-    return jsonify(models)
-
-
-
-
-
-
-# this is not needed anymore (gets started from the dockerfile)
-# if __name__ == '__main__':
-#     server.run(debug=True, use_reloader=False)

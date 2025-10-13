@@ -1,251 +1,349 @@
+/* =========================
+   Global state
+========================= */
 let selectedModelData = null;
 let modelConfig = {};
 
+/* =========================
+   Helpers
+========================= */
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, m => (
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])
+  ));
+}
+
+async function ensureModelConfigLoaded() {
+  if (Object.keys(modelConfig || {}).length) return;
+  await loadModelConfig();
+}
+
+/* =========================
+   Boot
+========================= */
 document.addEventListener("DOMContentLoaded", () => {
-  const modelSelect = document.getElementById('model_type');
+  const modelSelect     = document.getElementById('model_type');
   const topicInputGroup = document.getElementById('topicCountGroup');
- 
+  const formEl          = document.getElementById('modelSelectionForm');
+  const modalEl         = document.getElementById('modelNameModal');
+  const confirmBtn      = document.getElementById('confirmModelName');
+  const modal           = new bootstrap.Modal(modalEl);
 
-  
-  modelSelect.addEventListener('change', function () {
-    const selected = this.value;
-    topicInputGroup.style.display = selected === 'External' ? 'none' : 'block';
-  });
-
+  // Load dropdown + corpuses + config
+  loadModelOptions();
   loadCorpusCheckboxTable();
   loadModelConfig();
+  initModelNameGuard();     // optional; no-op if endpoint missing
+  initAdvancedToggle();
 
-  document.getElementById('modelSelectionForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const model = modelSelect.value;
-    const topicNumber = document.getElementById("numTopics").value;
-    
-
-    renderParamsIntoModal(model);
-
-    const modal = new bootstrap.Modal(document.getElementById('modelNameModal'));
-    modal.show();
-
-    document.getElementById('modelNameModal').addEventListener('shown.bs.modal', () => {
-      document.getElementById('modelNameInput')?.focus();
-    });
+  // Toggle topics input when model changes
+  modelSelect.addEventListener('change', function () {
+    topicInputGroup.style.display = this.value === 'External' ? 'none' : 'block';
   });
+  // Set initial visibility
+  topicInputGroup.style.display = modelSelect.value === 'External' ? 'none' : 'block';
 
-  document.getElementById('confirmModelName').addEventListener('click', () => {
-    const modelName = document.getElementById('modelNameInput').value.trim();
-    const numTopics = document.getElementById('numTopics').value.trim();
+  // Open modal on submit
+  formEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-    if (!modelName) {
-        alert("Please provide a model name.");
-        return;
+    // Must have at least one corpus selected
+    const checked = document.querySelectorAll('input[name="corpus"]:checked');
+    if (checked.length === 0) {
+      const trainBtn = document.getElementById("trainBtn");
+      trainBtn?.classList.add("disabled");
+      setTimeout(() => trainBtn?.classList.remove("disabled"), 400);
+      return;
     }
 
-    const selectedCorpora = Array.from(
-      document.querySelectorAll('input[name="corpusName"]:checked')
-    ).map(cb => cb.value);
+    // Ensure config ready then render inputs
+    await ensureModelConfigLoaded();
+    const model = modelSelect.value;
+    renderParamsIntoModal(model);
 
+    modal.show();
+  });
+
+  // Focus model name once modal opens
+  modalEl.addEventListener('shown.bs.modal', () => {
+    document.getElementById('modelNameInput')?.focus();
+  });
+
+  // Confirm -> stash data + redirect
+  confirmBtn.addEventListener('click', () => {
+    const modelName = document.getElementById('modelNameInput').value.trim();
+    const numTopics = document.getElementById('numTopics')?.value?.trim();
+
+    if (!modelName) {
+      alert("Please provide a model name.");
+      return;
+    }
+
+    const selected = Array.from(document.querySelectorAll('input[name="corpus"]:checked')).map(cb => ({
+      id: cb.dataset.id,
+      name: cb.dataset.name,
+      is_draft: cb.dataset.draft === '1'
+    }));
+
+    // Collect advanced params
     const training_param = {};
-    const inputs = document.querySelectorAll("#modelParamsArea input");
-    inputs.forEach(input => {
-        const key = input.id;
-        const value = input.value.trim();
-        training_param[key] = input.type === "number" ? Number(value) : value;
+    document.querySelectorAll("#modelParamsArea input").forEach(input => {
+      const key = input.id;
+      const value = input.value;
+      training_param[key] = input.type === "number" ? Number(value) : value;
     });
 
-    training_param["num_topics"] = Number(numTopics);
+    // Append num_topics unless External hides it
+    if (document.getElementById('topicCountGroup')?.style.display !== 'none') {
+      training_param["num_topics"] = Number(numTopics || 10);
+    }
 
     const requestData = {
-        model: modelSelect.value,
-        save_name: modelName,
-        training_params: training_param,
-        corpuses: selectedCorpora,
+      model: document.getElementById('model_type').value,
+      save_name: modelName,
+      training_params: training_param,
+      corpuses: selected, // full objects (id, name, is_draft)
     };
 
-    // Save to sessionStorage for frontend JS use after page load
+    // Save for follow-up page
     sessionStorage.setItem("modelTrainingData", JSON.stringify(requestData));
 
-    // ✅ Redirect with query parameters so Flask can use them
+    // Also pass a compact view via query params (names only)
     const query = new URLSearchParams({
-        modelName: modelName,
-        numTopics: training_param["num_topics"],
-        corpuses: selectedCorpora,
+      modelName: modelName,
+      numTopics: training_param["num_topics"] ?? "",
+      corpuses: selected.map(s => s.name).join(","),
     });
     window.location.href = `/training/?${query.toString()}`;
-});
+  });
 
-
-
-  const modalElement = document.getElementById('modelNameModal');
-  modalElement.addEventListener('hidden.bs.modal', () => {
-    if (modalElement.contains(document.activeElement)) {
+  // Modal housekeeping
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    if (modalEl.contains(document.activeElement)) {
       document.activeElement.blur();
     }
   });
 });
 
-async function loadCorpusCheckboxTable() {
-  const tbody = document.getElementById("corpusCheckboxTable");
-  tbody.innerHTML = `<tr><td colspan="3"><em>Loading corpora...</em></td></tr>`;
-
+/* =========================
+   Model registry
+========================= */
+async function loadModelOptions() {
+  const select = document.getElementById("model_type");
   try {
-    const res = await fetch("/corpora");
-    const corpora = await res.json();
+    const res = await fetch("/model-registry");
+    if (!res.ok) throw new Error(`registry load failed: ${res.status}`);
+    const models = await res.json();
 
-    if (corpora.length > 0) {
-      tbody.innerHTML = "";
-
-      corpora.forEach((name, index) => {
-        const row = document.createElement("tr");
-
-        // Checkbox Cell
-        const checkboxCell = document.createElement("td");
-        checkboxCell.className = "align-middle";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.name = "corpusName";
-        checkbox.value = name;
-        checkbox.className = "form-check-input";
-        checkbox.id = `corpus-${index}`;
-        checkboxCell.appendChild(checkbox);
-
-        // Name Cell
-        const nameCell = document.createElement("td");
-        nameCell.className = "align-middle";
-        const label = document.createElement("label");
-        label.htmlFor = `corpus-${index}`;
-        label.textContent = name;
-        nameCell.appendChild(label);
-
-        // Delete Button Cell
-        const deleteCell = document.createElement("td");
-        deleteCell.className = "text-end align-middle";
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.className = "btn btn-sm btn-outline-danger";
-        deleteBtn.textContent = "Delete";
-        deleteBtn.title = "Delete Corpus";
-        deleteBtn.onclick = () => deleteCorpus(name);
-        deleteCell.appendChild(deleteBtn);
-
-        // Append all cells to row
-        row.appendChild(checkboxCell);
-        row.appendChild(nameCell);
-        row.appendChild(deleteCell);
-        tbody.appendChild(row);
-      });
-
-      // ✅ Enable Train button only if at least one checkbox is selected
-      const trainBtn = document.getElementById("trainBtn");
-
-      function updateTrainButtonState() {
-        const anyChecked = document.querySelectorAll('input[name="corpusName"]:checked').length > 0;
-        trainBtn.disabled = !anyChecked;
-      }
-
-      // Add listener to all checkboxes
-      document.querySelectorAll('input[name="corpusName"]').forEach(cb => {
-        cb.addEventListener("change", updateTrainButtonState);
-      });
-
-      // Initial check
-      updateTrainButtonState();
-    } else {
-      tbody.innerHTML = `<tr><td colspan="3"><em>No corpora found</em></td></tr>`;
+    select.innerHTML = "";
+    for (const [key] of Object.entries(models || {})) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = key;
+      select.appendChild(option);
     }
-  } catch (error) {
-    console.error("Error loading corpora:", error);
-    tbody.innerHTML = `<tr><td colspan="3"><em>Error loading corpora</em></td></tr>`;
+    if (!select.options.length) {
+      select.innerHTML = "<option disabled>No models available</option>";
+    }
+  } catch (err) {
+    console.error("Error loading model options:", err);
+    select.innerHTML = "<option disabled>Error loading models</option>";
   }
 }
 
+/* =========================
+   Corpuses (drafts + saved)
+========================= */
+async function fetchAllCorpuses() {
+  const res = await fetch("/getallcorpuses", { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`Failed to load corpuses: ${res.status}`);
+  const items = await res.json();
+  // Expect [{id, name, is_draft, created_at}]
+  return Array.isArray(items) ? items : [];
+}
 
+async function loadCorpusCheckboxTable() {
+  const tbody = document.getElementById("corpusCheckboxTable");
+  const trainBtn = document.getElementById("trainBtn");
+  tbody.innerHTML = `<tr><td colspan="2"><em>Loading...</em></td></tr>`;
 
+  try {
+    const items = await fetchAllCorpuses();
 
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="2"><em>No corpuses found.</em></td></tr>`;
+      trainBtn.disabled = true;
+      return;
+    }
+
+    const rows = items.map((it, idx) => {
+      const safeName = escapeHtml(it.name || "");
+      const badge = it.is_draft ? `<span class="badge rounded-pill text-bg-warning ms-2">Draft</span>` : "";
+      const id = `corpus_${idx}`;
+      return `
+        <tr>
+          <td class="text-center" style="width:80px;">
+            <input
+              type="checkbox"
+              class="form-check-input"
+              name="corpus"
+              id="${id}"
+              data-id="${escapeHtml(it.id || '')}"
+              data-name="${safeName}"
+              data-draft="${it.is_draft ? '1' : '0'}"
+            >
+          </td>
+          <td>
+            <label class="ms-1 mb-0" for="${id}">${safeName}${badge}</label>
+          </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = rows.join("");
+
+    // Enable Train only if at least one selected
+    const updateTrain = () => {
+      const anyChecked = document.querySelectorAll('input[name="corpus"]:checked').length > 0;
+      trainBtn.disabled = !anyChecked;
+    };
+    document.querySelectorAll('input[name="corpus"]').forEach(cb => {
+      cb.addEventListener("change", updateTrain);
+    });
+    updateTrain();
+
+  } catch (e) {
+    console.error("Error loading corpuses:", e);
+    tbody.innerHTML = `<tr><td colspan="2" class="text-danger"><em>Failed to load corpuses.</em></td></tr>`;
+    trainBtn.disabled = true;
+  }
+}
+
+/* =========================
+   Delete corpus (optional)
+   NOTE: drafts generally shouldn't be deleted here;
+   this call expects a saved corpus name on your backend.
+========================= */
 async function deleteCorpus(name) {
   if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
 
   try {
     const res = await fetch(`/delete-corpus/`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ corpus_name: name })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
       console.error("Server responded with error:", data);
-      alert(`Error: ${data.message}`);
+      alert(`Error: ${data.message || 'Delete failed'}`);
       return;
     }
 
-    alert(data.message);
-    loadCorpusCheckboxTable(); // reload the table after deletion
+    alert(data.message || "Deleted.");
+    loadCorpusCheckboxTable();
   } catch (err) {
     console.error("Fetch failed:", err);
     alert("Failed to delete the corpus.");
   }
 }
 
-
-
-
-
+/* =========================
+   Model config (YAML)
+========================= */
 async function loadModelConfig() {
   if (Object.keys(modelConfig).length) return;
-
   try {
     const res = await fetch("/static/config/config.yaml");
-    const yamlText = await res.text();           // Read as text
-    modelConfig = jsyaml.load(yamlText);          // Parse YAML into JS object
-    console.log("Loaded model config:", modelConfig);
+    const yamlText = await res.text();
+    modelConfig = jsyaml.load(yamlText) || {};
+    // console.log("Loaded model config:", modelConfig);
   } catch (error) {
     console.error("Error loading model config:", error);
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+/* =========================
+   Advanced toggle
+========================= */
+function initAdvancedToggle() {
   const toggleButton = document.getElementById("toggleAdvanced");
   const advancedSection = document.getElementById("advancedSettings");
+  if (!toggleButton || !advancedSection) return;
 
   toggleButton.addEventListener("click", () => {
-      const isVisible = advancedSection.style.display === "block";
-      advancedSection.style.display = isVisible ? "none" : "block";
-      toggleButton.textContent = isVisible ? "Show Advanced Settings" : "Hide Advanced Settings";
+    const isVisible = advancedSection.style.display === "block";
+    advancedSection.style.display = isVisible ? "none" : "block";
+    toggleButton.textContent = isVisible ? "Show Advanced Settings" : "Hide Advanced Settings";
   });
-});
+}
 
+/* =========================
+   Duplicate model name guard (optional)
+========================= */
+async function initModelNameGuard() {
+  const modelInput  = document.getElementById("modelNameInput");
+  const warningText = document.getElementById("nameWarning");
+  if (!modelInput || !warningText) return;
 
+  let existingModelNames = [];
+  try {
+    const res = await fetch("/get_models");
+    if (res.ok) existingModelNames = await res.json();
+  } catch (err) {
+    // Non-fatal
+  }
+
+  const confirmButton = document.getElementById("confirmModelName");
+  const onChange = () => {
+    const enteredName = modelInput.value.trim().toLowerCase();
+    const dup = existingModelNames.some(n => String(n).toLowerCase() === enteredName);
+    if (dup) {
+      warningText.style.display = "block";
+      modelInput.classList.add("is-invalid");
+      if (confirmButton) confirmButton.disabled = true;
+    } else {
+      warningText.style.display = "none";
+      modelInput.classList.remove("is-invalid");
+      if (confirmButton) confirmButton.disabled = false;
+    }
+  };
+  modelInput.addEventListener("input", onChange);
+  onChange();
+}
+
+/* =========================
+   Render params into modal
+   Expects: modelConfig.topic_modeling[model]
+========================= */
 function renderParamsIntoModal(model) {
   const container = document.getElementById('modelParamsArea');
   container.innerHTML = '';
 
-  const params = modelConfig.topic_modeling[model];  // Adjust based on your structure
+  const paramsRoot = (modelConfig && modelConfig.topic_modeling) || {};
+  const params = paramsRoot[model];
   if (!params) return;
 
-  for (const key in params) {
-      const value = params[key];
+  for (const key of Object.keys(params)) {
+    const value = params[key];
 
-      // Each input will take half-width (col-6)
-      const col = document.createElement('div');
-      col.className = 'col-md-6'; // You can change to 'col-md-4' if you want 3 columns
+    const col = document.createElement('div');
+    col.className = 'col-md-6';
 
-      const label = document.createElement('label');
-      label.textContent = key.replace(/_/g, " ");
-      label.setAttribute('for', key);
-      label.classList.add('form-label');
+    const label = document.createElement('label');
+    label.textContent = key.replace(/_/g, " ");
+    label.setAttribute('for', key);
+    label.classList.add('form-label');
 
-      const input = document.createElement('input');
-      input.type = typeof value === 'number' ? 'number' : 'text';
-      input.className = 'form-control';
-      input.id = key;
-      input.name = key;
-      input.value = value ?? '';
+    const input = document.createElement('input');
+    input.type = (typeof value === 'number') ? 'number' : 'text';
+    input.className = 'form-control';
+    input.id = key;
+    input.name = key;
+    input.value = value ?? '';
 
-      col.appendChild(label);
-      col.appendChild(input);
-      container.appendChild(col);
+    col.appendChild(label);
+    col.appendChild(input);
+    container.appendChild(col);
   }
 }

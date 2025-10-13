@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TOVA · Training Dashboard (Demo)</title>
+  <title>TOVA · Training Dashboard</title>
 
   <!-- Bootstrap 5.3 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
@@ -16,146 +16,186 @@
     flex-direction: column;
   }
 
-  main {
-  flex: 1 1 auto;
-  padding: 1rem;
-  overflow: hidden; /* prevent it from overflowing the screen */
-  display: flex;
-  gap: 1rem;
-}
-.flex-grow-1 {
-  overflow-y: auto;
-  min-height: 0; /* important for flex children inside a fixed-height parent */
-}
-
-
-
-.xsmall {
-    font-size: 0.7rem !important;
-  }
-.compact-metric {
-padding: 4px 6px !important;
-margin-bottom: 4px !important;
-border-radius: 4px;
-}
-
-.truncate-cell {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-#docTableBody tr:hover {
-  background-color: #f9f9f9;
-  cursor: pointer;
-}
-
-.small-text {
-  font-size: 0.85rem;
-  line-height: 1.2;
-}
-.truncate-cell {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  padding: 1rem;
-  width: 100%;
-  height: auto;            /* ⬅️ Let height adjust to content */
-  box-sizing: border-box;
-  overflow: visible;       /* ⬅️ Ensure nothing gets cut off */
-}
-
-
-.table-scroll-container {
-  flex-grow: 1;
-  overflow-y: auto;
-  min-height: 0;
-}
-
-  .truncate-cell {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 200px; /* Adjust as needed */
-    cursor: pointer;
-  }
-
-  #docDetailModal {
-  z-index: 1065;
-}
-.modal-backdrop + .modal-backdrop {
-  z-index: 1060;
-}
-#themeStatsTable th,
-  #themeStatsTable td {
-    padding: 0.3rem 0.5rem !important;
-    font-size: 0.85rem;
-  }
-
-  #themeStatsTable tr {
-    line-height: 1.1;
-  }
-  #themeStatsTable th,
-  #themeStatsTable td {
-    padding: 0.25rem 0.4rem !important;
-    vertical-align: middle;
-  }
-
-  .table-scroll-wrapper {
-    max-height: 100%;
-  }
-
-  .panel h6 {
-    font-size: 0.8rem;
-    margin-bottom: 0.3rem;
-  }
-
-  /* Make ID column narrower */
-footer {
-      background-color: #f1f3f5;
-      text-align: center;
-      padding: 0.75rem;
-      font-size: 0.9rem;
-      border-top: 1px solid #dee2e6;
+      main {
+      flex: 1 1 auto;
+      padding: 1rem;
+      overflow: hidden; /* prevent it from overflowing the screen */
+      display: flex;
+      gap: 1rem;
+    }
+    .flex-grow-1 {
+      overflow-y: auto;
+      min-height: 0; /* important for flex children inside a fixed-height parent */
     }
 
-table {
-  border-collapse: collapse; /* keep default look */
-}
-
-  .theme-stripe {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 6px;
-    height: 100%;
-    background-color: var(--theme-color, #ccc);
-    border-top-left-radius: 0.5rem;
-    border-bottom-left-radius: 0.5rem;
-  }
-
-  .theme-colored-border {
-    border-left: 4px solid var(--theme-color, #ccc);
-  }
-
-  .theme-bordered .modal-header h5 {
-    color: var(--theme-color, #333);
-  }
 
 
+    .xsmall {
+        font-size: 0.7rem !important;
+      }
+    .compact-metric {
+    padding: 4px 6px !important;
+    margin-bottom: 4px !important;
+    border-radius: 4px;
+    }
 
+    .truncate-cell {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #docTableBody tr:hover {
+      background-color: #f9f9f9;
+      cursor: pointer;
+    }
+
+    .small-text {
+      font-size: 0.85rem;
+      line-height: 1.2;
+    }
+    .truncate-cell {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      width: 100%;
+      height: auto;            /* ⬅️ Let height adjust to content */
+      box-sizing: border-box;
+      overflow: visible;       /* ⬅️ Ensure nothing gets cut off */
+    }
+
+
+    .table-scroll-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+      .truncate-cell {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px; /* Adjust as needed */
+        cursor: pointer;
+      }
+
+      #docDetailModal {
+      z-index: 1065;
+    }
+    .modal-backdrop + .modal-backdrop {
+      z-index: 1060;
+    }
+    #themeStatsTable th,
+      #themeStatsTable td {
+        padding: 0.3rem 0.5rem !important;
+        font-size: 0.85rem;
+      }
+
+      #themeStatsTable tr {
+        line-height: 1.1;
+      }
+      #themeStatsTable th,
+      #themeStatsTable td {
+        padding: 0.25rem 0.4rem !important;
+        vertical-align: middle;
+      }
+
+      .table-scroll-wrapper {
+        max-height: 100%;
+      }
+
+      .panel h6 {
+        font-size: 0.8rem;
+        margin-bottom: 0.3rem;
+      }
+
+      /* Make ID column narrower */
+    footer {
+          background-color: #f1f3f5;
+          text-align: center;
+          padding: 0.75rem;
+          font-size: 0.9rem;
+          border-top: 1px solid #dee2e6;
+        }
+
+    table {
+      border-collapse: collapse; /* keep default look */
+    }
+
+      .theme-stripe {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 6px;
+        height: 100%;
+        background-color: var(--theme-color, #ccc);
+        border-top-left-radius: 0.5rem;
+        border-bottom-left-radius: 0.5rem;
+      }
+
+      .theme-colored-border {
+        border-left: 4px solid var(--theme-color, #ccc);
+      }
+
+      .theme-bordered .modal-header h5 {
+        color: var(--theme-color, #333);
+      }
+
+    .training-progress {
+      position: relative;
+      height: 1.25rem;
+      background-color: var(--bs-gray-200);
+      border-radius: var(--bs-progress-border-radius, .375rem);
+      overflow: hidden;
+    }
+    /* Indeterminate overlay; JS toggles display */
+    .training-progress .indeterminate {
+      display: none; /* shown by JS when % unknown */
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    .training-progress .indeterminate::before {
+      content: "";
+      position: absolute;
+      height: 100%;
+      width: 40%;
+      left: -40%;
+      background: linear-gradient(90deg, rgba(0,0,0,0), rgba(13,110,253,.25), rgba(0,0,0,0));
+      animation: indet-slide 1.2s infinite ease-in-out;
+    }
+    @keyframes indet-slide {
+      0% { left: -40%; }
+      50% { left: 60%; }
+      100% { left: 140%; }
+    }
   
-
-
+    /* Pulse status dot (JS adds .done / .error) */
+    .pulse-dot {
+      display: inline-block;
+      width: .65rem;
+      height: .65rem;
+      border-radius: 50%;
+      background: #0d6efd;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+    .pulse-dot.done  { background: #198754; animation: none; }
+    .pulse-dot.error { background: #dc3545; animation: none; }
+    @keyframes pulse {
+      0%   { transform: scale(.9); opacity: .6; }
+      50%  { transform: scale(1);  opacity: 1;  }
+      100% { transform: scale(.9); opacity: .6; }
+    }
   </style>
 </head>
 
@@ -187,28 +227,55 @@ table {
     </div>
   </nav>
 
-  <!-- PROGRESS BAR (sticky) -->
   <div class="container-fluid">
-    <div class="card shadow-soft mb-1">
+    <div class="card shadow-sm mb-3">
       <div class="card-body py-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div id="trainingMessage" class="fw-semibold">Initializing training…</div>
-          <small id="etaText" class="text-muted">ETA — estimating…</small>
-        </div>
-        <div class="progress mt-2" style="height:1.3rem;">
-          <div id="trainingBar" class="progress-bar progress-bar-striped progress-bar-animated"
-               role="progressbar" style="width:0%">0%</div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="pulse-dot" id="trainingDot" aria-hidden="true"></span>
+            <!-- aria-live to announce status changes -->
+            <div id="trainingMessage" class="fw-semibold" aria-live="polite">Initializing training…</div>
+          </div>
+          <small id="etaText" class="text-muted" aria-live="polite">ETA — estimating…</small>
         </div>
   
-        <!-- ✅ Proceed button shown when training finishes -->
-        <div id="redirectButtonContainer" class="mt-3 text-end" style="display: none;">
-          <button id="goToModelBtn" class="btn btn-success">
-            Proceed to Trained Model
-          </button>
+        <!-- Progress: determinate bar + indeterminate overlay (JS toggles which is visible) -->
+        <div class="progress mt-3 training-progress" role="progressbar" aria-label="Training progress">
+          <!-- Determinate (percent) -->
+          <div id="trainingBar"
+               class="progress-bar progress-bar-striped"
+               style="width:0%"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            0%
+          </div>
+          <!-- Indeterminate (overlay) -->
+          <div id="indeterminateBar" class="indeterminate" aria-hidden="true"></div>
         </div>
+  
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <!-- Left side -->
+          <div class="small text-muted mb-0" id="activityLine" aria-live="polite">
+            Preparing…
+          </div>
+        
+          <!-- Right side -->
+          <div id="redirectButtonContainer" class="text-end d-none">
+            <button id="goToModelBtn" class="btn btn-success">
+              View Trained Models
+            </button>
+          </div>
+        </div>
+        
+
+
+        </div>
+        
       </div>
     </div>
   </div>
+  
+
+
   
   
   <main class="d-flex flex-grow-1 gap-3" style="height: calc(100vh - 120px);">
@@ -365,6 +432,30 @@ table {
       </div>
     </div>
   </div>
+  <!-- ✅ Training Complete Modal -->
+    <div class="modal fade" id="trainingCompleteModal" tabindex="-1" aria-labelledby="trainingCompleteLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title fw-semibold" id="trainingCompleteLabel">🎉 Training Complete</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center py-4">
+            <p class="fs-6 mb-3">
+              Your model has finished training successfully!  
+             Click <b>“View Trained Models”</b> to see your models, then select one to open its dashboard.
+   
+            </p>
+            <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+          </div>
+          <div class="modal-footer justify-content-center border-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" id="viewModelsBtn" class="btn btn-success">View Trained Models</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   
   
 
@@ -423,124 +514,400 @@ table {
   <!-- === DEMO SCRIPT (unchanged logic, only order) =================== -->
   
   <script>
-
-    let allDocuments = []
-    let filteredDocs = []
-
-
-
+    /* ==============================
+       Config / Globals
+    ============================== */
+    let POLL_TIMER = null;
+    let POLL_ABORT = null;        // AbortController for the current fetch
+    let COMPLETION_SHOWN = false; // prevent duplicate modal
+    const DEBUG = true;
+    
+    const FALLBACK_STATUS_URL = "/status/"; // if no Location/jobId is returned
+    
+    let allDocuments = [];
+    let filteredDocs = [];
+    
+    /* ==============================
+       Boot
+    ============================== */
     document.addEventListener("DOMContentLoaded", async () => {
-      // const storedData = sessionStorage.getItem("modelTrainingData");
-
-      // if (!storedData) {
-      //   alert("No training data found.");
-      //   return;
-      // }
-
-      // const requestData = JSON.parse(storedData);
-      // const modelName = requestData.save_name;
-      const jsonlPath = `/static/data/outputmodel6.jsonl`;
-
-      try {
-        // Load combined output JSON (not JSONL anymore)
-        const response = await fetch(jsonlPath);
-        if (!response.ok) throw new Error("File not found");
-
-        const jsonData = await response.json();
-        // console.log()
-
-        // ✅ Use jsonData.documents for rendering
-        renderThemeVisualizations(jsonData.documents);
-        const perClusterMetrics = jsonData.per_cluster || [];
-        // console.log(perClusterMetrics);
-        populateThemeDiagnosticsTable(perClusterMetrics);
-        const globalMetrics = jsonData.global;
-        populateThemeInsights(globalMetrics);
-
-        renderDocumentTable(jsonData.documents);
-
-
-        document.getElementById("filterBtn").addEventListener("click", filterAndRenderDocuments);
-        document.getElementById("docSearchInput").addEventListener("input", filterAndRenderDocuments);
-
-        document.getElementById('filteredSearchInput').addEventListener("input", (e) => {
-          filterAndRenderThemeDocuments(e);
-        });
-
-        // After loading documents
-        allDocuments = jsonData.documents;
-
-        populateThemeFilterOptions(allDocuments);
-        
-        filterAndRenderDocuments(allDocuments);  
-
-
-        const toggleMetricBtn = document.getElementById("toggleMetricBtn");
-        toggleMetricBtn.addEventListener("click", () => {
-            const showingTheme = !themeMetricsPanel.classList.contains("d-none");
-          
-            themeMetricsPanel.classList.toggle("d-none", showingTheme);
-            modelMetricsPanel.classList.toggle("d-none", !showingTheme);
-          
-            toggleMetricBtn.textContent = showingTheme
-              ? "Switch to Theme Metrics"
-              : "Switch to Model Metrics";
-          });
-
-        
-      } catch (err) {
-        console.error("Failed to load visualization data:", err);
-        alert("Could not load visualization results.");
+      const params = new URLSearchParams(location.search);
+      const corpusId = params.get("corpus_id");
+    
+      if (!corpusId) {
+        console.error("Missing corpus_id in query string.");
+        alert("Missing corpus_id.");
         return;
       }
-
-      // ✅ Begin training tracking
-      try {
-        await startTrainingOnce();   // assumes this hits `/start` endpoint
-        fetchTrainingStatus();       // starts polling
-        startActualTraining();       // optional if it performs other logic
-      } catch (err) {
-        console.error("Training startup error:", err);
-      }
+    
+      await loadVisualization(corpusId);
+      wireUI();
+    
+      // Auto-start training status polling
+      await initTraining(corpusId);
     });
-
-
+    
+    /* ==============================
+       Visualization (independent)
+    ============================== */
+    async function loadVisualization(corpusId) {
+      console.groupCollapsed("[viz] loadVisualization");
+      try {
+        const url = `/corpus/${encodeURIComponent(corpusId)}/tfidf/`;
+        if (DEBUG) console.info("[viz] GET", url);
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`Failed to load TF-IDF: ${res.status} ${txt}`);
+        }
+    
+        const jsonData = await res.json();
+        if (DEBUG) console.info("[viz] TF-IDF data:", jsonData);
+    
+        // Render
+        const docs = Array.isArray(jsonData.documents) ? jsonData.documents : [];
+        renderThemeVisualizations(docs);
+        populateThemeDiagnosticsTable(jsonData.per_cluster || {});
+        populateThemeInsights(jsonData.global || {});
+        renderDocumentTable(docs);
+    
+        allDocuments = docs;
+        populateThemeFilterOptions(allDocuments);
+        filterAndRenderDocuments(allDocuments);
+      } catch (err) {
+        console.error("[viz] Error:", err);
+        alert("Could not load visualization results.");
+      } finally {
+        console.groupEnd();
+      }
+    }
+    
+    /* ==============================
+       Training (separate from viz)
+    ============================== */
+    async function initTraining(corpusId) {
+      console.groupCollapsed("[training] initTraining");
+      try {
+        const { statusUrl, jobId } = await callTrainingInfo(corpusId);
+    
+        if (!statusUrl && !jobId) {
+          console.warn("[training] No status URL or jobId returned. Training not started.");
+          return;
+        }
+    
+        const resolvedUrl = statusUrl || (jobId ? `/status/jobs/${encodeURIComponent(jobId)}` : FALLBACK_STATUS_URL);
+        if (DEBUG) console.info("[training] Polling URL:", resolvedUrl);
+    
+        startPolling(resolvedUrl, 1000);
+      } catch (err) {
+        console.error("[training] initTraining error:", err);
+        updateTrainingUI({ error: "Failed to start training." });
+      } finally {
+        console.groupEnd();
+      }
+    }
+    
+    /* ==============================
+       UI Wiring
+    ============================== */
+    function wireUI() {
+      document.getElementById("filterBtn")?.addEventListener("click", filterAndRenderDocuments);
+      document.getElementById("docSearchInput")?.addEventListener("input", filterAndRenderDocuments);
+      document.getElementById("filteredSearchInput")?.addEventListener("input", (e) => {
+        filterAndRenderThemeDocuments(e);
+      });
+    
+      const toggleMetricBtn = document.getElementById("toggleMetricBtn");
+      const themeMetricsPanel = document.getElementById("themeMetricsPanel");
+      const modelMetricsPanel = document.getElementById("modelMetricsPanel");
+      if (toggleMetricBtn && themeMetricsPanel && modelMetricsPanel) {
+        toggleMetricBtn.addEventListener("click", () => {
+          const showingTheme = !themeMetricsPanel.classList.contains("d-none");
+          themeMetricsPanel.classList.toggle("d-none", showingTheme);
+          modelMetricsPanel.classList.toggle("d-none", !showingTheme);
+          toggleMetricBtn.textContent = showingTheme
+            ? "Switch to Theme Metrics"
+            : "Switch to Model Metrics";
+        });
+      }
+    
+      // Optional manual trigger if you add a button with this id
+      const startBtn = document.getElementById("startTrainingBtn");
+      if (startBtn && !startBtn.dataset.bound) {
+        startBtn.addEventListener("click", async () => {
+          const params = new URLSearchParams(location.search);
+          const corpusId = params.get("corpus_id");
+          if (!corpusId) return alert("Missing corpus_id.");
+          await initTraining(corpusId);
+        });
+        startBtn.dataset.bound = "1";
+      }
+    }
+    
+    /* ==============================
+       Training helpers
+    ============================== */
+    async function callTrainingInfo(corpusId) {
+      const url = `/train/trainingInfo/${encodeURIComponent(corpusId)}/`;
+      if (DEBUG) console.info("[training] GET", url);
+      const resp = await fetch(url, { method: "GET", cache: "no-store" });
+    
+      const contentType = resp.headers.get("Content-Type") || "";
+      const locationHeader = resp.headers.get("Location") || null;
+    
+      let body = null;
+      if (contentType.includes("application/json")) {
+        try { body = await resp.json(); } catch { body = null; }
+      } else {
+        body = await resp.text().catch(() => "");
+      }
+    
+      if (!resp.ok) {
+        console.error("[training] trainingInfo failed:", resp.status, body);
+        return { statusUrl: null, jobId: null };
+      }
+    
+      // Prefer JSON job_id, fall back to Location header
+      let jobId = (body && typeof body === "object" && body.job_id) ? body.job_id : null;
+      if (!jobId && locationHeader) {
+        const m = locationHeader.match(/\/status\/jobs\/([^/\s]+)/);
+        if (m) jobId = m[1];
+      }
+    
+      // Store it somewhere visible if you want
+      const jobIdEl = document.getElementById("job_id");
+      if (jobIdEl && jobId) {
+        if ("value" in jobIdEl) jobIdEl.value = jobId;
+        else jobIdEl.textContent = jobId;
+        jobIdEl.dataset.jobId = jobId;
+      }
+    
+      const statusUrl = locationHeader || (jobId ? `/status/jobs/${encodeURIComponent(jobId)}` : null);
+      if (DEBUG) console.info("[training] response:", body, "job_id:", jobId, "statusUrl:", statusUrl);
+    
+      return { statusUrl, jobId };
+    }
+    
+    function startPolling(statusUrl, intervalMs) {
+      stopPolling(); // clear any previous
+      updateTrainingUI({ status: "starting" });
+      scheduleNextPoll(statusUrl, intervalMs);
+    }
+    
+    function stopPolling() {
+      if (POLL_TIMER) clearTimeout(POLL_TIMER);
+      POLL_TIMER = null;
+      if (POLL_ABORT) POLL_ABORT.abort();
+      POLL_ABORT = null;
+    }
+    
+    function scheduleNextPoll(statusUrl, intervalMs) {
+      if (POLL_TIMER) clearTimeout(POLL_TIMER);
+      POLL_TIMER = setTimeout(() => pollOnce(statusUrl, intervalMs), intervalMs);
+    }
+    
+    async function pollOnce(statusUrl, intervalMs) {
+      try {
+        // Allow cancellation of this specific fetch
+        POLL_ABORT = new AbortController();
+        const response = await fetch(statusUrl, { cache: "no-store", signal: POLL_ABORT.signal });
+        if (!response.ok) {
+          const isTransient = [429, 500, 502, 503, 504].includes(response.status);
+          if (isTransient) {
+            scheduleNextPoll(statusUrl, Math.min(intervalMs * 2, 10000));
+            return;
+          }
+          throw new Error(`Status fetch failed: ${response.status}`);
+        }
+    
+        const data = await response.json().catch(() => ({}));
+        const { done, error, progress } = data || {};
+    
+        updateTrainingUI(data);
+    
+        // Completion detection
+        const finishedStatuses = new Set(["succeeded", "completed", "finished", "success"]);
+        const isFinished =
+          !!done ||
+          (typeof progress === "number" && progress >= 1) ||
+          (data.status && finishedStatuses.has(String(data.status).toLowerCase()));
+    
+        if (error || isFinished) {
+          stopPolling();
+          if (isFinished && !COMPLETION_SHOWN) {
+            COMPLETION_SHOWN = true;
+            showTrainingCompleteModal();
+          }
+          return;
+        }
+    
+        scheduleNextPoll(statusUrl, intervalMs);
+      } catch (err) {
+        if (err.name === "AbortError") return; // cancelled due to stopPolling
+        console.error("[training] polling error:", err);
+        updateTrainingUI({ error: "Error connecting to training service." });
+        scheduleNextPoll(statusUrl, 5000);
+      }
+    }
+    
+    /* ==============================
+       Training UI
+    ============================== */
+    function updateTrainingUI(data = {}) {
+      const trainingEl  = document.getElementById("trainingMessage");
+      const etaEl       = document.getElementById("etaText");
+      const activityEl  = document.getElementById("activityLine");
+      const btnWrap     = document.getElementById("redirectButtonContainer");
+      const goBtn       = document.getElementById("goToModelBtn");
+      const detBar      = document.getElementById("trainingBar");
+      const indBar      = document.getElementById("indeterminateBar");
+      const dot         = document.getElementById("trainingDot");
+    
+      if (!trainingEl || !etaEl || !activityEl) return;
+    
+      const {
+        status, phase, progress, eta_seconds, queued_position,
+        message, done, error
+      } = data;
+    
+      // progress → 0..100 or null
+      let pct = null;
+      if (typeof progress === "number" && !Number.isNaN(progress)) {
+        pct = progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
+        pct = Math.max(0, Math.min(100, pct));
+      }
+    
+      // Headline
+      let mainText = "Initializing training…";
+      if (error) mainText = `Error: ${String(error)}`;
+      else if (done) mainText = "Training complete!";
+      else if (status === "queued") mainText = `Queued${Number.isFinite(queued_position) ? ` (position ${queued_position})` : ""}…`;
+      else if (status === "running" || status === "starting") {
+        mainText = `Training${phase ? ` — ${phase}` : ""}…${pct !== null ? ` ${pct}%` : ""}`;
+      } else if (status) {
+        mainText = `${status.charAt(0).toUpperCase() + status.slice(1)}…${pct !== null ? ` ${pct}%` : ""}`;
+      } else if (message) {
+        mainText = message;
+      }
+      trainingEl.textContent = mainText;
+    
+      // ETA
+      let etaText = "";
+      if (error) etaText = "—";
+      else if (done) etaText = "Completed";
+      else if (Number.isFinite(eta_seconds) && eta_seconds >= 0) etaText = `ETA — ~${formatETA(eta_seconds)}`;
+      else if (status === "queued" && Number.isFinite(queued_position)) etaText = "Waiting for capacity…";
+      etaEl.textContent = etaText;
+    
+      // Single activity line
+      if (error)       activityEl.textContent = "An error occurred. Check logs for details.";
+      else if (done)   activityEl.textContent = "Finalizing artifacts…";
+      else if (phase)  activityEl.textContent = `Current activity: ${phase}`;
+      else if (message)activityEl.textContent = String(message);
+      else if (status) activityEl.textContent = `Status: ${status}`;
+      else             activityEl.textContent = "Working…";
+    
+      // Visual helpers
+      const setProgress = ({ percent = null, running = true } = {}) => {
+        if (!detBar || !indBar) return;
+        if (!running) {
+          detBar.style.display = "none";
+          indBar.style.display = "none";
+          return;
+        }
+        if (percent === null) {
+          detBar.style.display = "none";
+          indBar.style.display = "block";
+        } else {
+          indBar.style.display = "none";
+          detBar.style.display = "block";
+          detBar.style.width = `${percent}%`;
+          detBar.textContent = `${percent}%`;
+          detBar.classList.toggle("bg-success", percent === 100);
+        }
+      };
+    
+      const setDotState = (mode) => { // 'run' | 'done' | 'err'
+        if (!dot) return;
+        dot.classList.remove("done", "error");
+        if (mode === "done") dot.classList.add("done");
+        if (mode === "err")  dot.classList.add("error");
+      };
+    
+      const finishedStatuses = new Set(["succeeded", "completed", "finished", "success"]);
+      const isComplete =
+        !!done ||
+        (status && finishedStatuses.has(String(status).toLowerCase())) ||
+        (pct !== null && pct >= 100);
+    
+      if (error) {
+        setDotState("err");
+        setProgress({ percent: null, running: false });
+      } else if (isComplete) {
+        setDotState("done");
+        setProgress({ percent: 100, running: true });
+        // The modal is shown by the poller when it stops polling (prevents double calls)
+      } else {
+        setDotState("run");
+        setProgress({ percent: pct, running: true });
+      }
+    
+      // Show final button when complete
+      if (btnWrap) {
+        if (isComplete && !error) {
+          btnWrap.style.display = "";
+          btnWrap.classList.remove("d-none", "invisible");
+          if (goBtn && !goBtn.dataset.bound) {
+            goBtn.addEventListener("click", () => {
+              window.location.href = "/trained-models";
+            });
+            goBtn.dataset.bound = "1";
+          }
+        } else {
+          btnWrap.style.display = "none";
+        }
+      }
+    }
+    
+    /* ==============================
+       Utilities
+    ============================== */
+    function formatETA(sec) {
+      sec = Math.max(0, Math.floor(Number(sec) || 0));
+      if (sec < 60) return `${sec}s`;
+      const m = Math.floor(sec / 60), s = sec % 60;
+      if (m < 60) return `${m}m ${s}s`;
+      const h = Math.floor(m / 60), mm = m % 60;
+      return `${h}h ${mm}m`;
+    }
+    
+    /* ==============================
+       Renderers (from your code)
+    ============================== */
     function renderThemeVisualizations(docs) {
-      // === [1] BAR CHART: Documents per Cluster ===
       const clusterCounts = {};
       const clusterColors = {};
-
       docs.forEach(doc => {
-        const cluster = doc.cluster;
-        clusterCounts[cluster] = (clusterCounts[cluster] || 0) + 1;
-        if (!clusterColors[cluster]) {
-          clusterColors[cluster] = `hsl(${(cluster * 50) % 360}, 70%, 60%)`;
-        }
+        const c = doc.cluster;
+        clusterCounts[c] = (clusterCounts[c] || 0) + 1;
+        if (!clusterColors[c]) clusterColors[c] = `hsl(${(c * 50) % 360}, 70%, 60%)`;
       });
-
-      const sortedClusters = Object.keys(clusterCounts)
-      .sort((a, b) => clusterCounts[b] - clusterCounts[a]);
-
+    
+      const sortedClusters = Object.keys(clusterCounts).sort((a, b) => clusterCounts[b] - clusterCounts[a]);
       const barLabels = sortedClusters.map(c => `Cluster ${c}`);
       const barCounts = sortedClusters.map(c => clusterCounts[c]);
       const barColors = sortedClusters.map(c => clusterColors[c]);
-
-      // Theme Chart Canvas
+    
       const themeCanvas = document.getElementById("themeChart");
       themeCanvas.hidden = false;
-
       if (window.themeChartInstance) window.themeChartInstance.destroy();
-
+    
       const themeCtx = themeCanvas.getContext("2d");
       window.themeChartInstance = new Chart(themeCtx, {
         type: "bar",
         data: {
           labels: barLabels,
-          datasets: [{
-            label: "Documents per Cluster",
-            data: barCounts,
-            backgroundColor: barColors
-          }]
+          datasets: [{ label: "Documents per Cluster", data: barCounts, backgroundColor: barColors }]
         },
         options: {
           responsive: true,
@@ -548,166 +915,108 @@ table {
             if (elements.length > 0) {
               const index = elements[0].index;
               const clusterId = sortedClusters[index];
-
-              const clusterColor = clusterColors[clusterId]; // 🎯 get the color
-            showThemeDetailModal(clusterId, docs, clusterColor); // ✅ pass it
-
+              const clusterColor = clusterColors[clusterId];
+              showThemeDetailModal(clusterId, docs, clusterColor);
             }
           },
-          plugins: {
-            title: { display: true, text: "Theme Overview", font: { size: 16 } },
-            legend: { display: false }
-          },
-          scales: {
-            x: { title: { display: true, text: "Cluster" } },
-            y: { beginAtZero: true, title: { display: true, text: "Document Count" } }
-          }
+          plugins: { title: { display: true, text: "Theme Overview", font: { size: 16 } }, legend: { display: false } },
+          scales: { x: { title: { display: true, text: "Cluster" } }, y: { beginAtZero: true, title: { display: true, text: "Document Count" } } }
         }
       });
-
-      const datasets = {};
-    docs.forEach(doc => {
-      const cluster = doc.cluster;
-      if (!datasets[cluster]) {
-        datasets[cluster] = {
-          label: `Cluster ${cluster}`,
-          data: [],
-          backgroundColor: clusterColors[cluster]
-        };
-      }
-      datasets[cluster].data.push({
-        x: doc.pca[0],
-        y: doc.pca[1],
-        _doc: doc  // ⬅️ Attach full document info
-      });
-    });
-
-
-
     }
-
-
+    
     function showTextModal(doc) {
-      // Set cluster title
       document.getElementById("modalClusterTitle").textContent = `Cluster ${doc.cluster ?? "–"}`;
-
-      // Set full text
       document.getElementById("modalFullText").textContent = doc.text || "(No text provided)";
-
-      // Set keywords
+    
       const kwContainer = document.getElementById("modalKeywords");
       kwContainer.innerHTML = "";
-      const keywords = doc.keywords || [];
-      keywords.forEach(kw => {
+      (doc.keywords || []).forEach(kw => {
         const badge = document.createElement("span");
         badge.className = "badge bg-secondary";
         badge.textContent = kw;
         kwContainer.appendChild(badge);
       });
-
-      // Show modal
-      const modal = new bootstrap.Modal(document.getElementById("docDetailModal"));
-      modal.show();
+    
+      new bootstrap.Modal(document.getElementById("docDetailModal")).show();
     }
-
-
+    
     async function loadJSONL(path) {
       const response = await fetch(path);
       const text = await response.text();
-      return text.trim().split('\n').map(line => JSON.parse(line));
+      return text.trim().split("\n").map(line => JSON.parse(line));
     }
-
-
+    
     function renderFilteredTable(docs = []) {
       const thead = document.getElementById("filteredTableHead");
       const tbody = document.getElementById("filteredTableBody");
       thead.innerHTML = "";
       tbody.innerHTML = "";
-
+    
       if (docs.length === 0) {
         thead.innerHTML = `<tr><th>No data</th></tr>`;
         tbody.innerHTML = `<tr><td class="text-muted">No documents to display.</td></tr>`;
         return;
       }
-
+    
       const columns = ["id", "text", "score"];
-      const columnWidths = {
-        id: "10%",
-        text: "70%",
-        score: "20%"
-      };
-
-      // ✅ Sort by score descending
+      const widths = { id: "10%", text: "70%", score: "20%" };
       docs.sort((a, b) => (b.score || 0) - (a.score || 0));
-
-      // Table header
+    
       const headerRow = document.createElement("tr");
       columns.forEach(col => {
         const th = document.createElement("th");
         th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
         th.classList.add("small-text", "text-nowrap");
-        th.style.width = columnWidths[col];
+        th.style.width = widths[col];
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
-
-      // Table body
+    
       docs.forEach(doc => {
         const row = document.createElement("tr");
-
         columns.forEach(col => {
           const td = document.createElement("td");
-
+          td.style.width = widths[col];
+          td.classList.add("small-text");
+    
           if (col === "text") {
             const fullText = doc.text || "";
             const offset = Math.floor(fullText.length / 40);
             const tail = fullText.slice(offset);
-
-            // Start from the first full word after offset
             const match = tail.match(/\b\w[^\s]{5,}/);
             const startIndex = match ? tail.indexOf(match[0]) : 0;
             const snippet = tail.slice(startIndex, startIndex + 100).trim() + (fullText.length > offset + 100 ? "…" : "");
-
             td.textContent = snippet;
-            td.classList.add("truncate-cell", "text-primary", "small-text");
+            td.classList.add("truncate-cell", "text-primary");
             td.title = "Click to view full text";
             td.style.cursor = "pointer";
-            td.addEventListener("click", e => {
-              e.stopPropagation();
-              showTextModal(doc);
-            });
+            td.addEventListener("click", e => { e.stopPropagation(); showTextModal(doc); });
           } else if (col === "score" && typeof doc.score === "number") {
             td.textContent = doc.score.toFixed(3);
-            td.classList.add("small-text");
+          } else if (col === "id") {
+            const fullId = doc.id != null ? String(doc.id) : "";
+            const shortId = fullId ? fullId.slice(0, 5) : "—";
+            td.textContent = shortId;
+            if (fullId) td.title = fullId;
           } else {
             td.textContent = doc[col] ?? "—";
-            td.classList.add("small-text");
           }
-
-          td.style.width = columnWidths[col];
+    
           row.appendChild(td);
         });
-
         tbody.appendChild(row);
       });
     }
-
-
+    
     function showThemeDetailModal(clusterId, docs, color = "#ccc") {
-      const clusterDocs = docs.filter(doc => doc.cluster == clusterId);
-
-      // Set the modal title and stripe color
+      const clusterDocs = docs.filter(d => d.cluster == clusterId);
       const modal = document.getElementById("themeDetailModal");
       modal.querySelector("#selectedThemeLabel").textContent = `Theme ${clusterId}`;
-
-      // Set color as CSS variable for dynamic theming
       modal.querySelector(".modal-content").style.setProperty("--theme-color", color);
-
-      // Update border elements
       document.getElementById("keywordsBox").style.borderColor = color;
       document.getElementById("docsBox").style.borderColor = color;
-
-      // Render neutral keyword badges
+    
       const keywordBox = document.getElementById("selectedThemeKeywords");
       keywordBox.innerHTML = "";
       const keywords = clusterDocs[0]?.keywords || [];
@@ -717,155 +1026,32 @@ table {
         span.textContent = kw;
         keywordBox.appendChild(span);
       });
-
-      // Document table
-      filteredDocs = clusterDocs
+    
+      filteredDocs = clusterDocs;
       renderFilteredTable(clusterDocs);
-
+    
       new bootstrap.Modal(modal).show();
     }
-
-
-    let trainingStarted = false;
-
-
-    async function startTrainingOnce() {
-      if (trainingStarted) return; // prevent duplicate calls
-      trainingStarted = true;
-
-      try {
-        const response = await fetch("/start");
-        if (!response.ok) {
-          console.error("Failed to start training:", response.statusText);
-        } else {
-          console.log("✅ Training process started.");
-        }
-      } catch (error) {
-        console.error("Error while starting training:", error);
-      }
-    }
-
-
-    async function startActualTraining() {
-      const fullscreenLoader = document.getElementById('fullscreenLoader');
-      if (fullscreenLoader) fullscreenLoader.style.display = 'flex';
-
-      const storedData = sessionStorage.getItem("modelTrainingData");
-      if (!storedData) {
-        alert("Missing model data.");
-        return;
-      }
-
-      const requestData = JSON.parse(storedData);
-
-      try {
-        const res = await fetch('/train_model', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Model training failed.');
-
-        // ✅ Show success and redirect button
-        alert(data.message || 'Model training completed!');
-        const btnContainer = document.getElementById("redirectButtonContainer");
-        if (btnContainer) btnContainer.style.display = "block";
-
-        document.getElementById("goToModelBtn").addEventListener("click", () => {
-          window.location.href = "/trained-models";
-        });
-
-      } catch (err) {
-        alert("Error during model training: " + err.message);
-        console.error("Training error:", err);
-      } finally {
-        if (fullscreenLoader) fullscreenLoader.style.display = 'none';
-        sessionStorage.removeItem("modelTrainingData");
-      }
-    }
-
-
-    async function fetchTrainingStatus() {
-      try {
-        const response = await fetch("/status");
-        if (!response.ok) throw new Error("Failed to fetch status");
-
-        const data = await response.json();
-        updateTrainingUI(data);
-        
-
-        if (!data.done) {
-          
-          setTimeout(fetchTrainingStatus, 1000); // Keep polling
-        } else {
-          
-          console.log("✅ Model training complete!");
-          document.getElementById("trainingMessage").textContent = "Training complete!";
-          document.getElementById("etaText").textContent = "Completed";
-
-          // ✅ Show the button
-          const btnContainer = document.getElementById("redirectButtonContainer");
-          if (btnContainer) btnContainer.style.display = "block";
-
-          document.getElementById("goToModelBtn").addEventListener("click", () => {
-            window.location.href = "/trained-models";
-          });
-        }
-
-      } catch (err) {
-        console.error("Error fetching training status:", err);
-        document.getElementById("trainingMessage").textContent = "Error connecting to training service.";
-      }
-    }
-
-
-    function updateTrainingUI(data) {
-        const bar = document.getElementById("trainingBar");
-        const msg = document.getElementById("trainingMessage");
-        const eta = document.getElementById("etaText");
-
-        const percent = Math.round(data.progress * 100);
-        bar.style.width = `${percent}%`;
-        bar.textContent = `${percent}%`;
-
-        msg.textContent = data.message || "Training...";
-        eta.textContent = data.eta ? `ETA — ${data.eta}` : "ETA — estimating…";
-
-        if (data.done) {
-          bar.classList.remove("progress-bar-animated");
-          bar.classList.add("bg-success");
-          msg.textContent = "Training complete.";
-          eta.textContent = "";
-        }
-      }
-
-
+    
     function populateThemeDiagnosticsTable(perCluster = {}) {
       const tableHead = document.querySelector("#themeStatsTable thead");
       const tableBody = document.querySelector("#themeStatsTable tbody");
-      const wrapper = document.querySelector("#themeStatsTable").parentElement;
-
-      if (!tableHead || !tableBody || !wrapper) {
-        return console.error("Theme diagnostics table or wrapper elements not found");
-      }
-
+      const wrapper = document.querySelector("#themeStatsTable")?.parentElement;
+      if (!tableHead || !tableBody || !wrapper) return console.error("Theme diagnostics table elements not found");
+    
       tableHead.innerHTML = "";
       tableBody.innerHTML = "";
-
+    
       const clusterKeys = Object.keys(perCluster);
       if (clusterKeys.length === 0) {
         tableHead.innerHTML = `<tr><th>No Data</th></tr>`;
         tableBody.innerHTML = `<tr><td class="text-muted">No diagnostics available.</td></tr>`;
         return;
       }
-
-      const sample = perCluster[clusterKeys[0]];
-      const metrics = Object.keys(sample);
+    
+      const metrics = Object.keys(perCluster[clusterKeys[0]]);
       const columns = ["Cluster", ...metrics];
-
-      // Header row
+    
       const headerRow = document.createElement("tr");
       columns.forEach(col => {
         const th = document.createElement("th");
@@ -874,56 +1060,43 @@ table {
         headerRow.appendChild(th);
       });
       tableHead.appendChild(headerRow);
-
-      // Body rows
+    
       clusterKeys.forEach(clusterId => {
         const row = document.createElement("tr");
         const clusterData = perCluster[clusterId];
-
         columns.forEach(col => {
           const td = document.createElement("td");
           td.classList.add("small-text");
-
           if (col === "Cluster") {
             td.textContent = clusterId;
           } else {
             const val = clusterData[col];
             td.textContent =
               typeof val === "number"
-                ? col.toLowerCase().includes("prevalence")
-                  ? `${(val)}`
-                  : val.toFixed(3)
-                : val ?? "—";
+                ? (col.toLowerCase().includes("prevalence") ? `${val}` : val.toFixed(3))
+                : (val ?? "—");
           }
-
           row.appendChild(td);
         });
-
         tableBody.appendChild(row);
       });
     }
-
-
+    
     function populateThemeInsights(metrics = {}) {
       const container = document.getElementById("themeInsightsGrid");
-      container.innerHTML = ""; // Clear previous content
-
-      if (!metrics || typeof metrics !== "object") {
-        console.warn("Invalid metrics data provided.");
-        return;
-      }
-
+      if (!container) return;
+      container.innerHTML = "";
+    
       const items = [
         { label: "Average Coherence (NPMI)", value: metrics.average_coherence },
         { label: "Average Entropy", value: metrics.average_entropy },
         { label: "Topic Diversity", value: metrics.topic_diversity },
         { label: "IRBO (Balance)", value: metrics.irbo }
       ];
-
-      items.forEach((metric) => {
+    
+      items.forEach(metric => {
         const col = document.createElement("div");
         col.className = "col-md-6";
-
         col.innerHTML = `
           <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light shadow-sm h-100">
             <div class="text-muted small fw-semibold">${metric.label}</div>
@@ -932,135 +1105,150 @@ table {
             </div>
           </div>
         `;
-
         container.appendChild(col);
       });
     }
-
-
+    
     function filterAndRenderDocuments() {
-      const searchTerm = document.getElementById("docSearchInput").value.toLowerCase();
-      const selectedTheme = document.getElementById("themeFilter").value;
-      const minScore = parseFloat(document.getElementById("scoreMin").value);
-      const maxScore = parseFloat(document.getElementById("scoreMax").value);
-
-      let filtered = allDocuments.filter(doc => {
-        const matchesText = !searchTerm || doc.text.toLowerCase().includes(searchTerm);
-        const matchesTheme = !selectedTheme || doc.cluster.toString() === selectedTheme;
-        const matchesMin = isNaN(minScore) || doc.score >= minScore;
-        const matchesMax = isNaN(maxScore) || doc.score <= maxScore;
+      const searchTerm   = (document.getElementById("docSearchInput")?.value || "").toLowerCase();
+      const selectedTheme = document.getElementById("themeFilter")?.value || "";
+      const minScore = parseFloat(document.getElementById("scoreMin")?.value || "");
+      const maxScore = parseFloat(document.getElementById("scoreMax")?.value || "");
+    
+      const filtered = allDocuments.filter(doc => {
+        const matchesText  = !searchTerm || (doc.text || "").toLowerCase().includes(searchTerm);
+        const matchesTheme = !selectedTheme || String(doc.cluster) === selectedTheme;
+        const matchesMin   = isNaN(minScore) || (doc.score ?? -Infinity) >= minScore;
+        const matchesMax   = isNaN(maxScore) || (doc.score ?? Infinity) <= maxScore;
         return matchesText && matchesTheme && matchesMin && matchesMax;
       });
-      
+    
       renderDocumentTable(filtered);
-    } 
-
-
+    }
+    
     function populateThemeFilterOptions(docs) {
       const themeFilter = document.getElementById("themeFilter");
       if (!themeFilter) return;
-
-      const uniqueClusters = [...new Set(docs.map(doc => doc.cluster))].sort((a, b) => a - b);
-
-      // Clear and add default option
+      const uniqueClusters = [...new Set(docs.map(d => d.cluster))].sort((a, b) => a - b);
       themeFilter.innerHTML = `<option value="">All Themes</option>`;
-
-      uniqueClusters.forEach(cluster => {
-        const option = document.createElement("option");
-        option.value = cluster;
-        option.textContent = `${cluster}`;
-        themeFilter.appendChild(option);
+      uniqueClusters.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = `${c}`;
+        themeFilter.appendChild(opt);
       });
     }
-
-
+    
     function renderDocumentTable(docs = []) {
       const thead = document.getElementById("docTableHead");
       const tbody = document.getElementById("docTableBody");
       thead.innerHTML = "";
       tbody.innerHTML = "";
-
+    
       if (docs.length === 0) {
         thead.innerHTML = `<tr><th>No data</th></tr>`;
         tbody.innerHTML = `<tr><td class="text-muted">No documents to display.</td></tr>`;
         return;
       }
-
+    
       const columns = ["id", "text", "cluster", "score"];
-      const columnWidths = {
-        id: "20%",
-        text: "60%",
-        cluster: "10%",
-        score: "10%"
+      const widths  = { id: "10%", text: "70%", cluster: "10%", score: "10%" };
+    
+      // Helpers
+      const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const findStartIndexFromStartWord = (fullText, startWord) => {
+        if (!startWord) return -1;
+        const pattern = new RegExp(`\\b${escapeRegExp(startWord)}\\b`, "i");
+        const match = fullText.match(pattern);
+        return match ? match.index : -1;
       };
-
-      // Table Header
+      const makeSnippet = (fullText, startIdx, maxLen = 80) => {
+        if (startIdx < 0 || startIdx >= fullText.length) startIdx = 0;
+        let snippet = fullText.slice(startIdx, startIdx + maxLen).trim();
+        if (fullText.length > startIdx + maxLen) snippet += "…";
+        return snippet;
+      };
+    
+      // Header
       const headerRow = document.createElement("tr");
       columns.forEach(col => {
         const th = document.createElement("th");
         th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
         th.classList.add("small-text", "align-middle", "text-nowrap");
-        th.style.width = columnWidths[col] || "auto";
+        th.style.width = widths[col] || "auto";
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
-
+    
       // Sort by cluster then score
-      docs.sort((a, b) => {
-        if (a.cluster !== b.cluster) return a.cluster - b.cluster;
-        return (b.score || 0) - (a.score || 0);
-      });
-
-      // Table Rows
+      docs.sort((a, b) => (a.cluster !== b.cluster ? a.cluster - b.cluster : (b.score || 0) - (a.score || 0)));
+    
+      // Rows
       docs.forEach(doc => {
         const row = document.createElement("tr");
-
         columns.forEach(col => {
           const td = document.createElement("td");
           td.classList.add("small-text", "align-middle", "truncate-cell");
-          td.style.width = columnWidths[col] || "auto";
-
+          td.style.width = widths[col] || "auto";
+    
           if (col === "text") {
             const fullText = doc.text || "";
-            const offset = Math.floor(fullText.length / 40);
-            const tail = fullText.slice(offset);
-
-            // Find the first word boundary (space or punctuation)
-            const match = tail.match(/\b\w[^\s]{10,}/); // First word with some length
-            const startIndex = match ? tail.indexOf(match[0]) : 0;
-
-            const snippet = tail.slice(startIndex, startIndex + 80).trim() + (fullText.length > offset + 80 ? "…" : "");
-
+            let startIdx = findStartIndexFromStartWord(fullText, doc.start_word);
+            if (startIdx === -1) {
+              const offset = Math.floor(fullText.length / 40);
+              const tail = fullText.slice(offset);
+              const match = tail.match(/\b\w[^\s]{10,}/);
+              const localIdx = match ? tail.indexOf(match[0]) : 0;
+              startIdx = offset + localIdx;
+            }
+            const snippet = makeSnippet(fullText, startIdx, 80);
             td.textContent = snippet;
             td.classList.add("text-primary");
             td.style.cursor = "pointer";
             td.title = "Click to view full text";
-            td.addEventListener("click", (e) => {
-              e.stopPropagation();
-              showTextModal(doc);
-            });
+            td.addEventListener("click", (e) => { e.stopPropagation(); showTextModal(doc); });
           } else if (col === "score" && typeof doc.score === "number") {
             td.textContent = doc.score.toFixed(3);
+          } else if (col === "id") {
+            const fullId = doc.id != null ? String(doc.id) : "";
+            const shortId = fullId ? fullId.slice(0, 5) : "—";
+            td.textContent = shortId;
+            if (fullId) td.title = fullId;
           } else {
             td.textContent = doc[col] !== undefined ? doc[col] : "—";
           }
-
+    
           row.appendChild(td);
         });
-
         tbody.appendChild(row);
       });
     }
-
-
-    function filterAndRenderThemeDocuments(e) {
-      const term = e.target.value.trim().toLowerCase();
-      const filtered = filteredDocs.filter(doc => doc.text.toLowerCase().includes(term));
-      renderFilteredTable(filtered);
-}
-
-
     
-  </script>
+    function filterAndRenderThemeDocuments(e) {
+      const term = (e.target.value || "").trim().toLowerCase();
+      const filtered = filteredDocs.filter(doc => (doc.text || "").toLowerCase().includes(term));
+      renderFilteredTable(filtered);
+    }
+    
+    /* ==============================
+       Completion Modal
+    ============================== */
+    function showTrainingCompleteModal() {
+      const modalEl = document.getElementById("trainingCompleteModal");
+      if (!modalEl) return; // no modal in DOM
+      const modal = new bootstrap.Modal(modalEl, { backdrop: "static", keyboard: true });
+      modal.show();
+    
+      const btn = document.getElementById("viewModelsBtn");
+      if (btn && !btn.dataset.bound) {
+        btn.addEventListener("click", () => {
+          modal.hide();
+          window.location.href = "/trained-models";
+        });
+        btn.dataset.bound = "1";
+      }
+    }
+    </script>
+    
 </body>
 </html>

@@ -66,6 +66,7 @@ class Model(BaseModel):
 class DraftType(str, Enum):
     model = "model"
     corpus = "corpus"
+    dataset = "dataset"
 
 
 class Draft(BaseModel):

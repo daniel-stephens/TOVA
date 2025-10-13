@@ -167,8 +167,8 @@ footer {
   
   
 
-  <div hidden id="modelName">{{model_name}}</div>
-  <div hidden id="modelId">{{model_id}}</div>
+  <!-- <div hidden id="modelName">{{model_name}}</div> -->
+  <div id="model_id">{{model_id}}</div>
   
 
   <!-- Full Workspace -->
@@ -611,7 +611,8 @@ footer {
     </div>
   </div>
   
-  
+  <pre id="output" style="white-space:pre-wrap; font-family:monospace;"></pre>
+
   
   
 
@@ -623,8 +624,8 @@ footer {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <script src="/static/js/dashboard.js"></script>
-  <script>
+  <!-- <script src="/static/js/dashboard.js"></script> -->
+  <!-- <script>
     model_name = document.getElementById("modelName").textContent;
     console.log(model_name)
     async function showModelDetails(modelName) {
@@ -807,8 +808,46 @@ footer {
 
   
 </script>
-      
+       -->
       
   
+
+       <script>
+  const DASHBOARD_ENDPOINT = "/get-dashboard-data";
+
+  function fetchWithTimeout(resource, { timeout = 20000, ...options } = {}) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    return fetch(resource, { ...options, signal: controller.signal })
+      .finally(() => clearTimeout(id));
+  }
+
+  async function fetchAndPrint(model_id) {
+    try {
+      const res = await fetchWithTimeout(DASHBOARD_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ model_id }),
+        timeout: 25000
+        // credentials: "same-origin", // uncomment if your Flask route needs cookies/session
+      });
+
+      console.log(res)
+
+    } catch (err) {
+      console.error("fetchAndPrint error:", err);
+      const out = document.getElementById("output");
+      if (out) out.textContent = `Error: ${err.message}`;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const el = document.getElementById("model_id");
+    const model_id = el ? el.textContent.trim() : "";
+    fetchAndPrint(model_id);
+  });
+</script>
+
+      
 </body>
 </html>

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import uuid
 from typing import Dict, List, Optional
+from fastapi import Body
 
 from fastapi import (APIRouter, BackgroundTasks, HTTPException,  # type: ignore
                      Response, status)
@@ -15,9 +16,10 @@ from tova.api.jobs.tokens import cancellation_tokens
 from tova.api.logger import logger
 from tova.api.models.train_schemas import TrainRequest, TrainResponse
 from tova.core.dispatchers import train_model_dispatch
+from tova.core.tfidf_lsi import *
 from tova.utils.cancel import CancellationToken, CancelledError
 from tova.utils.tm_utils import normalize_json_data
-
+from tova.core.tfidf_lsi import _save_training_payload
 router = APIRouter(tags=["Training"])
 
 # paths to temporary storage
@@ -153,3 +155,134 @@ async def train_model_from_json(req: TrainRequest, bg: BackgroundTasks, response
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+
+
+
+@router.post("/corpus/{corpus_id}/tfidf/")
+def analyze_corpus_draft_endpoint(
+    corpus_id: str,
+    payload: Optional[Dict[str, Any]] = Body(None),
+) -> Dict[str, Any]:
+    """
+    Analyze a saved corpus draft folder (DRAFTS_SAVE / corpus_id) and return:
+      - metrics
+      - tfidf_details (per-doc terms)
+      - documents (with cluster, score, pca, keywords)
+
+    Body (optional):
+      { "n_clusters": <int, default 15 and must be >= 2> }
+    """
+    try:
+        if not corpus_id or not corpus_id.startswith("c_"):
+            raise ValueError("Invalid corpus_id; expected an id starting with 'c_'")
+
+        n_clusters_raw = (payload or {}).get("n_clusters", 15)
+        n_clusters = int(n_clusters_raw)
+        if n_clusters < 2:
+            raise ValueError("n_clusters must be >= 2")
+
+        logger.info("Starting TF-IDF/cluster analysis for corpus %s (k=%d)", corpus_id, n_clusters)
+
+        # Run analysis
+        result = analyze_corpus_draft_folder(DRAFTS_SAVE, corpus_id, n_clusters=n_clusters)
+
+        # Save training payload for reproducibility
+        corpus_dir = DRAFTS_SAVE / corpus_id
+        # _save_training_payload(corpus_dir, payload or {"n_clusters": n_clusters})
+
+        logger.info("Completed analysis for corpus %s", corpus_id)
+        return result
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Analysis failed for corpus %s", corpus_id)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+
+
+
+@router.get("/corpus/{corpus_id}/tfidf/", summary="Return saved dashboard output for a corpus")
+def get_corpus(corpus_id: str) -> Dict[str, Any]:
+    """
+    Reads <DRAFTS_SAVE>/<corpus_id>/analysis_output.json and returns it.
+    This file is the minimal payload the dashboard expects:
+      {
+        "documents": [...],
+        "per_cluster": {...},
+        "global": {...}
+      }
+    """
+    if not corpus_id or not corpus_id.startswith("c_"):
+        raise HTTPException(status_code=400, detail="Invalid corpus_id; must start with 'c_'")
+
+    corpus_dir = DRAFTS_SAVE / corpus_id
+    if not corpus_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Corpus folder not found: {corpus_id}")
+
+    out_file = corpus_dir / "analysis_output.json"
+    if not out_file.exists():
+        raise HTTPException(status_code=404, detail="analysis_output.json not found; run analysis first")
+
+    try:
+        data = json.loads(out_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read analysis_output.json: {e}")
+
+    # Optional: quick shape validation
+    if not isinstance(data, dict) or "documents" not in data or "per_cluster" not in data or "global" not in data:
+        raise HTTPException(status_code=500, detail="analysis_output.json has unexpected structure")
+
+    return data
+
+
+
+@router.get("/trainingInfo/{corpus_id}/")
+def get_training_payload(corpus_id: str) -> Dict[str, Any]:
+    """
+    Fetch the training parameters saved for a given corpus draft.
+    Reads <DRAFTS_SAVE>/<corpus_id>/training_payload.json
+    """
+    try:
+        if not corpus_id or not corpus_id.startswith("c_"):
+            raise ValueError("Invalid corpus_id; expected an id starting with 'c_'")
+
+        corpus_dir = DRAFTS_SAVE / corpus_id
+        payload_path = corpus_dir / "training_config.json"
+
+        if not payload_path.exists():
+            raise HTTPException(status_code=404, detail="training_config.json not found")
+
+        return json.loads(payload_path.read_text(encoding="utf-8"))
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to read training payload for corpus %s", corpus_id)
+        raise HTTPException(status_code=500, detail=f"Failed to read training payload: {e}")
+
+
+#Place holder for database
+#########################################################
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "dashboard"
+
+@router.get("/dashboard-data/{model_id}/")
+def get_dashboard_data(model_id: str) -> Dict[str, Any]:
+    file_path = DATA_DIR / "dashboardData.json"  # or DATA_DIR / f"{model_id}.json"
+    print(file_path)
+    try:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)      # <-- load ONCE
+        print(data)  # avoid noisy prints in prod
+        return data
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path.name}")
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON in {file_path.name}: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File read error: {e}")
+

@@ -8,7 +8,6 @@
   <!-- Bootstrap CSS & Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
-
   <style>
     .tooltip-custom {
       position: fixed;
@@ -49,6 +48,33 @@
       z-index: 9999; display: none; align-items: center; justify-content: center;
     }
     .spinner-container { text-align: center; }
+
+    .json-pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    background: rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: .5rem;
+    padding: 1rem;
+    white-space: pre;
+    overflow: auto;
+    max-height: 60vh;
+    margin: 0;
+  }
+  .loader-overlay{
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,.55); /* gray/black with transparency */
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2147483647; /* top of everything */
+    pointer-events: all; /* block clicks below */
+  }
+  .loader-card{
+    min-width: 320px; max-width: 90vw;
+    background: #fff; color: #0f172a;
+    border-radius: 12px; padding: 24px 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.25);
+    display: flex; flex-direction: column; align-items: center;
+  }
   </style>
 </head>
 
@@ -93,8 +119,9 @@
         <div class="card shadow">
           <div class="card-body">
             <h2 class="card-title text-center mb-4">Upload Files</h2>
-
-            <form id="uploadForm" action="/validate" method="post" enctype="multipart/form-data">
+  
+            <!-- No action/method needed; mapping flow controls the Continue button -->
+            <form id="uploadForm" enctype="multipart/form-data">
               <!-- Upload Type -->
               <div class="mb-3">
                 <label class="form-label">Upload Type <span class="text-danger">*</span></label><br/>
@@ -107,45 +134,104 @@
                   <label class="form-check-label" for="uploadFolder">Folder</label>
                 </div>
               </div>
-
+            
               <!-- Inputs -->
               <div class="mb-3">
-                <input class="form-control" type="file" id="fileInput" name="file">
+                <input 
+                  class="form-control" 
+                  type="file" 
+                  id="fileInput" 
+                  name="file" 
+                  accept=".csv,.xlsx,.xls,.json,.jsonl"
+                >
               </div>
+            
               <div class="mb-3">
-                <input class="form-control" type="file" id="folderInput" name="files" webkitdirectory directory multiple style="display: none;">
+                <input 
+                  class="form-control" 
+                  type="file" 
+                  id="folderInput" 
+                  name="files" 
+                  webkitdirectory 
+                  directory 
+                  multiple 
+                  style="display: none;" 
+                  accept=".csv,.xlsx,.xls,.json,.jsonl"
+                >
               </div>
-
-              <div id="file-feedback" class="text-danger mb-3"></div>
-
-              <!-- Columns -->
-              <div class="mb-3">
-                <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
-                <select class="form-select" id="textColumn" name="text_column" required>
-                  <option value="" disabled selected>Select text column</option>
-                </select>
-
+            
+              <div id="file-feedback" class="text-danger mb-3" aria-live="polite"></div>
+            
+              <!-- Dynamic mapping container (single file mode) -->
+              <div id="dynamicSingle" class="mb-3">
                 <label for="idColumn" class="form-label mt-3">ID Column <span class="text-danger">*</span></label>
                 <select class="form-select" id="idColumn" name="id_column" required>
                   <option value="" disabled selected>Select id column</option>
                 </select>
-
-                <label for="labelColumn" class="form-label mt-3">Label Column <span class="text-danger">*</span></label>
-                <select class="form-select" id="labelColumn" name="label_column" required>
+            
+                <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
+                <select class="form-select" id="textColumn" name="text_column" required>
+                  <option value="" disabled selected>Select text column</option>
+                </select>
+            
+                <label for="labelColumn" class="form-label mt-3">Label Column</label>
+                <select class="form-select" id="labelColumn" name="label_column">
                   <option value="" disabled selected>Select label column</option>
                 </select>
               </div>
-
+            
+              <!-- Dynamic mapping wizard (folder mode) -->
+              <div id="dynamicFolder" class="mb-3" style="display:none;">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div>
+                    <span class="badge text-bg-secondary">Mapping</span>
+                    <span class="ms-2 file-pill" id="currentFileName">—</span>
+                  </div>
+                  <small id="wizardCounter" class="text-muted">0 / 0</small>
+                </div>
+            
+                <div class="progress mb-3" role="progressbar" aria-label="Mapping progress" aria-valuemin="0" aria-valuemax="100">
+                  <div class="progress-bar" id="mappingProgress" style="width:0%">0%</div>
+                </div>
+            
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label for="idColumnFolder" class="form-label">ID Column <span class="text-danger">*</span></label>
+                    <select class="form-select" id="idColumnFolder" aria-describedby="idHelp"></select>
+                    <div id="idHelp" class="form-text">Unique identifier in this file.</div>
+                  </div>
+                  <div class="col-12">
+                    <label for="textColumnFolder" class="form-label">Text Column Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="textColumnFolder" aria-describedby="textHelp"></select>
+                    <div id="textHelp" class="form-text">Column containing the main content.</div>
+                  </div>
+                  <div class="col-12">
+                    <label for="labelColumnFolder" class="form-label">Label Column (optional)</label>
+                    <select class="form-select" id="labelColumnFolder" aria-describedby="labelHelp"></select>
+                    <div id="labelHelp" class="form-text">Category/label if present.</div>
+                  </div>
+                </div>
+            
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                  <button type="button" id="prevMapBtn" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Previous</button>
+                  <div class="d-flex gap-2">
+                    <button type="button" id="saveMapBtn" class="btn btn-primary">Next <i class="bi bi-arrow-right"></i></button>
+                  </div>
+                </div>
+            
+                <div class="form-text mt-2" id="wizardHint">
+                  Fill the required fields for each file. Continue will unlock once all files are mapped.
+                </div>
+              </div>
+            
               <div class="mb-3">
                 <label for="corpusName" class="form-label">Corpus Name</label>
-                <input type="text" class="form-control" id="corpusName" name="corpusName" placeholder="Enter corpus name">
+                <input type="text" class="form-control" id="corpusName" required name="corpusName" placeholder="Enter corpus name">
               </div>
-
-              <div class="d-flex justify-content-center gap-2">
-                <button type="submit" class="btn btn-primary">Validate</button>
-              </div>
+            
+              <!-- Removed Validate button -->
             </form>
-
+  
             <!-- Selected Files Table -->
             <div class="mt-4">
               <h4>Selected Files:</h4>
@@ -164,17 +250,17 @@
                 </tbody>
               </table>
             </div>
-
+  
             <div class="d-flex justify-content-end">
               <a href="/model" class="btn btn-primary disabled" id="continueBtn" tabindex="-1" aria-disabled="true">Continue</a>
             </div>
-
+  
           </div>
         </div>
       </div>
     </div>
   </div>
-
+  
   <!-- Instruction Modal -->
   <div class="modal fade" id="instructionModal" tabindex="-1" aria-labelledby="instructionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -186,7 +272,7 @@
         <div class="modal-body">
           <p>Follow these guidelines before uploading your files:</p>
           <ul>
-            <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel, PDF</strong></li>
+            <li>Accepted formats: <strong>JSON, JSONL, CSV, Excel</strong></li>
             <li>Ensure files contain:
               <ul>
                 <li><strong>Document Number:</strong> Unique identifier</li>
@@ -203,8 +289,8 @@
       </div>
     </div>
   </div>
-
-  <!-- File Preview Modal (pre-validation quick peek) -->
+  
+  <!-- File Preview Modal -->
   <div class="modal fade" id="filePreviewModal" tabindex="-1" aria-labelledby="filePreviewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
       <div class="modal-content">
@@ -221,71 +307,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Post-Validation Results Modal (automatic after submit) -->
-  <div class="modal fade" id="validationResultsModal" tabindex="-1" aria-labelledby="validationResultsLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="validationResultsLabel">Validation Results</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-
-        <div class="modal-body">
-          <div id="validation-summary" class="mb-3"></div>
-          <div id="validation-tabs"></div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <a href="/model" id="proceedBtn" class="btn btn-primary disabled" tabindex="-1" aria-disabled="true">Proceed</a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Preview Data Modal (from backend /preview endpoint) -->
-  <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="previewModalLabel">Preview Uploaded Data</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-
-        <div class="modal-body">
-          <div class="mb-3">
-            <div class="input-group">
-              <input type="text" class="form-control" id="search-input" placeholder="Search content..." oninput="filterTable()">
-              <button class="btn btn-secondary" onclick="resetTableFilter()">Reset</button>
-            </div>
-          </div>
-
-          <div style="max-height: 400px; overflow-y: auto; width: 100%;">
-            <table class="table table-bordered table-striped table-sm mb-0" style="width: 100%; table-layout: fixed;">
-              <thead>
-                <tr>
-                  <th style="width: 70%; white-space: normal; word-break: break-word;">Content</th>
-                </tr>
-              </thead>
-              <tbody id="preview-table-body">
-                <tr>
-                  <td class="text-center" colspan="2" style="white-space: normal; word-break: break-word;">No data loaded.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Overlay -->
-  <div id="loader-overlay">
+  
+  <div id="loader-overlay" style="display:none;">
     <div class="spinner-container">
       <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
         <span class="visually-hidden">Loading...</span>
@@ -293,526 +316,918 @@
       <p class="text-light mt-3">Processing... Please wait.</p>
     </div>
   </div>
-
+  
+  
   <div id="hoverTooltip" class="tooltip-custom"></div>
-
+  
   <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const fileRadio   = document.getElementById("uploadFile");
-      const folderRadio = document.getElementById("uploadFolder");
-      const fileInput   = document.getElementById("fileInput");
-      const folderInput = document.getElementById("folderInput");
-
-      const textSelect  = document.getElementById("textColumn");
-      const idSelect    = document.getElementById("idColumn");
-      const labelSelect = document.getElementById("labelColumn");
-
-      const loader      = document.getElementById('loader-overlay');
-      const selectedTbody = document.getElementById('selected-files-body');
-      const continueBtn = document.getElementById("continueBtn");
-
-      function getActiveFileInput() {
-        return fileRadio.checked ? fileInput : folderInput;
+  <!-- <script src="{{ url_for('static', filename='js/corpus_draft.js') }}"></script> -->
+</body>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // ===== Allowed file types (single source of truth) =====
+    const allowedExtensions = ['csv', 'xls', 'xlsx', 'json', 'jsonl'];
+  
+    const fileRadio   = document.getElementById("uploadFile");
+    const folderRadio = document.getElementById("uploadFolder");
+    const fileInput   = document.getElementById("fileInput");
+    const folderInput = document.getElementById("folderInput");
+  
+    // Single-file selects
+    const textSelectSingle  = document.getElementById("textColumn");
+    const idSelectSingle    = document.getElementById("idColumn");
+    const labelSelectSingle = document.getElementById("labelColumn");
+  
+    // Folder wizard selects
+    const textSelectFolder  = document.getElementById("textColumnFolder");
+    const idSelectFolder    = document.getElementById("idColumnFolder");
+    const labelSelectFolder = document.getElementById("labelColumnFolder");
+  
+    // Containers / widgets
+    const dynamicSingle = document.getElementById('dynamicSingle');
+    const dynamicFolder = document.getElementById('dynamicFolder');
+    const wizardCounter = document.getElementById('wizardCounter');
+    const currentFileNameEl = document.getElementById('currentFileName');
+    const mappingProgress = document.getElementById('mappingProgress');
+  
+    const selectedTbody = document.getElementById('selected-files-body');
+    const continueBtn   = document.getElementById("continueBtn");
+    const feedback      = document.getElementById('file-feedback');
+  
+    const prevMapBtn  = document.getElementById('prevMapBtn');
+    const saveMapBtn  = document.getElementById('saveMapBtn');
+  
+    // ===== State =====
+    const wizard = { files: [], acceptableCount: 0, index: 0, columns: {}, mappings: {} };
+    let singleFile = null;
+    let singleColumns = [];
+    let singleMapping = { id: '', text: '', label: '' };
+  
+    // ---- expose helpers so the POST step can always read latest state ----
+    function syncExposeSingle() {
+      window.singleFile = singleFile;
+      window.singleMapping = { ...singleMapping };
+    }
+    function syncExposeWizard() {
+      window.wizard = {
+        files: [...wizard.files],
+        acceptableCount: wizard.acceptableCount,
+        index: wizard.index,
+        columns: { ...wizard.columns },
+        mappings: { ...wizard.mappings }
+      };
+    }
+    syncExposeSingle();
+    syncExposeWizard();
+  
+    // ===== Helpers =====
+    function setContinueEnabled(enabled) {
+      if (!continueBtn) return;
+      if (enabled) {
+        continueBtn.classList.remove("disabled");
+        continueBtn.removeAttribute("aria-disabled");
+        continueBtn.removeAttribute("tabindex");
+      } else {
+        continueBtn.classList.add("disabled");
+        continueBtn.setAttribute("aria-disabled", "true");
+        continueBtn.setAttribute("tabindex", "-1");
       }
-
-      function detachFileChangeListeners() {
-        fileInput.removeEventListener("change", getColumns);
-        folderInput.removeEventListener("change", getColumns);
+    }
+    setContinueEnabled(false);
+  
+    function getActiveFileInput() {
+      return (fileRadio && fileRadio.checked) ? fileInput : folderInput;
+    }
+  
+    function detachFileChangeListeners() {
+      if (fileInput)   fileInput.removeEventListener("change", onFilesChanged);
+      if (folderInput) folderInput.removeEventListener("change", onFilesChanged);
+    }
+    function attachFileChangeListener() {
+      const active = getActiveFileInput();
+      if (active) active.addEventListener("change", onFilesChanged);
+    }
+  
+    function isAllowed(fileName) {
+      const ext = (fileName.split('.').pop() || '').toLowerCase();
+      return allowedExtensions.includes(ext);
+    }
+    function sanitizeSelection(files) {
+      return files.filter(f =>
+        f.name !== '.DS_Store' &&
+        !f.name.startsWith('~$') &&
+        isAllowed(f.name)
+      );
+    }
+    function clearSelectedTable() {
+      selectedTbody.innerHTML = '<tr><td colspan="5" class="text-center">No files selected yet.</td></tr>';
+    }
+    function resetSingleSelects() {
+      textSelectSingle.innerHTML  = '<option value="" disabled selected>Select text column</option>';
+      idSelectSingle.innerHTML    = '<option value="" disabled selected>Select id column</option>';
+      labelSelectSingle.innerHTML = '<option value="" disabled selected>Select label column</option>';
+    }
+    function fillSelectOptions(sel, columns, { includeEmpty=true, selected=null } = {}) {
+      sel.innerHTML = '';
+      if (includeEmpty) sel.innerHTML += '<option value="" disabled selected>Select column</option>';
+      columns.forEach(col => {
+        const opt = document.createElement('option');
+        opt.value = col; opt.textContent = col;
+        if (selected && selected === col) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+    function resetFolderSelects() {
+      fillSelectOptions(idSelectFolder, []);
+      fillSelectOptions(textSelectFolder, []);
+      fillSelectOptions(labelSelectFolder, []);
+      currentFileNameEl.textContent = '—';
+      wizardCounter.textContent = '0 / 0';
+      mappingProgress.style.width = '0%';
+      mappingProgress.textContent = '0%';
+    }
+  
+    // --- Single-file header + preview button ---
+    function ensureSingleHeader() {
+      if (document.getElementById('singleHeaderRow')) return;
+      if (!dynamicSingle) return;
+      const header = document.createElement('div');
+      header.className = 'd-flex align-items-center justify-content-between mb-2';
+      header.id = 'singleHeaderRow';
+      header.innerHTML = `
+        <div>
+          <span class="badge text-bg-secondary">Mapping</span>
+          <span class="ms-2 file-pill" id="currentSingleFileName">—</span>
+        </div>
+        <button type="button" id="previewSingleBtn" class="btn btn-outline-secondary btn-sm" style="display:none;">Preview</button>
+      `;
+      dynamicSingle.insertBefore(header, dynamicSingle.firstChild);
+    }
+    async function openSinglePreview(file) {
+      if (!file) return;
+      previewFiles = [file];
+      previewIndex = 0;
+      await showPreviewJSON(0);
+      const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
+      modal.show();
+    }
+    function updateSingleHeader(file) {
+      ensureSingleHeader();
+      const nameEl = document.getElementById('currentSingleFileName');
+      const btn = document.getElementById('previewSingleBtn');
+      if (!nameEl || !btn) return;
+      if (file) {
+        nameEl.textContent = file.name;
+        btn.style.display = 'inline-block';
+        btn.onclick = () => openSinglePreview(file);
+      } else {
+        nameEl.textContent = '—';
+        btn.style.display = 'none';
+        btn.onclick = null;
       }
-
-      function attachFileChangeListener() {
-        getActiveFileInput().addEventListener("change", getColumns);
+    }
+  
+    function updateInputVisibility() {
+      detachFileChangeListeners();
+      if (fileRadio && fileRadio.checked) {
+        if (fileInput) fileInput.style.display = "block";
+        if (folderInput) folderInput.style.display = "none";
+        if (dynamicSingle) dynamicSingle.style.display = '';
+        if (dynamicFolder) dynamicFolder.style.display = 'none';
+        updateSingleHeader(null);
+      } else {
+        if (fileInput) fileInput.style.display = "none";
+        if (folderInput) folderInput.style.display = "block";
+        if (dynamicSingle) dynamicSingle.style.display = 'none';
+        if (dynamicFolder) dynamicFolder.style.display = '';
       }
-
-      function updateInputVisibility() {
-        detachFileChangeListeners();
-        if (fileRadio.checked) {
-          fileInput.style.display = "block";
-          folderInput.style.display = "none";
-        } else {
-          fileInput.style.display = "none";
-          folderInput.style.display = "block";
-        }
-        attachFileChangeListener();
+      attachFileChangeListener();
+  
+      clearSelectedTable();
+      feedback.textContent = '';
+      setContinueEnabled(false);
+      singleFile = null; singleColumns = []; singleMapping = { id: '', text: '', label: '' };
+      wizard.files = []; wizard.columns = {}; wizard.mappings = {}; wizard.index = 0; wizard.acceptableCount = 0;
+      resetSingleSelects(); resetFolderSelects();
+      syncExposeSingle();
+      syncExposeWizard();
+      renderWizard();
+    }
+  
+    if (fileRadio)  fileRadio.addEventListener("change", updateInputVisibility);
+    if (folderRadio) folderRadio.addEventListener("change", updateInputVisibility);
+    updateInputVisibility();
+  
+    // ===== File selection =====
+    async function onFilesChanged(e) {
+      const raw = Array.from(e.target.files || []);
+      const files = sanitizeSelection(raw);
+  
+      const dropped = raw.length - files.length;
+      if (dropped > 0) {
+        feedback.classList.remove('text-danger');
+        feedback.classList.add('text-muted');
+        feedback.textContent = `${dropped} file${dropped>1?'s were':' was'} ignored (unsupported or system files).`;
+      } else {
+        feedback.textContent = '';
       }
-
-      // Radio change handlers
-      fileRadio.addEventListener("change", updateInputVisibility);
-      folderRadio.addEventListener("change", updateInputVisibility);
-      updateInputVisibility(); // initialize
-
-      // Populate column selects from first selected file(s)
-      getActiveFileInput().addEventListener("change", getColumns);
-
-      async function getColumns(event) {
-        const files = event.target.files;
-        const columnsSet = new Set();
-        let isAllTxt = true;
-
-        for (const file of files) {
-          if (file.name.startsWith("~$")) continue;  // skip Excel temp
-          const ext = file.name.split('.').pop().toLowerCase();
-
-          if (ext === "csv") {
-            isAllTxt = false;
-            const text = await file.text();
-            const firstLine = text.split('\n')[0] || "";
-            const headers = firstLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-            headers.forEach(col => col && columnsSet.add(col));
-          } else if (["json", "jsonl"].includes(ext)) {
-            isAllTxt = false;
-            const text = await file.text();
-            try {
-              const lines = ext === "jsonl" ? text.split('\n').filter(Boolean) : [text];
-              const firstObj = JSON.parse(lines.find(line => line.trim()));
-              Object.keys(firstObj).forEach(col => columnsSet.add(col));
-            } catch (err) {
-              console.error("JSON parse error:", err);
-            }
-          } else if (["xls", "xlsx"].includes(ext)) {
-            isAllTxt = false;
-            try {
-              const arrayBuffer = await file.arrayBuffer();
-              const workbook = XLSX.read(arrayBuffer, { type: "array" });
-              const firstSheetName = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[firstSheetName];
-              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-              const headers = jsonData[0] || [];
-              headers.forEach(col => col && columnsSet.add(col.toString().trim()));
-            } catch (err) {
-              console.error("Excel parse error:", err);
-            }
-          } else if (ext === "txt") {
-            // Assume 'content' exists, columns won't apply
-            continue;
-          } else {
-            isAllTxt = false;
+  
+      if (fileRadio && fileRadio.checked) {
+        singleFile = files[0] || null;
+        syncExposeSingle();
+        updateSingleHeader(singleFile);
+        await populateSingleFileColumns(singleFile);
+      } else {
+        await initFolderWizard(files);
+      }
+      fillSelectedFilesTable(files);
+    }
+  
+    function fillSelectedFilesTable(files) {
+      selectedTbody.innerHTML = '';
+      if (!files.length) return clearSelectedTable();
+      files.forEach((file, i) => {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        selectedTbody.innerHTML += `
+          <tr data-fname="${encodeURIComponent(file.name)}">
+            <td>${i + 1}</td>
+            <td>${file.name}</td>
+            <td>${ext}</td>
+            <td>${(file.size / 1024).toFixed(2)}</td>
+            <td class="status-cell">⏳ pending</td>
+          </tr>`;
+      });
+      if (fileRadio && fileRadio.checked && files.length) updateSingleStatusRow();
+    }
+  
+    // ===== Column detection =====
+    async function detectColumnsForFile(file) {
+      const ext = (file?.name.split('.').pop() || '').toLowerCase();
+      const set = new Set();
+      if (!file || file.name.startsWith("~$")) return [];
+      try {
+        if (ext === 'csv') {
+          const text = await file.text();
+          const firstLine = (text.split('\n')[0] || "").replace(/^\uFEFF/, '').replace(/\r$/, '');
+          firstLine.split(',').map(h => h.trim().replace(/^"|"$/g, '')).forEach(col => col && set.add(col));
+        } else if (ext === 'json') {
+          const text = await file.text();
+          const json = JSON.parse(text);
+          const obj = Array.isArray(json) ? json.find(Boolean) || {} : json;
+          Object.keys(obj).forEach(k => set.add(k));
+        } else if (ext === 'jsonl') {
+          const lines = (await file.text()).split('\n').map(l => l.trim()).filter(Boolean);
+          if (lines.length) {
+            const obj = JSON.parse(lines[0]);
+            Object.keys(obj).forEach(k => set.add(k));
           }
+        } else if (ext === 'xls' || ext === 'xlsx') {
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(buf, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          (rows[0] || []).forEach(h => h && set.add(h.toString().trim()));
         }
-
-        // Reset options
-        textSelect.innerHTML  = '<option value="" disabled selected>Select text column</option>';
-        idSelect.innerHTML    = '<option value="" disabled selected>Select id column</option>';
-        labelSelect.innerHTML = '<option value="" disabled selected>Select label column</option>';
-
-        if (isAllTxt) {
-          textSelect.innerHTML  += `<option value="content" selected>content</option>`;
-          idSelect.innerHTML    += `<option value="id">id</option>`;
-          labelSelect.innerHTML += `<option value="category">category</option>`;
-        } else {
-          columnsSet.forEach(col => {
-            textSelect.innerHTML  += `<option value="${col}">${col}</option>`;
-            idSelect.innerHTML    += `<option value="${col}">${col}</option>`;
-            labelSelect.innerHTML += `<option value="${col}">${col}</option>`;
-          });
-        }
-        console.log("🔍 Columns detected:", [...columnsSet]);
+      } catch (e) {
+        console.warn('Column detection failed for', file?.name, e);
       }
-
-      // ====== QUICK PREVIEW BEFORE VALIDATION ======
-      let previewFiles = [];
-      let previewIndex = 0;
-
-      getActiveFileInput().addEventListener('change', async function (e) {
-        previewFiles = Array.from(e.target.files).slice(0, 6);
+      return Array.from(set);
+    }
+  
+    // ===== Single-file mapping =====
+    async function populateSingleFileColumns(file) {
+      updateSingleHeader(file);
+      resetSingleSelects();
+      singleMapping = { id: '', text: '', label: '' };
+      syncExposeSingle();
+      setContinueEnabled(false);
+      if (!file || !isAllowed(file.name)) return;
+  
+      singleColumns = await detectColumnsForFile(file);
+      if (!singleColumns.length) return;
+  
+      singleColumns.forEach(col => {
+        textSelectSingle.innerHTML  += `<option value="${col}">${col}</option>`;
+        idSelectSingle.innerHTML    += `<option value="${col}">${col}</option>`;
+        labelSelectSingle.innerHTML += `<option value="${col}">${col}</option>`;
+      });
+    }
+  
+    function isSingleMapped() { return !!(singleFile && singleMapping.id && singleMapping.text); }
+    function updateSingleStatusRow() {
+      const row = selectedTbody.querySelector('tr[data-fname]');
+      const cell = row?.querySelector('.status-cell');
+      if (cell) cell.textContent = isSingleMapped() ? '✅ mapped' : '⏳ pending';
+      setContinueEnabled(isSingleMapped());
+    }
+  
+    idSelectSingle.addEventListener('change', () => {
+      singleMapping.id = idSelectSingle.value || '';
+      syncExposeSingle();
+      updateSingleStatusRow();
+    });
+    textSelectSingle.addEventListener('change', () => {
+      singleMapping.text = textSelectSingle.value || '';
+      syncExposeSingle();
+      updateSingleStatusRow();
+    });
+    labelSelectSingle.addEventListener('change', () => {
+      singleMapping.label = labelSelectSingle.value || '';
+      syncExposeSingle();
+    });
+  
+    // ===== Folder wizard =====
+    async function initFolderWizard(files) {
+      wizard.files = files.filter(f => !f.name.startsWith('~$') && f.name !== '.DS_Store' && isAllowed(f.name));
+      wizard.acceptableCount = wizard.files.length;
+      wizard.index = 0; wizard.columns = {}; wizard.mappings = {};
+  
+      for (const f of wizard.files) {
+        wizard.columns[f.name] = await detectColumnsForFile(f);
+      }
+      syncExposeWizard();
+      renderWizard();
+    }
+  
+    function ensureFolderPreviewButton() {
+      const headerRow = currentFileNameEl?.closest('.d-flex.align-items-center');
+      if (!headerRow) return;
+      if (document.getElementById('previewCurrentBtn')) return;
+  
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'previewCurrentBtn';
+      btn.className = 'btn btn-outline-secondary btn-sm ms-2';
+      btn.textContent = 'Preview';
+      currentFileNameEl.parentElement.appendChild(btn);
+  
+      btn.addEventListener('click', async () => {
+        if (!wizard.acceptableCount) return;
+        previewFiles = [wizard.files[wizard.index]];
         previewIndex = 0;
-
-        if (previewFiles.length === 0) return;
-
-        await showPreview(previewIndex);
+        await showPreviewJSON(0);
         const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
         modal.show();
       });
-
-      async function showPreview(index) {
-        const file = previewFiles[index];
-        const extension = file.name.split('.').pop().toLowerCase();
-        const previewContainer = document.getElementById('preview-content');
-        previewContainer.innerHTML = '';
-
-        document.getElementById('filePreviewModalLabel').textContent = `Preview - ${file.name}`;
-        document.getElementById('preview-counter').textContent = `File ${index + 1} of ${previewFiles.length}`;
-
-        if (['csv'].includes(extension)) {
-          const content = await file.text();
-          const parsed = Papa.parse(content, { header: true });
-          const headers = parsed.meta.fields || [];
-          const rows = parsed.data.slice(0, 5);
-          if (headers.length) {
-            const table = document.createElement('table');
-            table.className = 'table table-bordered table-striped table-sm';
-            table.innerHTML = `
-              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-              <tbody>${rows.map(row => `<tr>${headers.map(h => `<td>${row[h] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
-            previewContainer.appendChild(table);
-          } else {
-            previewContainer.innerHTML = '<p class="text-muted">No valid CSV data found.</p>';
-          }
-
-        } else if (extension === 'json') {
-          const content = await file.text();
-          try {
-            const jsonData = JSON.parse(content);
-            previewContainer.innerHTML = `<pre>${JSON.stringify(Array.isArray(jsonData) ? jsonData.slice(0, 5) : jsonData, null, 2)}</pre>`;
-          } catch { previewContainer.innerHTML = `<pre class="text-danger">Invalid JSON format</pre>`; }
-
-        } else if (extension === 'jsonl') {
-          const lines = (await file.text()).trim().split('\n').slice(0, 5);
-          const parsed = lines.map(line => JSON.parse(line));
-          previewContainer.innerHTML = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
-
-        } else if (['xls', 'xlsx'].includes(extension)) {
-          const arrayBuffer = await file.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: "array" });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-          if (jsonData.length) {
-            const headers = jsonData[0];
-            const rows = jsonData.slice(1, 6);
-            const wrapper = document.createElement('div');
-            wrapper.style.overflowX = 'auto'; wrapper.style.maxWidth = '100%';
-            const table = document.createElement('table');
-            table.className = 'table table-bordered table-striped table-sm';
-            table.innerHTML = `
-              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-              <tbody>${rows.map(row => `<tr>${headers.map((_, i) => `<td>${row[i] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
-            wrapper.appendChild(table);
-            previewContainer.appendChild(wrapper);
-          } else {
-            previewContainer.innerHTML = '<p class="text-muted">No valid Excel data found.</p>';
-          }
-        } else if (extension === 'txt') {
-          const content = await file.text();
-          const lines = content.split('\n').slice(0, 20);
-          previewContainer.innerHTML = `<pre>${lines.join('\n')}</pre>`;
-        } else {
-          previewContainer.innerHTML = '<p class="text-muted">Unsupported format.</p>';
-        }
-
-        document.getElementById('prevFile').style.display = (index === 0) ? 'none' : 'inline-block';
-        document.getElementById('nextFile').style.display = (index === previewFiles.length - 1) ? 'none' : 'inline-block';
+    }
+  
+    function updateSaveButton() {
+      if (!wizard.acceptableCount) { saveMapBtn.disabled = true; return; }
+  
+      const isLast = wizard.index === wizard.acceptableCount - 1;
+      const fname = wizard.files[wizard.index]?.name;
+      const prev = (fname && wizard.mappings[fname]) || { id:'', text:'', label:'' };
+  
+      const idVal = idSelectFolder.value || '';
+      const textVal = textSelectFolder.value || '';
+      const labelVal = labelSelectFolder.value || '';
+  
+      const alreadyMapped = !!(prev.id && prev.text);
+      const changed = (idVal !== prev.id) || (textVal !== prev.text) || ((labelVal || '') !== (prev.label || ''));
+  
+      saveMapBtn.textContent = isLast ? 'Save' : 'Save & Next';
+      // Disable if required fields missing, or (on last file) there is literally nothing to save
+      saveMapBtn.disabled = !(idVal && textVal) || (isLast && alreadyMapped && !changed);
+      saveMapBtn.style.visibility = 'visible';
+    }
+  
+    function renderWizard() {
+      if (!wizard.acceptableCount) {
+        currentFileNameEl.textContent = '—';
+        wizardCounter.textContent = '0 / 0';
+        fillSelectOptions(idSelectFolder, []);
+        fillSelectOptions(textSelectFolder, []);
+        fillSelectOptions(labelSelectFolder, []);
+        mappingProgress.style.width = '0%';
+        mappingProgress.textContent = '0%';
+        setContinueEnabled(false);
+        updateSaveButton();
+        syncExposeWizard();
+        return;
       }
-
-      document.getElementById('prevFile').addEventListener('click', () => {
-        if (previewIndex > 0) { previewIndex--; showPreview(previewIndex); }
+  
+      const total = wizard.acceptableCount;
+      const mappedCount = Object.keys(wizard.mappings).length;
+      const pct = Math.floor((mappedCount / total) * 100);
+      mappingProgress.style.width = pct + '%';
+      mappingProgress.textContent = pct + '%';
+      mappingProgress.setAttribute('aria-valuenow', pct);
+  
+      const i = wizard.index;
+      const f = wizard.files[i];
+      const fname = f.name;
+      const cols = wizard.columns[fname] || [];
+  
+      currentFileNameEl.textContent = fname;
+      wizardCounter.textContent = `${i + 1} / ${total}`;
+  
+      const prev = wizard.mappings[fname] || { id: '', text: '', label: '' };
+      fillSelectOptions(idSelectFolder, cols.length ? cols : ['id'], { selected: prev.id });
+      fillSelectOptions(textSelectFolder, cols.length ? cols : ['content'], { selected: prev.text });
+      fillSelectOptions(labelSelectFolder, [''].concat(cols.length ? cols : ['category']), { includeEmpty: true, selected: prev.label || '' });
+  
+      document.getElementById('prevMapBtn').style.visibility = i === 0 ? 'hidden' : 'visible';
+  
+      updateTableStatus();
+      setContinueEnabled(isAllMapped());
+      updateSaveButton();
+      ensureFolderPreviewButton();
+      syncExposeWizard();
+    }
+  
+    function isAllMapped() {
+      if (!wizard.acceptableCount) return false;
+      return wizard.files.every(f => {
+        const m = wizard.mappings[f.name];
+        return m && m.id && m.text;
       });
-      document.getElementById('nextFile').addEventListener('click', () => {
-        if (previewIndex < previewFiles.length - 1) { previewIndex++; showPreview(previewIndex); }
+    }
+  
+    function updateTableStatus() {
+      const rows = selectedTbody.querySelectorAll('tr[data-fname]');
+      rows.forEach(row => {
+        const fname = decodeURIComponent(row.getAttribute('data-fname'));
+        const cell = row.querySelector('.status-cell');
+        const mapped = wizard.mappings[fname];
+        cell.textContent = (mapped && mapped.id && mapped.text) ? '✅ mapped' : '⏳ pending';
       });
-
-      function setContinueEnabled(enabled) {
-        const btn = continueBtn;
-        if (enabled) {
-          btn.classList.remove("disabled");
-          btn.removeAttribute("aria-disabled");
-          btn.removeAttribute("tabindex");
-        } else {
-          btn.classList.add("disabled");
-          btn.setAttribute("aria-disabled", "true");
-          btn.setAttribute("tabindex", "-1");
-        }
+    }
+  
+    prevMapBtn.addEventListener('click', () => {
+      if (wizard.index > 0) {
+        wizard.index--;
+        syncExposeWizard();
+        renderWizard();
       }
-
-      // =======================
-      // SUBMIT → CALL /validate
-      // =======================
-      document.getElementById('uploadForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
-        loader.style.display = 'flex';
-
-        const allowedExtensions = ['csv', 'xls', 'xlsx', 'json', 'jsonl', 'txt'];
-        const active = getActiveFileInput();
-        const files = active.files;
-        const feedback = document.getElementById('file-feedback');
-        const textColumn = textSelect.value;
-        const idColumn = idSelect.value;
-        const labelColumn = labelSelect.value;
-        const corpusName = document.getElementById("corpusName").value;
-
-        feedback.textContent = '';
-        feedback.classList.remove('text-success', 'text-danger');
-        selectedTbody.innerHTML = '';
-
-        if (!files.length) {
+    });
+  
+    idSelectFolder.addEventListener('change', updateSaveButton);
+    textSelectFolder.addEventListener('change', updateSaveButton);
+    labelSelectFolder.addEventListener('change', updateSaveButton);
+  
+    saveMapBtn.addEventListener('click', () => {
+      const idVal = idSelectFolder.value || '';
+      const textVal = textSelectFolder.value || '';
+      const labelVal = labelSelectFolder.value || '';
+  
+      if (!idVal || !textVal) {
+        feedback.classList.add('text-danger');
+        feedback.textContent = 'Please select both ID and Text columns for this file.';
+        return;
+      }
+      const fname = wizard.files[wizard.index].name;
+      wizard.mappings[fname] = { id: idVal, text: textVal, label: labelVal };
+      syncExposeWizard();
+  
+      const wasLast = wizard.index === wizard.acceptableCount - 1;
+  
+      if (!wasLast) {
+        wizard.index++;
+        syncExposeWizard();
+        renderWizard();
+      } else {
+        renderWizard();
+        setContinueEnabled(true);
+        setTimeout(() => continueBtn?.focus(), 0);
+      }
+    });
+  
+    // ===== JSON-style preview =====
+    let previewFiles = [];
+    let previewIndex = 0;
+  
+    async function fileToPreviewObjects(file, maxRows = 5) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+  
+      if (ext === 'csv') {
+        const content = await file.text();
+        const parsed = Papa.parse(content, { header: true, preview: maxRows });
+        const rows = (parsed.data || []).filter(r => r && Object.keys(r).length);
+        return rows.slice(0, maxRows);
+      }
+  
+      if (ext === 'json') {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        if (Array.isArray(data)) return data.slice(0, maxRows);
+        return [data];
+      }
+  
+      if (ext === 'jsonl') {
+        const lines = (await file.text()).split('\n').map(s => s.trim()).filter(Boolean).slice(0, maxRows);
+        const out = [];
+        for (const line of lines) {
+          try { out.push(JSON.parse(line)); } catch { out.push({ _raw: line }); }
+        }
+        return out;
+      }
+  
+      if (ext === 'xls' || ext === 'xlsx') {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (!rows.length) return [];
+        const headers = (rows[0] || []).map(h => (h == null ? '' : String(h)));
+        const out = [];
+        for (let r = 1; r < rows.length && out.length < maxRows; r++) {
+          const obj = {};
+          headers.forEach((h, i) => { if (h) obj[h] = rows[r]?.[i]; });
+          if (Object.keys(obj).length) out.push(obj);
+        }
+        return out;
+      }
+  
+      return [];
+    }
+  
+    function renderJSONPreview(container, data) {
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        container.innerHTML = '<p class="text-muted">No previewable data found.</p>';
+        return;
+      }
+      const pre = document.createElement('pre');
+      pre.className = 'json-pre';
+      pre.textContent = JSON.stringify(data, null, 2);
+      container.appendChild(pre);
+    }
+  
+    (function ensureJsonPreStyle() {
+      if (document.querySelector('style[data-json-pre-style]')) return;
+      const style = document.createElement('style');
+      style.setAttribute('data-json-pre-style', 'true');
+      style.textContent = `
+        .json-pre {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+          background: rgba(15, 23, 42, 0.06);
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          border-radius: .5rem;
+          padding: 1rem;
+          white-space: pre;
+          overflow: auto;
+          max-height: 60vh;
+          margin: 0;
+        }`;
+      document.head.appendChild(style);
+    })();
+  
+    async function showPreviewJSON(index) {
+      const file = previewFiles[index];
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const previewContainer = document.getElementById('preview-content');
+      previewContainer.innerHTML = '';
+  
+      document.getElementById('filePreviewModalLabel').textContent = `Preview - ${file.name}`;
+      document.getElementById('preview-counter').textContent = `File ${index + 1} of ${previewFiles.length}`;
+  
+      if (file.name === '.DS_Store' || !allowedExtensions.includes(ext)) {
+        previewContainer.innerHTML = '<p class="text-muted">Unsupported or system file skipped.</p>';
+        return;
+      }
+  
+      try {
+        const data = await fileToPreviewObjects(file, 5);
+        renderJSONPreview(previewContainer, data);
+      } catch (err) {
+        console.warn('Preview parse error:', err);
+        previewContainer.innerHTML = '<p class="text-danger">Could not render preview.</p>';
+      }
+  
+      document.getElementById('prevFile').style.display = (index === 0) ? 'none' : 'inline-block';
+      document.getElementById('nextFile').style.display = (index === previewFiles.length - 1) ? 'none' : 'inline-block';
+    }
+  
+    document.getElementById('prevFile').addEventListener('click', () => {
+      if (previewIndex > 0) { previewIndex--; showPreviewJSON(previewIndex); }
+    });
+    document.getElementById('nextFile').addEventListener('click', () => {
+      if (previewIndex < previewFiles.length - 1) { previewIndex++; showPreviewJSON(previewIndex); }
+    });
+  
+    // Bind preview opener to BOTH inputs (no getActiveFileInput needed)
+    async function onPreviewChange(e) {
+      const raw = Array.from(e.target.files || []);
+      const cleaned = sanitizeSelection(raw);
+      previewFiles = cleaned.slice(0, 6);
+      previewIndex = 0;
+      if (!previewFiles.length) return;
+      await showPreviewJSON(0);
+      const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
+      modal.show();
+    }
+    if (fileInput)   fileInput.addEventListener('change', onPreviewChange);
+    if (folderInput) folderInput.addEventListener('change', onPreviewChange);
+  
+    // ===============================
+    // POST to backend + Loader UI
+    // ===============================
+    const SAVE_URL = "/drafts/corpus/save/"; // Flask route -> FastAPI /data/drafts/corpus
+  
+    // Use your existing overlay block (#loader-overlay). We'll just set its <p> text.
+    function setBusy(on, message = "Processing... Please wait.") {
+      const overlay = document.getElementById('loader-overlay');
+      if (!overlay) return;
+      overlay.style.display = on ? 'flex' : 'none';
+      const p = overlay.querySelector('p');
+      if (p && message) p.textContent = message;
+      document.body.style.overflow = on ? 'hidden' : '';
+    }
+  
+    function nameToExt(name) { return (name.split('.').pop() || '').toLowerCase(); }
+  
+    async function parseCSV(file) {
+      const text = await file.text();
+      const parsed = Papa.parse(text, { header: true });
+      return (parsed.data || []).filter(r => r && Object.keys(r).length);
+    }
+    async function parseJSON(file) {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : [data];
+    }
+    async function parseJSONL(file) {
+      const lines = (await file.text()).split('\n').map(s => s.trim()).filter(Boolean);
+      const out = [];
+      for (const line of lines) { try { out.push(JSON.parse(line)); } catch {} }
+      return out;
+    }
+    async function parseXLSX(file) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(ws);
+    }
+    async function parseFileToObjects(file) {
+      const ext = nameToExt(file.name);
+      if (ext === 'csv') return parseCSV(file);
+      if (ext === 'json') return parseJSON(file);
+      if (ext === 'jsonl') return parseJSONL(file);
+      if (ext === 'xls' || ext === 'xlsx') return parseXLSX(file);
+      return [];
+    }
+  
+    function rowsToDocuments(rows, mapping) {
+      const idKey = mapping?.id, textKey = mapping?.text, labelKey = mapping?.label || null;
+      if (!idKey || !textKey) return [];
+      const docs = [];
+      for (const r of rows) {
+        const id = r?.[idKey]; const text = r?.[textKey];
+        if (id == null || id === '' || text == null || text === '') continue;
+        const one = { id: String(id), text: String(text) };
+        if (labelKey) one.label = (r?.[labelKey] ?? null) == null ? null : String(r[labelKey]);
+        docs.push(one);
+      }
+      return docs;
+    }
+  
+    async function buildDocuments(files, mappings) {
+      const documents = [];
+      for (const f of files) {
+        const m = mappings[f.name];
+        if (!m) continue;
+        const rows = await parseFileToObjects(f);
+        const docs = rowsToDocuments(rows, m).map(d => ({
+          id: d.id,
+          text: d.text,
+          ...(d.label !== undefined ? { label: d.label } : {}), // optional
+          sourcefile: f.name
+        }));
+        documents.push(...docs);
+      }
+      return documents;
+    }
+  
+    function buildMetadata({ corpusName, mode, files }) {
+      return {
+        name: corpusName,
+        mode,
+        files: files.map(f => f.name),
+        created_at: new Date().toISOString()
+      };
+    }
+    async function postDraft({ metadata, data, owner_id }) {
+      const res = await fetch( "/drafts/corpus/save/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata, data, owner_id })
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=>'');
+        throw new Error(`Draft save failed: ${res.status} ${txt}`);
+      }
+      return res.json(); // { draft_id: "c_XXXXXXXX" }
+    }
+  
+    async function onContinueClick(e) {
+      e.preventDefault();
+      if (continueBtn.classList.contains('disabled')) return;
+  
+      try {
+        const corpusName = (document.getElementById("corpusName")?.value || '').trim();
+        if (!corpusName) {
           feedback.classList.add('text-danger');
-          feedback.textContent = "Please select at least one file.";
-          loader.style.display = 'none';
+          feedback.textContent = "Please enter a Corpus Name.";
           return;
         }
-
-        // Light client-side type check + table fill
-        let allTypesOK = true;
-        Array.from(files).forEach((file, i) => {
-          const ext = (file.name.split('.').pop() || '').toLowerCase();
-          const isOk = allowedExtensions.includes(ext);
-          allTypesOK = allTypesOK && isOk;
-          selectedTbody.innerHTML += `
-            <tr>
-              <td>${i + 1}</td>
-              <td>${file.name}</td>
-              <td>${ext}</td>
-              <td>${(file.size / 1024).toFixed(2)}</td>
-              <td>${isOk ? '⏳ pending' : '❌ invalid type'}</td>
-            </tr>`;
-        });
-        if (!allTypesOK) {
-          feedback.classList.add('text-danger');
-          feedback.textContent = 'One or more files have unsupported types.';
-          loader.style.display = 'none';
-          return;
-        }
-
-        // Build payload for backend validation
-        // Your Flask route should proxy this to FastAPI:
-        // - Single file -> /validate/single
-        // - Multiple files -> /validate/multiple (with text_columns JSON list)
-        const formData = new FormData();
-        Array.from(files).forEach(f => formData.append('files', f));
-        formData.append('text_column', textColumn);
-        formData.append('id_column', idColumn);
-        formData.append('label_column', labelColumn);
-        formData.append('corpusName', corpusName);
-
-        try {
-          const response = await fetch('/validate', { method: 'POST', body: formData });
-          const result = await response.json();
-
-          // Show results modal automatically
-          showValidationResults(result);
-
-          // Success → enable Continue / Proceed
-          const ok = response.ok && result && (result.status === 'success');
-          setContinueEnabled(ok);
-          setProceedEnabled(ok);
-
-          // Update table last column to success/failure
-          const rows = selectedTbody.querySelectorAll('tr');
-          rows.forEach(r => r.cells[4].textContent = ok ? '✅ validated' : '❌ failed');
-
-          if (!ok) {
-            feedback.classList.add('text-danger');
-            feedback.textContent = (result && (result.error || result.message)) || 'Validation failed.';
-          } else {
-            feedback.classList.add('text-success');
-            feedback.textContent = 'Validation passed!';
+  
+        const wiz = window.wizard || { files: [], mappings: {} };
+        const sFile = window.singleFile || null;
+        const sMap  = window.singleMapping || { id:'', text:'', label:'' };
+        const mode = (document.getElementById("uploadFile")?.checked ? 'single' : 'folder');
+  
+        let files = [], mappings = {};
+        if (mode === 'single') {
+          if (!sFile || !sMap.id || !sMap.text) {
+            feedback.classList.add('text-danger'); feedback.textContent = 'Please select and map ID/Text for the file.'; return;
           }
-        } catch (err) {
-          console.error('Validation error:', err);
-          setContinueEnabled(false);
-          setProceedEnabled(false);
-          feedback.classList.add('text-danger');
-          feedback.textContent = "Unexpected error occurred during validation.";
-        } finally {
-          loader.style.display = 'none';
-        }
-      });
-
-      // After validation, you might still want to load to DB; keep your existing function if needed.
-      async function sendData(formData) {
-        try {
-          const response = await fetch('/loadDB', { method: 'POST', body: formData });
-          const result = await response.json();
-          alert(result.message);
-        } catch (err) {
-          alert('Something went wrong while sending data.');
-        }
-      }
-
-      // ===== BACKEND PREVIEW (OPTIONAL) =====
-      async function loadPreview() {
-        const tbody = document.getElementById("preview-table-body");
-        tbody.innerHTML = '<tr><td class="text-center">Loading...</td></tr>';
-        try {
-          const res = await fetch('/preview');
-          const data = await res.json();
-          if (Array.isArray(data) && data.length) {
-            renderPreviewTable(data);
-          } else {
-            tbody.innerHTML = '<tr><td class="text-center">No data found.</td></tr>';
-          }
-        } catch (err) {
-          console.error(err);
-          tbody.innerHTML = '<tr><td class="text-danger text-center">Error loading data.</td></tr>';
-        }
-      }
-
-      function filterTable() {
-        const input = document.getElementById('search-input').value.toLowerCase();
-        const rows = document.querySelectorAll('#preview-table-body tr');
-        rows.forEach(row => {
-          const content = row.textContent.toLowerCase();
-          row.style.display = content.includes(input) ? '' : 'none';
-        });
-      }
-
-      function resetTableFilter() {
-        document.getElementById('search-input').value = '';
-        filterTable();
-      }
-
-      function renderPreviewTable(data) {
-        const tbody = document.getElementById('preview-table-body');
-        tbody.innerHTML = '';
-        const tooltip = document.getElementById('hoverTooltip');
-
-        data.forEach(item => {
-          const row = document.createElement('tr');
-          const cell = document.createElement('td');
-          const isLong = (item.content || '').length > 300;
-
-          cell.textContent = isLong ? (item.content.slice(0, 300) + '...') : (item.content || '');
-
-          // Tooltip hover
-          cell.addEventListener('mouseenter', function () {
-            tooltip.textContent = item.content || '';
-            tooltip.style.display = 'block';
-          });
-          cell.addEventListener('mousemove', function (e) {
-            tooltip.style.left = (e.clientX + 15) + 'px';
-            tooltip.style.top = (e.clientY + 15) + 'px';
-          });
-          cell.addEventListener('mouseleave', function () {
-            tooltip.style.display = 'none';
-          });
-
-          row.appendChild(cell);
-          tbody.appendChild(row);
-        });
-      }
-
-      // ===== Validation Results Modal helpers =====
-      function setProceedEnabled(enabled) {
-        const btn = document.getElementById('proceedBtn');
-        if (enabled) {
-          btn.classList.remove('disabled');
-          btn.removeAttribute('aria-disabled');
-          btn.removeAttribute('tabindex');
+          files = [sFile]; mappings[sFile.name] = sMap;
         } else {
-          btn.classList.add('disabled');
-          btn.setAttribute('aria-disabled', 'true');
-          btn.setAttribute('tabindex', '-1');
+          if (!wiz.files?.length) { feedback.classList.add('text-danger'); feedback.textContent = 'No files selected.'; return; }
+          const unmapped = wiz.files.filter(f => !wiz.mappings?.[f.name]?.id || !wiz.mappings?.[f.name]?.text);
+          if (unmapped.length) { feedback.classList.add('text-danger'); feedback.textContent = 'Please map ID and Text for all files.'; return; }
+          files = wiz.files; mappings = wiz.mappings;
         }
+  
+        setBusy(true, "Building corpus…");
+        const documents = await buildDocuments(files, mappings);
+        if (!documents.length) { setBusy(false); feedback.classList.add('text-danger'); feedback.textContent = 'No valid documents found from mappings.'; return; }
+  
+        const metadata = buildMetadata({ corpusName, mode, files });
+        const data = { documents };
+        console.log(data)
+        console.log(metadata)
+        const owner_id = window.currentUserId || "anonymous";
+  
+        setBusy(true, "Saving draft…");
+        const result = await postDraft({ metadata, data, owner_id });
+        if (result?.draft_id) sessionStorage.setItem('draft_id', result.draft_id);
+  
+        setBusy(false);
+        window.location.href = "/model";
+      } catch (err) {
+        console.error(err);
+        setBusy(false);
+        feedback.classList.add('text-danger');
+        feedback.textContent = err.message || 'Failed to save draft.';
       }
+    }
+  
+    /* ---------- Replace the old Continue binding with a guarded handler ---------- */
+if (continueBtn) {
+  continueBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const ok = await validateCorpusNameOnSubmit({ endpoint: '/drafts/corpus' });
+    if (!ok) return;                  // duplicate or empty -> show inline error and stop
+    await onContinueClick(e);         // proceed with your existing save flow
+  }, { passive: false });
+}
 
-      function showValidationResults(result) {
-        const modalEl = document.getElementById('validationResultsModal');
-        const modal = new bootstrap.Modal(modalEl);
-        const summary = document.getElementById('validation-summary');
-        const tabsContainer = document.getElementById('validation-tabs');
+/* ---------- Fetch & dedupe (strings OR objects) ---------- */
+async function getUniqueCorpusNames(endpoint = '/drafts/corpus') {
+  const res = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error(`Failed to load corpuses: ${res.status}`);
+  const items = await res.json();
 
-        // Clear old
-        summary.innerHTML = '';
-        tabsContainer.innerHTML = '';
+  // Case 1: backend already returns names: ["A","B",...]
+  if (Array.isArray(items) && (items.length === 0 || typeof items[0] === 'string')) {
+    const seen = new Set(), out = [];
+    for (const n of items) {
+      const name = String(n).trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(name); }
+    }
+    return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
+  }
 
-        if (!result || result.status !== 'success') {
-          const errorMsg = (result && (result.error || result.message)) || 'Validation failed.';
-          summary.innerHTML = `<div class="alert alert-danger mb-0"><strong>Validation Error:</strong> ${errorMsg}</div>`;
-          modal.show();
-          return;
-        }
+  // Case 2: objects with metadata.name
+  const byLower = new Map(); // lower -> original casing
+  for (const item of items || []) {
+    const raw = item?.metadata?.name;
+    if (!raw) continue;
+    const name = String(raw).trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!byLower.has(key)) byLower.set(key, name);
+  }
+  return Array.from(byLower.values())
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
+}
 
-        // Success — build tabs with previews
-        summary.innerHTML = `<div class="alert alert-success mb-3"><strong>Validation Passed.</strong> Showing first 5 rows from each file.</div>`;
+/* ---------- Cache for live typing ---------- */
+let __cachedCorpusNames = null;
+let __cachedCorpusSet = null;
 
-        // Normalize for single/multiple API shapes:
-        // - single: { status:'success', preview:[{...},{...}] }
-        // - multiple: { status:'success', previews: { filename: [{...}] } }
-        let previewsMap = {};
-        if (Array.isArray(result.preview)) {
-          previewsMap['Uploaded File'] = result.preview;
-        } else if (result.previews && typeof result.previews === 'object') {
-          previewsMap = result.previews;
-        }
+async function loadCorpusNameCache(endpoint = '/drafts/corpus') {
+  if (__cachedCorpusNames) return __cachedCorpusNames;
+  const names = await getUniqueCorpusNames(endpoint);
+  __cachedCorpusNames = names;
+  __cachedCorpusSet = new Set(names.map(n => n.toLowerCase()));
+  return __cachedCorpusNames;
+}
 
-        const fileNames = Object.keys(previewsMap);
-        if (!fileNames.length) {
-          tabsContainer.innerHTML = `<div class="text-muted">No preview rows returned.</div>`;
-          modal.show();
-          return;
-        }
+/* ---------- UI helpers ---------- */
+function ensureCorpusInvalidFeedbackEl(input) {
+  let fb = document.getElementById('corpusNameInvalid');
+  if (!fb) {
+    fb = document.createElement('div');
+    fb.id = 'corpusNameInvalid';
+    fb.className = 'invalid-feedback';
+    fb.setAttribute('aria-live', 'polite');
+    input.insertAdjacentElement('afterend', fb);
+  }
+  return fb;
+}
 
-        // Build Bootstrap tabs
-        const navId = 'val-nav-' + Date.now();
-        const contentId = 'val-content-' + Date.now();
+/* ---------- Live validation while typing (uses cache) ---------- */
+async function validateCorpusNameField({ endpoint = '/drafts/corpus' } = {}) {
+  const input = document.getElementById('corpusName');
+  if (!input) return true;
 
-        const nav = document.createElement('ul');
-        nav.className = 'nav nav-tabs';
-        nav.id = navId;
-        nav.role = 'tablist';
+  const value = (input.value || '').trim();
+  const fb = ensureCorpusInvalidFeedbackEl(input);
 
-        const content = document.createElement('div');
-        content.className = 'tab-content pt-3';
-        content.id = contentId;
+  await loadCorpusNameCache(endpoint); // warms __cachedCorpusSet
 
-        fileNames.forEach((fname, idx) => {
-          const tabId = 'tab-' + idx + '-' + Date.now();
-          const paneId = 'pane-' + idx + '-' + Date.now();
+  let ok = true;
+  let msg = '';
 
-          // Tab
-          const li = document.createElement('li');
-          li.className = 'nav-item';
-          const btn = document.createElement('button');
-          btn.className = 'nav-link' + (idx === 0 ? ' active' : '');
-          btn.id = tabId;
-          btn.setAttribute('data-bs-toggle', 'tab');
-          btn.setAttribute('data-bs-target', '#' + paneId);
-          btn.type = 'button';
-          btn.role = 'tab';
-          btn.ariaControls = paneId;
-          btn.ariaSelected = (idx === 0 ? 'true' : 'false');
-          btn.textContent = fname;
-          li.appendChild(btn);
-          nav.appendChild(li);
+  if (!value) {
+    ok = false;
+    msg = 'Please enter a corpus name.';
+  } else if (__cachedCorpusSet.has(value.toLowerCase())) {
+    ok = false;
+    msg = `“${value}” already exists. Please choose a different name.`;
+  }
 
-          // Pane
-          const pane = document.createElement('div');
-          pane.className = 'tab-pane fade' + (idx === 0 ? ' show active' : '');
-          pane.id = paneId;
-          pane.role = 'tabpanel';
-          pane.ariaLabelledby = tabId;
+  input.classList.toggle('is-invalid', !ok);     // Bootstrap-friendly
+  input.setCustomValidity(ok ? '' : msg);        // Native form validity
+  fb.textContent = msg;
 
-          const rows = previewsMap[fname] || [];
-          if (!rows.length) {
-            pane.innerHTML = '<div class="text-muted">No rows to preview.</div>';
-          } else {
-            // Collect headers from union of keys (first 5 rows)
-            const headers = Array.from(rows.reduce((s, r) => {
-              Object.keys(r || {}).forEach(k => s.add(k));
-              return s;
-            }, new Set()));
+  return ok;
+}
 
-            const table = document.createElement('table');
-            table.className = 'table table-bordered table-striped table-sm';
-            table.innerHTML = `
-              <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-              <tbody>
-                ${rows.map(r => `<tr>${headers.map(h => `<td>${(r && r[h] !== undefined) ? r[h] : ''}</td>`).join('')}</tr>`).join('')}
-              </tbody>`;
-            pane.appendChild(table);
-          }
-          content.appendChild(pane);
-        });
+function initCorpusNameValidator({ endpoint = '/drafts/corpus' } = {}) {
+  const input = document.getElementById('corpusName');
+  if (!input) return;
 
-        tabsContainer.appendChild(nav);
-        tabsContainer.appendChild(content);
+  // Warm cache; don’t block typing if network fails
+  loadCorpusNameCache(endpoint).catch(() => {});
 
-        modal.show();
+  const onChange = () => validateCorpusNameField({ endpoint });
+  input.addEventListener('input', onChange);
+  input.addEventListener('blur', onChange);
+}
+
+/* ---------- Submit-time guard (fresh fetch for race safety) ---------- */
+async function validateCorpusNameOnSubmit({ endpoint = '/drafts/corpus' } = {}) {
+  const input = document.getElementById('corpusName');
+  if (!input) return true;
+
+  const value = (input.value || '').trim();
+  const fb = ensureCorpusInvalidFeedbackEl(input);
+
+  let ok = true;
+  let msg = '';
+
+  try {
+    if (!value) {
+      ok = false;
+      msg = 'Please enter a corpus name.';
+    } else {
+      const names = await getUniqueCorpusNames(endpoint); // fresh list
+      const set = new Set(names.map(n => n.toLowerCase()));
+      if (set.has(value.toLowerCase())) {
+        ok = false;
+        msg = `“${value}” already exists. Please choose a different name.`;
       }
+    }
+  } catch (e) {
+    ok = false;
+    msg = 'Could not verify name uniqueness. Please try again.';
+  }
 
-      // Optional external preview trigger
-      document.getElementById('previewSelectedBtn').addEventListener('click', () => {
-        // If you want to preload /preview endpoint results here:
-        // loadPreview();
-      });
+  input.classList.toggle('is-invalid', !ok);
+  input.setCustomValidity(ok ? '' : msg);
+  fb.textContent = msg;
 
-    }); // DOMContentLoaded
+  if (!ok) input.focus();
+  return ok;
+}
+
+/* ---------- Initialize live validator (we are already inside DOMContentLoaded) ---------- */
+initCorpusNameValidator({ endpoint: '/drafts/corpus' });
+
+}); // <-- end of the outer DOMContentLoaded handler
+
   </script>
+  
+  
+
+
+  
 </body>
 </html>
