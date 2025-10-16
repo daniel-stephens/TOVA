@@ -189,7 +189,7 @@ def analyze_corpus_draft_endpoint(
 
         # Save training payload for reproducibility
         corpus_dir = DRAFTS_SAVE / corpus_id
-        # _save_training_payload(corpus_dir, payload or {"n_clusters": n_clusters})
+        _save_training_payload(corpus_dir, payload or {"n_clusters": n_clusters})
 
         logger.info("Completed analysis for corpus %s", corpus_id)
         return result
@@ -264,25 +264,13 @@ def get_training_payload(corpus_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to read training payload: {e}")
 
 
-#Place holder for database
+#Place holder for data from database
 #########################################################
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "dashboard"
 
 @router.get("/dashboard-data/{model_id}/")
 def get_dashboard_data(model_id: str) -> Dict[str, Any]:
-    file_path = DATA_DIR / "dashboardData.json"  # or DATA_DIR / f"{model_id}.json"
-    print(file_path)
-    try:
-        with file_path.open("r", encoding="utf-8") as f:
-            data = json.load(f)      # <-- load ONCE
-        print(data)  # avoid noisy prints in prod
-        return data
-
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"File not found: {file_path.name}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON in {file_path.name}: {e}")
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"File read error: {e}")
+    ## to implement
+    return None
 
