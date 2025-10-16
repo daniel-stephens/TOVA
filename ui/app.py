@@ -454,34 +454,6 @@ def delete_model():
 
 ##########################################################
     
-
-
-@server.post("/get-dashboard-data")
-def get_dashboard_data():
-    payload = request.get_json(silent=True) or {}
-    model_id = payload.get("model_id")
-    if not model_id:
-        return jsonify({"error": "model_id is required"}), 400
-
-    # keep the file inside your app directory, not CWD
-    base = Path(current_app.root_path) / "static" / "config"
-    file_path = base / "dashboardData.json"   # or f"{model_id}.dashboardData.json" (see below)
-
-    try:
-        with file_path.open(encoding="utf-8") as f:
-            data = json.load(f)
-            
-        return jsonify(data)
-    except FileNotFoundError:
-        return jsonify({"error": f"File not found: {file_path}"}), 404
-    except json.JSONDecodeError as e:
-        return jsonify({"error": f"Invalid JSON in {file_path}: {e}"}), 500
-    except OSError as e:
-        return jsonify({"error": f"File read error: {e}"}), 500
-
-
-
-
 @server.route("/dashboard/<modelId>", methods=["GET", "POST"])
 def dashboard(modelId):
 
@@ -489,4 +461,19 @@ def dashboard(modelId):
     return render_template("dashboard.html", model_id=modelId)
 
 
+@server.route("/get-dashboard-data", methods=["GET", "POST"])
+def get_data():
+    data_path = Path("dashboardData.json")
+    # Read the JSON file from disk and return it
+    with data_path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    # jsonify sets the correct Content-Type and handles UTF-8 safely
+    return jsonify(payload)
 
+
+
+@server.post("/save-settings")
+def save_settings():
+    payload = request.get_json(silent=True) or {}
+    server.logger.info("Dummy /save-settings received: %s", payload)
+    return jsonify({"ok": True, "echo": payload}), 200

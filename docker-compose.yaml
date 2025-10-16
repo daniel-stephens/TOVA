@@ -39,6 +39,7 @@ services:
       - API_BASE_URL=http://api:8000
     volumes:
     - ./data:/data
+    
 
   solr-api:
     build:

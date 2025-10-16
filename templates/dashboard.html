@@ -116,7 +116,12 @@ footer {
       font-size: 0.9rem;
       border-top: 1px solid #dee2e6;
     }
-  
+    
+  /* Disable transition for our quick hide→show bump */
+  .modal.no-transition .modal-dialog {
+    transition: none !important;
+  }
+
 
 
   </style>
@@ -128,37 +133,88 @@ footer {
       <!-- Brand -->
       <a class="navbar-brand fw-bold" href="/">TOVA</a>
   
-      <!-- Mobile Toggler -->
+      <!-- Mobile toggler -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-        aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
   
-      <!-- Navbar Content -->
+      <!-- Content -->
       <div class="collapse navbar-collapse" id="navbarContent">
-        <!-- Left-aligned Nav Links -->
-        <ul class="navbar-nav me-auto d-flex align-items-center gap-3">
+        <!-- Primary flow (left) -->
+        <ul class="navbar-nav me-auto align-items-lg-center gap-lg-2">
           <li class="nav-item">
-            <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Upload Data</a>
+            <a class="nav-link{% if request.path == '/' %} active{% endif %}"
+               {% if request.path == '/' %}aria-current="page"{% endif %} href="/">
+              Upload Data
+            </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Initiate Training</a>
+            <a class="nav-link{% if 'load' in request.path %} active{% endif %}"
+               {% if 'load' in request.path %}aria-current="page"{% endif %} href="/model">
+              Initiate Training
+            </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Manage Models</a>
+            <a class="nav-link{% if 'train' in request.path %} active{% endif %}"
+               {% if 'train' in request.path %}aria-current="page"{% endif %} href="/trained-models">
+              Manage Models
+            </a>
           </li>
         </ul>
   
-        <!-- Right-aligned Modal Links -->
-        <ul class="navbar-nav ms-auto d-flex align-items-center gap-3">
-          <li class="nav-item">
-            <a class="nav-link text-primary" role="button" onclick="showModelDetails('{{ model_name }}')">Model Info</a>
+        <!-- Utilities / actions (right) -->
+        <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+          <!-- Current model pill (optional; remove if not needed) -->
+          <li class="nav-item d-none d-lg-block">
+            <span class="badge text-bg-light border">
+              Model: <span id="navCurrentModel">{{ model_name|e }}</span>
+            </span>
           </li>
+  
+          <!-- Model Info (modal) -->
           <li class="nav-item">
-            <a class="nav-link text-primary" role="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">Run Inference</a>
+            <a href="#"
+               class="nav-link"
+               role="button"
+               onclick="event.preventDefault(); showModelDetails('{{ model_name|e }}')">
+              Model Info
+            </a>
           </li>
+  
+          <!-- Save (modal) -->
           <li class="nav-item">
-            <a class="nav-link text-primary" role="button" data-bs-toggle="modal" data-bs-target="#topicModelGuideModal">Glossary</a>
+            <a href="#"
+               class="nav-link"
+               role="button"
+               onclick="event.preventDefault(); window.openSaveSettingsModal && window.openSaveSettingsModal();">
+              Save
+            </a>
+          </li>
+  
+          <!-- Help dropdown -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="helpDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Help
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="helpDropdown">
+              <li>
+                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#topicModelGuideModal">
+                  Glossary
+                </a>
+              </li>
+              <!-- Add more help links if needed -->
+            </ul>
+          </li>
+  
+          <!-- Primary action: Run Inference -->
+          <li class="nav-item ms-lg-2">
+            <button class="btn btn-primary"
+                    type="button"
+                    data-bs-toggle="modal"
+                    data-bs-target="#inferenceModal">
+              Run Inference
+            </button>
           </li>
         </ul>
       </div>
@@ -166,9 +222,10 @@ footer {
   </nav>
   
   
+  
 
-  <!-- <div hidden id="modelName">{{model_name}}</div> -->
-  <div id="model_id">{{model_id}}</div>
+  <div hidden id="modelName">{{model_name}}</div>
+  <div hidden id="model_id">{{model_id}}</div>
   
 
   <!-- Full Workspace -->
@@ -624,41 +681,880 @@ footer {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <!-- <script src="/static/js/dashboard.js"></script> -->
-  <!-- <script>
-    model_name = document.getElementById("modelName").textContent;
-    console.log(model_name)
-    async function showModelDetails(modelName) {
-  console.log("Fetching model info for:", modelName);
+  <script>
+document.addEventListener("DOMContentLoaded", () => {
+  const modelName = document.getElementById("modelName")?.textContent?.trim() || "";
 
-  try {
-    const res = await fetch("/api/model-info", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ model_name: modelName })
+  // ---------------------------
+  // Stacked modal helper (bring-to-front)
+  // ---------------------------
+  (function injectNoTransitionStyle() {
+    if (document.getElementById("noTransitionStyle")) return;
+    const style = document.createElement("style");
+    style.id = "noTransitionStyle";
+    style.textContent = ".modal.no-transition .modal-dialog{transition:none!important}";
+    document.head.appendChild(style);
+  })();
+
+  function bringModalToFront(modalEl) {
+    if (!modalEl) return;
+    const instance = bootstrap.Modal.getOrCreateInstance(modalEl, { backdrop: true, focus: true });
+
+    // If closed, normal show.
+    if (!modalEl.classList.contains("show")) {
+      instance.show();
+      return;
+    }
+
+    // Already open → bump to top (hide -> show, no animation).
+    modalEl.classList.add("no-transition");
+    instance.hide();
+
+    queueMicrotask(() => {
+      // Keep body locked if any other modal is open.
+      if (document.querySelectorAll(".modal.show").length > 0) {
+        document.body.classList.add("modal-open");
+      }
+      instance.show();
+      requestAnimationFrame(() => modalEl.classList.remove("no-transition"));
     });
-    console.log("this worked");
+  }
 
-    if (!res.ok) throw new Error("Failed to fetch model data");
+  // ---------------------------
+  // Global state
+  // ---------------------------
+  let dashboardV2 = null;        // normalized single-fetch bundle
+  let themeChartInstance = null;
+  let scatterChartInstance = null;
+  let docInferenceChart = null;
+  let themeColorMap = {};        // { [themeId]: color }
+  let docsArray = [];            // cached rows for main table
 
-    const model = await res.json();
-    console.log("Fetched model data:", model);
+  // ---------------------------
+  // Helpers
+  // ---------------------------
+  function computeColor(index, cfg = {}) {
+    const golden = 137.508;
+    const hue = (index * golden + (cfg.seed || 0)) % 360;
+    const sat = Array.isArray(cfg.saturation) ? cfg.saturation[index % cfg.saturation.length] : 75;
+    const lig = Array.isArray(cfg.lightness) ? cfg.lightness[index % cfg.lightness.length] : 60;
+    return `hsl(${hue}, ${sat}%, ${lig}%)`;
+  }
 
+  function lightBgFromColor(color) {
+    if (!color) return "rgba(0,0,0,0.04)";
+    if (color.startsWith("hsl(")) return color.replace("hsl(", "hsla(").replace(")", ", 0.12)");
+    if (color.startsWith("rgb(")) return color.replace("rgb(", "rgba(").replace(")", ", 0.12)");
+    return "rgba(0,0,0,0.04)";
+  }
+
+  // Choose the first non-empty rationale among several shapes
+  function pickRationale(...candidates) {
+    for (const v of candidates) {
+      if (v == null) continue;
+
+      if (typeof v === "string" && v.trim()) return v.trim();
+
+      if (Array.isArray(v)) {
+        const joined = v.map(x => (x ?? "")).join("\n").replace(/\r\n/g, "\n").trim();
+        if (joined) return joined;
+      }
+
+      if (typeof v === "object") {
+        if (typeof v.text === "string" && v.text.trim()) return v.text.trim();
+        if (Array.isArray(v.bullets)) {
+          const joined = v.bullets.map(x => (x ?? "")).join("\n").replace(/\r\n/g, "\n").trim();
+          if (joined) return joined;
+        }
+      }
+    }
+    return "";
+  }
+
+  // Robust rationale renderer (string/array/object). Hides wrapper when empty.
+  function setRationale({ wrapperId, textId, value, parentId }) {
+    let wrapper = document.getElementById(wrapperId);
+    let textEl  = document.getElementById(textId);
+
+    // Create wrapper if missing
+    if (!wrapper && parentId) {
+      const parent = document.getElementById(parentId);
+      if (parent) {
+        wrapper = document.createElement("div");
+        wrapper.id = wrapperId;
+        wrapper.className = "mb-3";
+        wrapper.style.display = "none";
+        wrapper.innerHTML = `
+          <strong>Rationale:</strong>
+          <p id="${textId}" class="fst-italic small text-muted mb-0" style="white-space: pre-wrap;">—</p>
+        `;
+        parent.appendChild(wrapper);
+        textEl = document.getElementById(textId);
+      }
+    }
+    if (!wrapper || !textEl) return;
+
+    let str = "";
+    if (Array.isArray(value)) str = value.map(x => (x ?? "")).join("\n");
+    else if (typeof value === "string") str = value;
+    else if (value && typeof value === "object") str = pickRationale(value) || "";
+    else if (value != null) str = String(value);
+
+    str = str.replace(/\r\n/g, "\n").trim();
+
+    if (str) {
+      textEl.textContent = str;
+      wrapper.style.display = "";
+    } else {
+      textEl.textContent = "—";
+      wrapper.style.display = "none";
+    }
+  }
+
+  // ---------------------------
+  // Accessors for normalized bundle
+  // ---------------------------
+  const themeIds       = () => dashboardV2.themes.allIds;
+  const themeById      = (id) => dashboardV2.themes.byId[String(id)];
+  const coordByThemeId = (id) => dashboardV2.coordinates?.byThemeId?.[String(id)];
+  const diagByThemeId  = (id) => dashboardV2.diagnostics?.byThemeId?.[String(id)];
+
+  function themesForChart() {
+    const ids = themeIds();
+    return ids.map((id, i) => {
+      const t = themeById(id);
+      const color = computeColor(i, dashboardV2.color);
+      return {
+        id: t.id,
+        label: t.label,
+        document_count: t.documentCount,
+        color,
+        keywords: (t.keywords || []).join(", ")
+      };
+    });
+  }
+
+  function docsForTable() {
+    const out = [];
+    for (const id of dashboardV2.documents.allIds) {
+      const d = dashboardV2.documents.byId[id];
+      const t = themeById(d.themeId);
+      out.push({
+        id: d.id,
+        text: d.text,
+        theme: t?.label || "—",
+        score: d.score,
+        rationale: d.rationale
+      });
+    }
+    return out;
+  }
+
+  function diagnosticsForTable() {
+    return themeIds().map(id => {
+      const t = themeById(id);
+      const d = diagByThemeId(id) || {};
+      return {
+        theme: t.label,
+        prevalence: typeof d.prevalence === "number" ? d.prevalence : null,
+        coherence:  typeof d.coherence  === "number" ? d.coherence  : null,
+        uniqueness: typeof d.uniqueness === "number" ? d.uniqueness : null,
+        theme_matches: typeof d.themeMatches === "number" ? d.themeMatches : null
+      };
+    });
+  }
+
+  function coordinatesForScatter() {
+    return themeIds().map((id) => {
+      const t = themeById(id);
+      const c = coordByThemeId(id) || { x: 0, y: 0, size: t.documentCount || 1 };
+      return { id: Number(id), label: t.label, x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
+    });
+  }
+
+  function similaritiesForTheme(themeId) {
+    const raw = dashboardV2.similarities?.[String(themeId)] || [];
+    return raw.map(([ID, Similarity]) => ({ ID, Similarity }));
+  }
+
+  // ---------------------------
+  // Charts
+  // ---------------------------
+  function createThemeChartData(themes) {
+    return {
+      labels: themes.map(t => t.label),
+      ids: themes.map(t => t.id),
+      meta: themes.map(t => ({ id: t.id, color: t.color, keywords: t.keywords })),
+      datasets: [{
+        data: themes.map(t => t.document_count),
+        backgroundColor: themes.map(t => t.color || "#0d6efd")
+      }]
+    };
+  }
+
+  function renderThemeChart(chartData) {
+    themeColorMap = {};
+    chartData.meta.forEach(m => { themeColorMap[m.id] = m.color || "#0d6efd"; });
+
+    const canvas = document.getElementById("themeChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (themeChartInstance) themeChartInstance.destroy();
+
+    themeChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const i = ctx.dataIndex;
+                const count = ctx.parsed.y;
+                const meta = chartData.meta?.[i];
+                const raw = meta?.keywords || "—";
+                if (typeof raw !== "string") return [`${count} documents`, "Keywords: —"];
+                const words = raw.split(", ").map(w => w.trim());
+                const lines = [];
+                for (let j = 0; j < words.length; j += 5) lines.push(words.slice(j, j + 5).join(", "));
+                return [`${count} documents`, "Keywords:"].concat(lines);
+              }
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { maxRotation: 45, minRotation: 30 } },
+          y: { beginAtZero: true, title: { display: true, text: "Documents" } }
+        },
+        onClick: (e, els) => {
+          if (!els.length) return;
+          const idx = els[0].index;
+          const meta = chartData.meta?.[idx];
+          if (!meta) return;
+          openThemeModal(meta.id, meta.color || "#0d6efd");
+        }
+      }
+    });
+  }
+
+  function renderDocInferenceChart(topThemes = []) {
+    const canvas = document.getElementById("docInferenceChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (docInferenceChart) docInferenceChart.destroy();
+
+    const getColor = id => themeColorMap[Number(id)] || "#0d6efd";
+    const backgroundColors = topThemes.map(t => getColor(t.theme_id));
+
+    docInferenceChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: topThemes.map(t => t.label),
+        datasets: [{ data: topThemes.map(t => t.score), backgroundColor: backgroundColors }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, max: 1 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const t = topThemes[ctx.dataIndex];
+                const pct = (ctx.parsed.y * 100).toFixed(1);
+                const kws = (t.keywords || "No keywords").split(", ").map(k => k.trim());
+                const lines = [];
+                for (let i = 0; i < kws.length; i += 5) lines.push(kws.slice(i, i + 5).join(", "));
+                return [`Score: ${pct}%`, "Keywords:"].concat(lines);
+              }
+            }
+          }
+        },
+        onClick: (e, els) => {
+          if (!els.length) return;
+          const idx = els[0].index;
+          const theme = topThemes[idx];
+          openThemeModal(theme.theme_id, themeColorMap[theme.theme_id] || "#0d6efd");
+        }
+      }
+    });
+  }
+
+  function plotScatterChart(pointsIn) {
+    const canvas = document.getElementById("themeChartGrid");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (scatterChartInstance) scatterChartInstance.destroy();
+
+    const minSize = Math.min(...pointsIn.map(d => d.size));
+    const maxSize = Math.max(...pointsIn.map(d => d.size));
+    const normalize = s => {
+      const minR = 10, maxR = 40;
+      if (maxSize === minSize) return (minR + maxR) / 2;
+      return ((s - minSize) / (maxSize - minSize)) * (maxR - minR) + minR;
+    };
+
+    const points = pointsIn.map(d => {
+      const solid = themeColorMap[d.id] || "rgb(66,133,244)";
+      const fill = solid.startsWith("hsl(")
+        ? solid.replace("hsl(", "hsla(").replace(")", ", 0.2)")
+        : solid.replace("rgb(", "rgba(").replace(")", ", 0.2)");
+      return {
+        x: d.x, y: d.y, r: normalize(d.size),
+        label: d.label, id: d.id, keywords: d.keywords || [],
+        color: solid, backgroundColor: fill, borderColor: solid
+      };
+    });
+
+    const labelPlugin = {
+      id: "themeLabels",
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        const meta = chart.getDatasetMeta(0);
+        meta.data.forEach((pt, i) => {
+          const { x, y } = pt.getCenterPoint();
+          ctx.fillStyle = "#000";
+          ctx.font = "bold 13px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(points[i].label, x, y);
+        });
+        ctx.restore();
+      }
+    };
+
+    scatterChartInstance = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "Themes",
+          data: points,
+          backgroundColor: points.map(p => p.backgroundColor),
+          borderColor: points.map(p => p.borderColor),
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: 20 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const p = points[ctx.dataIndex];
+                const kws = Array.isArray(p.keywords) ? p.keywords : [];
+                const lines = [];
+                for (let i = 0; i < kws.length; i += 5) lines.push(kws.slice(i, i + 5).join(", "));
+                return [p.label, "Keywords:"].concat(lines);
+              }
+            }
+          }
+        },
+        elements: {
+          point: {
+            radius: ctx => points[ctx.dataIndex].r || 20,
+            hoverRadius: ctx => (points[ctx.dataIndex].r || 20) * 1.2
+          }
+        },
+        onClick: (e, els) => {
+          if (!els.length) return;
+          const idx = els[0].index;
+          const p = points[idx];
+          openThemeModal(p.id, p.color || "#0d6efd");
+        },
+        scales: {
+          x: { ticks: { display: false }, grid: { color: "rgba(0,0,0,0.1)" } },
+          y: { ticks: { display: false }, grid: { color: "rgba(0,0,0,0.1)" } }
+        }
+      },
+      plugins: [labelPlugin]
+    });
+  }
+
+  function renderThemeSimilarityChart(similarThemesObjs) {
+    const canvas = document.getElementById("similarityDotPlot");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    const processed = (similarThemesObjs || [])
+      .map(t => ({ id: t.ID, theme: themeById(t.ID)?.label || `Theme ${t.ID}`, similarity: parseFloat(t.Similarity) }))
+      .sort((a, b) => Math.abs(b.similarity) - Math.abs(a.similarity));
+
+    const labels = processed.map(t => t.theme);
+    const values = processed.map(t => t.similarity);
+    const colors = processed.map(t => themeColorMap[t.id] || "#4B8DF8");
+
+    if (window.similarityDotPlot instanceof Chart) window.similarityDotPlot.destroy();
+
+    window.similarityDotPlot = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Similarity Score", data: values, backgroundColor: colors, borderRadius: 4 }] },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        scales: { x: { min: -1, max: 1, ticks: { stepSize: 0.2 }, title: { display: true, text: "Similarity Score - Correlation Between Themes" } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => `Similarity: ${ctx.raw.toFixed(3)}` } }
+        },
+        onClick: (e, els) => {
+          if (!els.length) return;
+          const idx = els[0].index;
+          const t = processed[idx];
+          openThemeModal(t.id, themeColorMap[t.id] || "#0d6efd");
+        }
+      }
+    });
+  }
+
+  // ---------------------------
+  // Tables & Filters
+  // ---------------------------
+  function renderDocumentTable(docs = []) {
+    const thead = document.getElementById("docTableHead");
+    const tbody = document.getElementById("docTableBody");
+    if (!thead || !tbody) return;
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+
+    if (docs.length === 0) {
+      thead.innerHTML = `<tr><th>No data</th></tr>`;
+      tbody.innerHTML = `<tr><td class="text-muted">No documents to display.</td></tr>`;
+      return;
+    }
+
+    const hasRationale = docs.some(doc => "rationale" in doc);
+    const columns = hasRationale ? ["id", "text", "theme", "rationale", "score"] : ["id", "text", "theme", "score"];
+
+    const columnWidths = hasRationale ? {
+      id: "12%", text: "38%", theme: "20%", rationale: "20%", score: "3%"
+    } : {
+      id: "10%", text: "70%", theme: "10%", score: "3%"
+    };
+
+    const headerRow = document.createElement("tr");
+    columns.forEach(col => {
+      const th = document.createElement("th");
+      th.textContent = col.charAt(0).toUpperCase() + col.slice(1).replace(/_/g, " ");
+      th.classList.add("small-text", "align-middle", "text-nowrap");
+      th.style.width = columnWidths[col] || "auto";
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    docs.forEach(doc => {
+      const row = document.createElement("tr");
+      const searchBlob = [doc.id, doc.text, doc.theme, doc.rationale ?? "", String(doc.score ?? "")]
+        .join(" ").toLowerCase();
+      row.dataset.search = searchBlob;
+      row.classList.add("small-text");
+      row.addEventListener("click", () => showInferenceModal(doc));
+
+      columns.forEach(col => {
+        const td = document.createElement("td");
+        let value = doc[col];
+        if (col === "score" && typeof value === "number") {
+          td.textContent = value.toFixed(3);
+          td.title = value.toFixed(3);
+        } else {
+          td.textContent = value !== undefined && value !== null ? String(value) : "—";
+          td.title = td.textContent;
+        }
+        td.classList.add("truncate-cell", "small-text");
+        td.style.width = columnWidths[col] || "auto";
+        row.appendChild(td);
+      });
+
+      tbody.appendChild(row);
+    });
+  }
+
+  function populateThemeFilter(docs) {
+    const themeFilter = document.getElementById("themeFilter");
+    if (!themeFilter) return;
+    themeFilter.innerHTML = `<option value="">All</option>`;
+    const set = [...new Set(docs.map(d => d.theme).filter(Boolean))];
+    set.forEach(theme => {
+      const opt = document.createElement("option");
+      opt.value = theme;
+      opt.textContent = theme;
+      themeFilter.appendChild(opt);
+    });
+  }
+
+  function applyFilters() {
+    const theme = document.getElementById("themeFilter")?.value || "";
+    const minScore = parseFloat(document.getElementById("scoreMin")?.value || "");
+    const maxScore = parseFloat(document.getElementById("scoreMax")?.value || "");
+
+    const filtered = docsArray.filter(doc => {
+      const matchTheme = !theme || doc.theme === theme;
+      const matchMin = isNaN(minScore) || doc.score >= minScore;
+      const matchMax = isNaN(maxScore) || doc.score <= maxScore;
+      return matchTheme && matchMin && matchMax;
+    });
+
+    renderDocumentTable(filtered);
+    const input = document.getElementById("docSearchInput");
+    if (input) input.dispatchEvent(new Event("input"));
+  }
+
+  document.getElementById("docSearchInput")?.addEventListener("input", ((fn, ms = 150) => {
+    let t;
+    return function() {
+      clearTimeout(t);
+      const self = this, args = arguments;
+      t = setTimeout(() => fn.apply(self, args), ms);
+    };
+  })(function () {
+    const query = this.value.toLowerCase().trim();
+    const rows = document.querySelectorAll("#docTableBody tr");
+    rows.forEach(row => {
+      const content = row.dataset.search || "";
+      row.style.display = content.includes(query) ? "" : "none";
+    });
+  }, 100));
+
+  document.getElementById("filteredSearchInput")?.addEventListener("input", ((fn, ms = 150) => {
+    let t;
+    return function() {
+      clearTimeout(t);
+      const self = this, args = arguments;
+      t = setTimeout(() => fn.apply(self, args), ms);
+    };
+  })((e) => {
+    const term = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll("#filteredTableBody tr");
+    rows.forEach(row => {
+      const content = row.dataset.search || "";
+      row.style.display = content.includes(term) ? "" : "none";
+    });
+  }, 100));
+
+  document.getElementById("filterBtn")?.addEventListener("click", applyFilters);
+
+  function populateThemeDiagnosticsTable(rows = []) {
+    const tableHead = document.querySelector("#themeStatsTable thead");
+    const tableBody = document.querySelector("#themeStatsTable tbody");
+    const wrapper   = document.querySelector("#themeStatsTable")?.parentElement;
+    if (!tableHead || !tableBody || !wrapper) return;
+
+    tableHead.innerHTML = "";
+    tableBody.innerHTML = "";
+
+    if (rows.length === 0) {
+      tableHead.innerHTML = `<tr><th>No Data</th></tr>`;
+      tableBody.innerHTML = `<tr><td class="text-muted">No diagnostics available.</td></tr>`;
+      return;
+    }
+
+    const allKeys = Object.keys(rows[0]);
+    const dynamicKeys = allKeys.filter(k => k !== "theme");
+    const columns = ["theme", ...dynamicKeys];
+
+    const headerRow = document.createElement("tr");
+    columns.forEach(col => {
+      const th = document.createElement("th");
+      th.textContent = col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      th.style.position = "sticky"; th.style.top = "0"; th.style.backgroundColor = "#fff"; th.style.zIndex = "1";
+      headerRow.appendChild(th);
+    });
+    tableHead.appendChild(headerRow);
+
+    rows.forEach(r => {
+      const row = document.createElement("tr");
+      columns.forEach(col => {
+        let value = r[col];
+        if (typeof value === "number") {
+          value = col.toLowerCase().includes("prevalence") ? `${(value * 100).toFixed(1)}%` : value.toFixed(3);
+        }
+        const td = document.createElement("td");
+        td.title = value ?? "—";
+        td.textContent = value ?? "—";
+        row.appendChild(td);
+      });
+      tableBody.appendChild(row);
+    });
+  }
+
+  function renderThemeMetrics(metrics = []) {
+    const container = document.getElementById("themeInsightsGrid");
+    if (!container) return;
+    container.innerHTML = "";
+    metrics.forEach(metric => {
+      const col = document.createElement("div");
+      col.className = "col-md-6";
+      col.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light shadow-sm">
+          <div class="text-muted small fw-semibold">${metric.label}</div>
+          <div class="fw-bold text-dark small">${
+            typeof metric.value === "number"
+              ? (metric.label.toLowerCase().includes("prevalence") ? (metric.value * 100).toFixed(1) + "%" : metric.value.toFixed(2))
+              : metric.value
+          }</div>
+        </div>
+      `;
+      container.appendChild(col);
+    });
+  }
+
+  // ---------------------------
+  // Theme modal
+  // ---------------------------
+  function openThemeModal(themeId, themeColor) {
+    const t = themeById(themeId);
+    if (!t) return;
+
+    const modalContent = document.getElementById("themeModalContent");
+    if (modalContent) modalContent.style.backgroundColor = lightBgFromColor(themeColor);
+
+    const modalTitle = document.getElementById("selectedThemeLabel");
+    if (modalTitle) {
+      modalTitle.style.color = themeColor;
+      modalTitle.style.borderLeft = `6px solid ${themeColor}`;
+      modalTitle.style.paddingLeft = "0.5rem";
+      modalTitle.textContent = t.label;
+    }
+
+    document.querySelectorAll("#themeDetailModal .panel").forEach(panel => {
+      panel.style.borderColor = themeColor;
+      panel.style.boxShadow = `0 0 0 1px ${themeColor}`;
+    });
+
+    const summaryEl = document.getElementById("selectedThemeSummary");
+    if (summaryEl) summaryEl.textContent = t.summary || "—";
+
+    // diagnostics
+    const d = diagByThemeId(themeId) || {};
+    const diagContainer = document.getElementById("themeDiagnosticsGrid");
+    if (diagContainer) {
+      diagContainer.innerHTML = "";
+      const diagnostics = {
+        "Prevalence": (typeof d.prevalence === "number") ? `${(d.prevalence * 100).toFixed(3)}%` : "—",
+        "Coherence": (typeof d.coherence === "number") ? d.coherence.toFixed(3) : "—",
+        "Keyword Uniqueness": (typeof d.uniqueness === "number") ? d.uniqueness.toFixed(3) : "—",
+        "Document Matches": (typeof d.themeMatches === "number") ? String(d.themeMatches) : "—"
+      };
+      Object.entries(diagnostics).forEach(([label, value]) => {
+        const div = document.createElement("div");
+        div.innerHTML = `<div class="border rounded p-2 bg-light-subtle h-100 small">
+          <strong>${label}:</strong> <span class="text-muted">${value}</span>
+        </div>`;
+        diagContainer.appendChild(div);
+      });
+    }
+
+    // keywords
+    const kwContainer = document.getElementById("selectedThemeKeywords");
+    if (kwContainer) {
+      kwContainer.innerHTML = "";
+      (t.keywords || []).forEach(k => {
+        const badge = document.createElement("span");
+        badge.className = "badge bg-light text-dark border me-1 mb-1";
+        badge.textContent = k;
+        kwContainer.appendChild(badge);
+      });
+    }
+
+    // documents for this theme
+    const themedDocs = docsArray.filter(d => d.theme === t.label);
+    renderFilteredTable(themedDocs);
+
+    // similarities
+    renderThemeSimilarityChart(similaritiesForTheme(themeId));
+
+    const modalEl = document.getElementById("themeDetailModal");
+    if (modalEl) bringModalToFront(modalEl);
+  }
+
+  function renderFilteredTable(filters = []) {
+    const thead = document.getElementById("filteredTableHead");
+    const tbody = document.getElementById("filteredTableBody");
+    if (!thead || !tbody) return;
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+
+    if (filters.length === 0) {
+      thead.innerHTML = `<tr class="small"><th>No data</th></tr>`;
+      tbody.innerHTML = `<tr class="small"><td class="text-muted">No documents to display.</td></tr>`;
+      return;
+    }
+
+    const baseColumns = ["id", "text", "score"];
+    const hasRationale = filters.some(f => f.hasOwnProperty("rationale"));
+    const columns = hasRationale ? [...baseColumns, "rationale"] : baseColumns;
+
+    const headerRow = document.createElement("tr");
+    headerRow.classList.add("small");
+    columns.forEach(col => {
+      const th = document.createElement("th");
+      th.classList.add("small");
+      th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    filters
+      .slice()
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .forEach(filter => {
+        const row = document.createElement("tr");
+        row.classList.add("small");
+        row.dataset.search = [filter.id, filter.text, String(filter.score ?? ""), filter.rationale ?? ""].join(" ").toLowerCase();
+        row.addEventListener("click", () => showInferenceModal?.(filter));
+
+        columns.forEach(col => {
+          const td = document.createElement("td");
+          td.classList.add("small", "truncate-cell");
+          let value = filter[col];
+          if (col === "score" && typeof value === "number") value = value.toFixed(3);
+          td.textContent = value ?? "—";
+          td.title = td.textContent;
+          row.appendChild(td);
+        });
+
+        tbody.appendChild(row);
+      });
+  }
+
+  // ---------------------------
+  // Inference modal (bundle-first, fetch fallback)
+  // ---------------------------
+  async function showInferenceModal(doc) {
+    const docId = doc.id;
+    const cached = dashboardV2?.inferences?.[docId];
+    let result = null;
+
+    if (cached) {
+      result = {
+        theme: themeById(cached.themeId)?.label,
+        top_themes: cached.topThemes.map(([tid, score]) => {
+          const t = themeById(tid);
+          return {
+            theme_id: tid,
+            label: t?.label,
+            score,
+            keywords: (t?.keywords || []).join(", ")
+          };
+        }),
+        rationale: cached.rationale
+      };
+    } else {
+      try {
+        const response = await fetch("/text-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model_id: dashboardV2.model, document_id: docId })
+        });
+        if (!response.ok) throw new Error("Failed to fetch inference");
+        result = await response.json();
+      } catch (error) {
+        console.error("Inference failed:", error);
+        alert("Failed to infer topic.");
+        return;
+      }
+    }
+
+    const fullTextEl = document.getElementById("modalFullText");
+    const themeEl    = document.getElementById("modalTheme");
+    if (fullTextEl) fullTextEl.textContent = doc.text || "—";
+    if (themeEl)    themeEl.textContent    = result.theme || "—";
+
+    const topTheme = result.top_themes?.[0];
+    const keywordsRaw = topTheme?.keywords || "—";
+    const formatted = typeof keywordsRaw === "string"
+      ? keywordsRaw.split(", ").reduce((acc, word, idx) => {
+          const line = Math.floor(idx / 5);
+          acc[line] = acc[line] ? acc[line] + ", " + word : word;
+          return acc;
+        }, []).join("\n")
+      : keywordsRaw;
+
+    const kwEl = document.getElementById("modalKeywords");
+    if (kwEl) kwEl.textContent = formatted;
+
+    // Use best-available rationale (cached/server/doc)
+    const rationaleVal = pickRationale(
+      result?.rationale,
+      result?.explanation,
+      result?.reason,
+      doc?.rationale
+    );
+
+    setRationale({
+      wrapperId: "rationalDiv",
+      textId: "modalRationale",
+      parentId: "inferenceOutput",
+      value: rationaleVal
+    });
+
+    renderDocInferenceChart(result.top_themes);
+
+    const modal = document.getElementById("docDetailModal");
+    if (modal) bringModalToFront(modal);
+  }
+
+  // ---------------------------
+  // Model details (bundle only)
+  // ---------------------------
+  function showModelDetails(name) {
+    if (!dashboardV2) {
+      alert("Model details are unavailable until the dashboard data loads.");
+      return;
+    }
+    let info = null;
+    if (dashboardV2.modelInfos && typeof dashboardV2.modelInfos === "object") {
+      info = dashboardV2.modelInfos[name] || null;
+      if (!info) {
+        const keys = Object.keys(dashboardV2.modelInfos);
+        if (keys.length === 1) info = dashboardV2.modelInfos[keys[0]];
+      }
+    } else if (dashboardV2.modelInfo) {
+      info = dashboardV2.modelInfo;
+    }
+    if (!info) {
+      alert("No model details found in the loaded data.");
+      return;
+    }
+    renderModelInfoModal(info);
+  }
+  window.showModelDetails = showModelDetails;
+
+  function renderModelInfoModal(model) {
     const modalBody = document.getElementById("modelDetailBody");
+    if (!modalBody) return;
 
-    // 🔧 Format training_params into HTML rows
-    const trainingParamsHTML = model.training_params
-      ? Object.entries(model.training_params)
-          .map(([key, value]) => `
-            <div class="row mb-1">
-              <div class="col-4 text-muted small">${key}:</div>
-              <div class="col-8 small">${value}</div>
-            </div>
-          `)
-          .join("")
+    const trainingParamsHTML = model.training_params && Object.keys(model.training_params).length
+      ? Object.entries(model.training_params).map(([k, v]) => `
+          <div class="row mb-1">
+            <div class="col-4 text-muted small">${k}:</div>
+            <div class="col-8 small">${String(v)}</div>
+          </div>
+        `).join("")
       : `<div class="text-muted small">No training parameters found.</div>`;
+
+    const trainingMetricsHTML = model.training_metrics && Object.keys(model.training_metrics).length
+      ? `
+        <hr />
+        <h6 class="fw-semibold">Training Metrics</h6>
+        ${Object.entries(model.training_metrics).map(([k, v]) => `
+          <div class="row mb-1">
+            <div class="col-4 text-muted small">${k}:</div>
+            <div class="col-8 small">${typeof v === "number" ? v.toFixed(3) : String(v)}</div>
+          </div>
+        `).join("")}
+      `
+      : "";
+
+    const corpora = Array.isArray(model.corpus_names) ? model.corpus_names.join(", ") : (model.corpus_names || "—");
 
     modalBody.innerHTML = `
       <div class="row mb-2">
@@ -679,7 +1575,7 @@ footer {
       </div>
       <div class="row mb-3">
         <div class="col-4 fw-semibold text-muted">Corpora Used:</div>
-        <div class="col-8">${model.corpus_names}</div>
+        <div class="col-8">${corpora}</div>
       </div>
 
       <hr />
@@ -691,163 +1587,362 @@ footer {
       <hr />
       <h6 class="fw-semibold">Training Parameters</h6>
       ${trainingParamsHTML}
+      ${trainingMetricsHTML}
+      ${model.notes ? `<hr /><div class="text-muted small">${model.notes}</div>` : ""}
     `;
 
     const modalEl = document.getElementById("modelInfoModal");
-    const modalInstance = new bootstrap.Modal(modalEl);
-    modalInstance.show();
-
-  } catch (err) {
-    console.error("Error loading model:", err);
-    alert("Failed to load model details.");
-  }
-}
-
-  const barChart = document.getElementById("themeChart");
-  const gridChart = document.getElementById("themeChartGrid");
-  const toggleBtn = document.getElementById("toggleChartBtn");
-
-  toggleBtn.addEventListener("click", () => {
-    const showingBar = !barChart.hidden;
-
-    barChart.hidden = showingBar;
-    gridChart.hidden = !showingBar;
-
-    // Update button text
-    toggleBtn.textContent = showingBar ? "Switch to Bar Chart" : "Switch to Grid View";
-  });
-  let fullChartInstance = null;
-
-
-  function openFullChart(originalChartId) {
-  const originalCanvas = document.getElementById(originalChartId);
-  const fullCanvas = document.getElementById('fullChartCanvas');
-  const fullModalEl = document.getElementById('fullChartModal');
-
-  if (!originalCanvas || !fullCanvas || !fullModalEl) return;
-
-  const originalChart = Chart.getChart(originalCanvas);
-  if (!originalChart) return;
-
-  // Clone chart data (labels and datasets)
-  let clonedData;
-  try {
-    clonedData = structuredClone(originalChart.config.data);
-  } catch (e) {
-    clonedData = JSON.parse(JSON.stringify(originalChart.config.data));
+    if (modalEl) bringModalToFront(modalEl);
   }
 
-  // Clone chart options
-  const originalOptions = originalChart.config.options || {};
-  const clonedOptions = {
-    ...originalOptions,
-    onClick: originalOptions.onClick || null,
-    plugins: {
-      ...originalOptions.plugins,
-      datalabels: {
-        anchor: 'end',
-        align: 'top',
-        font: {
-          weight: 'bold'
-        },
-        formatter: function(value, context) {
-          // Fallback: use chart.data.labels[] or dataset.data[i].label
-          const labels = context.chart.data.labels;
-          if (labels && labels[context.dataIndex]) {
-            return labels[context.dataIndex];
-          }
-          const point = context.dataset.data[context.dataIndex];
-          return point?.label || 'Label';
-        }
-      }
-    }
-  };
-
-  // Destroy any existing chart instance in modal
-  if (window.fullChartInstance) {
-    window.fullChartInstance.destroy();
-  }
-
-  // Initialize Bootstrap modal
-  const modal = new bootstrap.Modal(fullModalEl, {
-    backdrop: false,
-    focus: false
-  });
-
-  // Create chart after modal is fully shown
-  const onModalShown = () => {
-    window.fullChartInstance = new Chart(fullCanvas.getContext('2d'), {
-      type: originalChart.config.type,
-      data: clonedData,
-      options: clonedOptions,
-      plugins: [ChartDataLabels] // ⬅️ make sure the plugin is passed in
+  // ---------------------------
+  // One fetch + boot
+  // ---------------------------
+  async function fetchDashboard(name) {
+    const res = await fetch("/get-dashboard-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: name })
     });
-
-    // Clean up listener to avoid duplicates
-    fullModalEl.removeEventListener('shown.bs.modal', onModalShown);
-  };
-
-  fullModalEl.addEventListener('shown.bs.modal', onModalShown);
-  modal.show();
-}
-
-
-  function openVisibleThemeChart() {
-  const canvasA = document.getElementById('themeChart');
-  const canvasB = document.getElementById('themeChartGrid');
-
-  const visibleCanvas = !canvasA.hidden ? canvasA : !canvasB.hidden ? canvasB : null;
-
-  if (visibleCanvas) {
-    openFullChart(visibleCanvas.id);
-  } else {
-    console.warn('No visible chart found.');
-  }
-}
-
-
-  
-</script>
-       -->
-      
-  
-
-       <script>
-  const DASHBOARD_ENDPOINT = "/get-dashboard-data";
-
-  function fetchWithTimeout(resource, { timeout = 20000, ...options } = {}) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    return fetch(resource, { ...options, signal: controller.signal })
-      .finally(() => clearTimeout(id));
+    if (!res.ok) throw new Error(`Dashboard fetch failed: ${res.status}`);
+    return res.json();
   }
 
-  async function fetchAndPrint(model_id) {
+  (async () => {
     try {
-      const res = await fetchWithTimeout(DASHBOARD_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ model_id }),
-        timeout: 25000
-        // credentials: "same-origin", // uncomment if your Flask route needs cookies/session
-      });
+      dashboardV2 = await fetchDashboard(modelName);
 
-      console.log(res)
+      const themeArray = themesForChart();
+      themeArray.forEach((t, i) => { themeColorMap[t.id] = t.color || computeColor(i, dashboardV2.color); });
+
+      renderThemeChart(createThemeChartData(themeArray));
+      plotScatterChart(coordinatesForScatter());
+
+      docsArray = docsForTable();
+      renderDocumentTable(docsArray);
+      populateThemeFilter(docsArray);
+
+      populateThemeDiagnosticsTable(diagnosticsForTable());
+      renderThemeMetrics(dashboardV2.metrics || []);
+
+      // Bar/Grid toggle
+      const barChart = document.getElementById("themeChart");
+      const gridChart = document.getElementById("themeChartGrid");
+      const toggleBtn = document.getElementById("toggleChartBtn");
+      if (toggleBtn && barChart && gridChart) {
+        toggleBtn.addEventListener("click", () => {
+          const showingBar = !barChart.hidden;
+          barChart.hidden = showingBar;
+          gridChart.hidden = !showingBar;
+          toggleBtn.textContent = showingBar ? "Switch to Bar Chart" : "Switch to Grid View";
+        });
+      }
+
+      // Inference input toggle
+      (() => {
+        const toggleTextBtn = document.getElementById("toggleTextInput");
+        const toggleFileBtn = document.getElementById("toggleFileInput");
+        const textArea = document.getElementById("textAreaSpace");
+        const fileGroup = document.getElementById("fileInputGroup");
+        const inferredBlock = document.getElementById("inferredResults");
+        if (!toggleTextBtn || !toggleFileBtn || !textArea || !fileGroup) return;
+
+        let madeInference = false;
+        toggleTextBtn.addEventListener("click", () => {
+          textArea.style.display = "block";
+          fileGroup.style.display = "none";
+          toggleTextBtn.classList.add("active");
+          toggleFileBtn.classList.remove("active");
+          if (madeInference && inferredBlock) inferredBlock.style.display = "block";
+        });
+        toggleFileBtn.addEventListener("click", () => {
+          textArea.style.display = "none";
+          fileGroup.style.display = "block";
+          toggleFileBtn.classList.add("active");
+          toggleTextBtn.classList.remove("active");
+          if (inferredBlock) inferredBlock.style.display = "none";
+        });
+
+        const inferBtn = document.getElementById("inferBtn");
+        const inputText = document.getElementById("inputText");
+        if (inferBtn && inputText) {
+          inferBtn.addEventListener("click", async () => {
+            const text = inputText.value.trim();
+            if (!text) return alert("Please enter some text.");
+            try {
+              const response = await fetch("/infer-text", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text, id: "temp_id", model: modelName })
+              });
+              if (!response.ok) throw new Error("Failed to fetch inference");
+              const result = await response.json();
+
+              const inferredThemeEl = document.getElementById("inferredTheme");
+              const inferredKeywordsEl = document.getElementById("inferredKeywords");
+              if (inferredThemeEl) inferredThemeEl.textContent = result.top_themes?.[0]?.label || "–";
+
+              setRationale({
+                wrapperId: "inferredRationaleWrapper",
+                textId: "inferredRationale",
+                value: pickRationale(result?.rationale, result?.explanation, result?.reason)
+              });
+
+              if (inferredKeywordsEl) {
+                const kw = result.top_themes?.[0]?.keywords || "";
+                const formatted = typeof kw === "string"
+                  ? kw.split(", ").reduce((acc, word, idx) => {
+                      const line = Math.floor(idx / 5);
+                      acc[line] = acc[line] ? acc[line] + ", " + word : word;
+                      return acc;
+                    }, []).join("\n")
+                  : "";
+                inferredKeywordsEl.textContent = formatted || "—";
+              }
+
+              renderDocInferenceChart(
+                (result.top_themes || []).map(t => ({
+                  ...t,
+                  keywords: t.keywords || ""
+                }))
+              );
+
+              if (textArea) textArea.className = "col-md-6";
+              if (inferredBlock) inferredBlock.style.display = "block";
+              madeInference = true;
+            } catch (err) {
+              console.error("Inference error:", err);
+              alert("Failed to perform inference.");
+            }
+          });
+        }
+      })();
+
+      // Metrics toggle (Theme vs Model)
+      (function metricsToggle() {
+        const btn   = document.getElementById("toggleMetricBtn");
+        const theme = document.getElementById("themeMetricsPanel");
+        const model = document.getElementById("modelMetricsPanel");
+        if (!btn || !theme || !model) return;
+
+        let isThemeView = !theme.classList.contains("d-none");
+        function render() {
+          theme.classList.toggle("d-none", !isThemeView);
+          model.classList.toggle("d-none",  isThemeView);
+          btn.textContent = isThemeView ? "Switch to Model Metrics" : "Switch to Theme Metrics";
+          btn.setAttribute("aria-pressed", String(!isThemeView));
+        }
+        btn.addEventListener("click", () => { isThemeView = !isThemeView; render(); });
+        render();
+      })();
+
+      // Fullscreen chart helpers
+      window.openFullChart = function (originalChartId) {
+        const originalCanvas = document.getElementById(originalChartId);
+        const fullCanvas = document.getElementById('fullChartCanvas');
+        const fullModalEl = document.getElementById('fullChartModal');
+        if (!originalCanvas || !fullCanvas || !fullModalEl) return;
+
+        const originalChart = Chart.getChart(originalCanvas);
+        if (!originalChart) return;
+
+        let clonedData;
+        try { clonedData = structuredClone(originalChart.config.data); }
+        catch(e) { clonedData = JSON.parse(JSON.stringify(originalChart.config.data)); }
+
+        const originalOptions = originalChart.config.options || {};
+        const clonedOptions = {
+          ...originalOptions,
+          onClick: null,
+          plugins: {
+            ...originalOptions.plugins,
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              font: { weight: 'bold' },
+              formatter: function(value, context) {
+                const labels = context.chart.data.labels;
+                if (labels && labels[context.dataIndex]) return labels[context.dataIndex];
+                const point = context.dataset.data[context.dataIndex];
+                return point?.label || 'Label';
+              }
+            }
+          }
+        };
+
+        if (window.fullChartInstance) window.fullChartInstance.destroy();
+
+        const modal = new bootstrap.Modal(fullModalEl, { backdrop: false, focus: false });
+        const onShown = () => {
+          window.fullChartInstance = new Chart(fullCanvas.getContext('2d'), {
+            type: originalChart.config.type,
+            data: clonedData,
+            options: clonedOptions,
+            plugins: [ChartDataLabels]
+          });
+          fullModalEl.removeEventListener('shown.bs.modal', onShown);
+        };
+        fullModalEl.addEventListener('shown.bs.modal', onShown);
+        bringModalToFront(fullModalEl);
+      };
+
+      window.openVisibleThemeChart = function () {
+        const canvasA = document.getElementById('themeChart');
+        const canvasB = document.getElementById('themeChartGrid');
+        const visibleCanvas = !canvasA?.hidden ? canvasA : !canvasB?.hidden ? canvasB : null;
+        if (visibleCanvas) window.openFullChart(visibleCanvas.id);
+      };
 
     } catch (err) {
-      console.error("fetchAndPrint error:", err);
-      const out = document.getElementById("output");
-      if (out) out.textContent = `Error: ${err.message}`;
+      console.error(err);
+      alert("Failed to load dashboard.");
     }
-  }
+  })();
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const el = document.getElementById("model_id");
-    const model_id = el ? el.textContent.trim() : "";
-    fetchAndPrint(model_id);
-  });
+  // ---------------------------
+  // Save preferences modal (autoshow after 5 minutes)
+  // ---------------------------
+  (function savePrefs() {
+    const SAVE_DELAY_MS = 5 * 60 * 1000;     // 5 minutes
+    const SESSION_KEY   = "savePrefsDismissed";
+
+    function ensureSaveSettingsModal() {
+      if (document.getElementById("saveSettingsModal")) return;
+
+      document.body.insertAdjacentHTML("beforeend", `
+        <div class="modal fade" id="saveSettingsModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <form id="saveSettingsForm">
+                <div class="modal-header">
+                  <h5 class="modal-title">Save preferences</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                  <p class="mb-2 small text-muted">Choose what you’d like to save:</p>
+
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="saveModel" name="saveModel">
+                    <label class="form-check-label" for="saveModel">Save <strong>Model</strong></label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="saveCorpus" name="saveCorpus">
+                    <label class="form-check-label" for="saveCorpus">Save <strong>Corpus</strong></label>
+                  </div>
+
+                  <div class="form-text">You can change this later in settings.</div>
+                </div>
+
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" id="saveNotNowBtn" data-bs-dismiss="modal">Not now</button>
+                  <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>`);
+
+      document.getElementById("saveNotNowBtn")?.addEventListener("click", () => {
+        try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
+      });
+
+      document.getElementById("saveSettingsForm")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const saveModel  = document.getElementById("saveModel")?.checked || false;
+        const saveCorpus = document.getElementById("saveCorpus")?.checked || false;
+
+        const modelId =
+          (window.dashboardV2?.model) ||
+          (document.getElementById("modelName")?.textContent || "").trim();
+
+        const modelInfo =
+          window.dashboardV2?.modelInfo ||
+          (window.dashboardV2?.modelInfos && window.dashboardV2.modelInfos[modelId]) ||
+          null;
+
+        const payload = {
+          model_id: modelId,
+          save: { model: !!saveModel, corpus: !!saveCorpus },
+          meta: {
+            theme_count: window.dashboardV2?.themes?.allIds?.length ?? null,
+            document_count: window.dashboardV2?.documents?.allIds?.length ?? null,
+            num_topics: modelInfo?.num_topics ?? null,
+            corpus_names: Array.isArray(modelInfo?.corpus_names)
+              ? modelInfo.corpus_names
+              : (modelInfo?.corpus_names ? [modelInfo.corpus_names] : [])
+          },
+          ts: new Date().toISOString()
+        };
+
+        try {
+          const res = await fetch("/save-settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+          const modalEl = document.getElementById("saveSettingsModal");
+          bootstrap.Modal.getInstance(modalEl)?.hide();
+        } catch (err) {
+          console.error(err);
+          alert("Failed to save your preference. Please try again.");
+        }
+      });
+    }
+
+    function openSaveSettingsModal() {
+      ensureSaveSettingsModal();
+      const el = document.getElementById("saveSettingsModal");
+      if (el) bringModalToFront(el);
+    }
+    window.openSaveSettingsModal = openSaveSettingsModal;
+
+    // Auto-show after delay unless dismissed
+    try {
+      if (!sessionStorage.getItem(SESSION_KEY)) {
+        setTimeout(() => {
+          if (!sessionStorage.getItem(SESSION_KEY)) openSaveSettingsModal();
+        }, SAVE_DELAY_MS);
+      }
+    } catch {
+      setTimeout(openSaveSettingsModal, SAVE_DELAY_MS);
+    }
+  })();
+
+  // ---------------------------
+  // Metrics panel toggle (ensure button works even if initial DOM classes differ)
+  // ---------------------------
+  (function metricsToggleOnce() {
+    const btn   = document.getElementById("toggleMetricBtn");
+    const theme = document.getElementById("themeMetricsPanel");
+    const model = document.getElementById("modelMetricsPanel");
+    if (!btn || !theme || !model) return;
+
+    let isThemeView = !theme.classList.contains("d-none");
+    function render() {
+      theme.classList.toggle("d-none", !isThemeView);
+      model.classList.toggle("d-none",  isThemeView);
+      btn.textContent = isThemeView ? "Switch to Model Metrics" : "Switch to Theme Metrics";
+      btn.setAttribute("aria-pressed", String(!isThemeView));
+    }
+    btn.addEventListener("click", () => { isThemeView = !isThemeView; render(); });
+    render();
+  })();
+
+  // Expose for other inline handlers
+  window.openThemeModal = openThemeModal;
+});
 </script>
 
-      
+    
+    
+    
+    
+    
+
+
+
 </body>
 </html>

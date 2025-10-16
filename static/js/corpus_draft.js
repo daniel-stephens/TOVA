@@ -1,16 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-    // Unified store populated from /get-dashboard-data
-    const DATA = {
-      themes: [],                 // [{id, id_num, label, document_count, keywords (string)}]
-      documents: [],              // [{id,text,theme,score,rationale?}]
-      diagnostics: [],            // [{theme,prevalence,coherence,uniqueness,theme_matches}]
-      themeMetrics: [],           // [{label,value}]
-      themeCoordinates: [],       // [{id,label,x,y,size,keywords:[]}]
-      themeDetailsById: {}        // { [id_num]: full detail }
-    };
-
-
 
     
   modelName = document.getElementById("modelName").textContent;
