@@ -1,42 +1,53 @@
-# 🧠 TOVA: Topic Visualization & Analysis
+# TOVA: Topic Visualization & Analysis
 
-**TOVA** is an interactive, end-to-end platform for working with topic models. It provides:
-- ✅ A **command-line interface** for training and inferring models
-- ✅ A **REST API** for integrating into apps or pipelines
-- ✅ A sleek **web dashboard** for visualizing and exploring topics, keywords, documents, and trends
+## Build and deploy
 
-Whether you're a researcher, data scientist, or a curious explorer, TOVA helps you understand the hidden structure of large collections of text.
+Everything happens through the Makefile that encapsulates all the docker-compose commands.
 
----
-
-## 🚀 Features
-
-- 🔍 Train traditional or LLM-based topic models
-- 🧩 Ingest CSV, Excel, or JSON files with custom columns
-- 📊 Visualize themes by prevalence, coherence, and keyword uniqueness
-- 📝 Run single or batch document inference
-- 📈 Track themes over time with trend graphs
-- ⚡ Modular architecture (CLI/API/UI) that shares one backend core
-
----
-
-## 🛠️ Setup & Installation
-
-### 1. Clone the Repository
+### Quick Start
 
 ```bash
-git clone https://github.com/your-org/tova.git
-cd tova
+make up      # Build and start all services
+make down    # Stop all services
+make logs-api # View API logs
 ```
 
+### Available Commands
 
-### Install Python Dependencies in your virtual environment
-```bash
-    pip install -r requirements.txt
-```
-### Start the Both Servers - Backend API and Flaskapp
+**Building Images:**
 
-```bash
-    python run.py
-```
-Then visit  http://localhost:5000 to access the Web interface. You can visit http://localhost:8989 for API instructions
+- `make build` - Build all images (builder, assets, api, web, solr-api)
+- `make build-api` - Build only the API service
+- `make build-web` - Build only the web UI service  
+- `make build-solr-api` - Build only the Solr API service
+
+**Rebuilding (no cache):**
+
+- `make rebuild-all` - Rebuild everything and start services
+- `make rebuild-run` - Rebuild runtime services (api, web, solr-api) and start
+- `make rebuild-api`, `make rebuild-web`, `make rebuild-solr-api` - Rebuild individual services
+
+**Running Services:**
+
+- `make up` - Build (if needed) and start all services
+- `make down` - Stop and remove all containers
+
+**Monitoring:**
+
+- `make logs-api` - Follow API logs
+- `make logs-web` - Follow web UI logs  
+- `make logs-solr-api` - Follow Solr API logs
+
+### Services
+
+The application consists of:
+
+- **API** (port 8000) - Main FastAPI application
+- **Web** (port 8080) - Web UI interface
+- **Solr API** (port 8001) - Solr search interface
+- **Solr** (port 8983) - Apache Solr search engine
+- **Zookeeper** (ports 2180, 2181) - Coordination service for Solr
+
+## Functionalities
+
+1. Users can upload one or more datasets. Each dataset contains raw text documents, and multiple datasets can be merged into a single corpus for model training.

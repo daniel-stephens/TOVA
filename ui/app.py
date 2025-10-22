@@ -98,7 +98,25 @@ def create_corpus():
         mimetype=upstream.headers.get("Content-Type", "application/json"),
     )
 
+@server.route("/draft/create/dataset/", methods=["POST"])
+def create_dataset():
+    payload = request.get_json(silent=True) or {}
+    try:
+        upstream = requests.post(
+            f"{API}/data/drafts/dataset/save",  # <-- IMPORTANT: /data prefix
+            json=payload,
+            timeout=(3.05, 30),
+        )
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
+    return Response(
+        upstream.content,
+        status=upstream.status_code,
+        mimetype=upstream.headers.get("Content-Type", "application/json"),
+    )
 
 
 @server.route("/train/corpus/<corpus_id>/tfidf/", methods=["POST"])

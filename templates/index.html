@@ -924,8 +924,10 @@
     // ===============================
     // POST to backend + Loader UI
     // ===============================
-    const SAVE_URL = "/drafts/corpus/save/"; // Flask route -> FastAPI /data/drafts/corpus
-  
+    //const SAVE_URL = "/drafts/corpus/save/"; // Flask route -> FastAPI /data/drafts/corpus
+    const SAVE_DATASET_URL = "/draft/create/dataset/"; 
+    const SAVE_CORPUS_URL  = "/draft/create/corpus/";  
+
     // Use your existing overlay block (#loader-overlay). We'll just set its <p> text.
     function setBusy(on, message = "Processing... Please wait.") {
       const overlay = document.getElementById('loader-overlay');
@@ -1008,8 +1010,9 @@
         created_at: new Date().toISOString()
       };
     }
-    async function postDraft({ metadata, data, owner_id }) {
-      const res = await fetch( "/drafts/corpus/save/", {
+    /*async function postDraft({ metadata, data, owner_id }) {
+      //const res = await fetch( "/drafts/corpus/save/", {
+      const res = await fetch(SAVE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ metadata, data, owner_id })
@@ -1019,61 +1022,138 @@
         throw new Error(`Draft save failed: ${res.status} ${txt}`);
       }
       return res.json(); // { draft_id: "c_XXXXXXXX" }
+    }*/
+    async function postDraft(body) {
+      const res = await fetch(SAVE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=>'');
+        throw new Error(`Draft save failed: ${res.status} ${txt}`);
+      }
+      return res.json();
     }
   
     async function onContinueClick(e) {
       e.preventDefault();
       if (continueBtn.classList.contains('disabled')) return;
-  
+
       try {
-        const corpusName = (document.getElementById("corpusName")?.value || '').trim();
+        // --- validate corpus name ---
+        const corpusName = (document.getElementById("corpusName")?.value || "").trim();
         if (!corpusName) {
           feedback.classList.add('text-danger');
           feedback.textContent = "Please enter a Corpus Name.";
           return;
         }
-  
-        const wiz = window.wizard || { files: [], mappings: {} };
+
+        // --- collect mapping state ---
+        const wiz  = window.wizard || { files: [], mappings: {} };
         const sFile = window.singleFile || null;
-        const sMap  = window.singleMapping || { id:'', text:'', label:'' };
-        const mode = (document.getElementById("uploadFile")?.checked ? 'single' : 'folder');
-  
+        const sMap  = window.singleMapping || { id: "", text: "", label: "" };
+        const mode  = (document.getElementById("uploadFile")?.checked ? "single" : "folder");
+
         let files = [], mappings = {};
-        if (mode === 'single') {
+        if (mode === "single") {
           if (!sFile || !sMap.id || !sMap.text) {
-            feedback.classList.add('text-danger'); feedback.textContent = 'Please select and map ID/Text for the file.'; return;
+            feedback.classList.add("text-danger");
+            feedback.textContent = "Please select and map ID/Text for the file.";
+            return;
           }
-          files = [sFile]; mappings[sFile.name] = sMap;
+          files = [sFile];
+          mappings[sFile.name] = sMap;
         } else {
-          if (!wiz.files?.length) { feedback.classList.add('text-danger'); feedback.textContent = 'No files selected.'; return; }
+          if (!wiz.files?.length) {
+            feedback.classList.add("text-danger");
+            feedback.textContent = "No files selected.";
+            return;
+          }
           const unmapped = wiz.files.filter(f => !wiz.mappings?.[f.name]?.id || !wiz.mappings?.[f.name]?.text);
-          if (unmapped.length) { feedback.classList.add('text-danger'); feedback.textContent = 'Please map ID and Text for all files.'; return; }
-          files = wiz.files; mappings = wiz.mappings;
+          if (unmapped.length) {
+            feedback.classList.add("text-danger");
+            feedback.textContent = "Please map ID and Text for all files.";
+            return;
+          }
+          files = wiz.files;
+          mappings = wiz.mappings;
         }
-  
-        setBusy(true, "Building corpus…");
-        const documents = await buildDocuments(files, mappings);
-        if (!documents.length) { setBusy(false); feedback.classList.add('text-danger'); feedback.textContent = 'No valid documents found from mappings.'; return; }
-  
+
+        // --- build documents for DATASET endpoint (expects id, text, sourcefile; label optional) ---
+        setBusy(true, "Building documents…");
+        const documents = (await buildDocuments(files, mappings)).map(d => ({
+          id: d.id,
+          text: d.text,                              // REQUIRED by /drafts/dataset/save
+          sourcefile: d.sourcefile,                  // REQUIRED by /drafts/dataset/save
+          ...(d.label !== undefined ? { label: d.label } : {})
+        }));
+
+        if (!documents.length) {
+          setBusy(false);
+          feedback.classList.add("text-danger");
+          feedback.textContent = "No valid documents found from mappings.";
+          return;
+        }
+
+        // --- shared metadata for listing/UX ---
         const metadata = buildMetadata({ corpusName, mode, files });
-        const data = { documents };
-        console.log(data)
-        console.log(metadata)
         const owner_id = window.currentUserId || "anonymous";
-  
-        setBusy(true, "Saving draft…");
-        const result = await postDraft({ metadata, data, owner_id });
-        if (result?.draft_id) sessionStorage.setItem('draft_id', result.draft_id);
-  
+
+        // ---------- Step 1: save DATASET draft ----------
+        setBusy(true, "Saving dataset…");
+        const dsResp = await fetch(SAVE_DATASET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            metadata,
+            data: { documents },          // shape expected by /drafts/dataset/save
+            owner_id
+          })
+        });
+        if (!dsResp.ok) {
+          const txt = await dsResp.text().catch(() => "");
+          throw new Error(`Dataset save failed: ${dsResp.status} ${txt}`);
+        }
+        const dsJson = await dsResp.json();
+        const dataset_id = dsJson?.draft_id;        // e.g., "d_abcd1234"
+        if (!dataset_id) {
+          throw new Error("Dataset save failed: missing draft_id in response.");
+        }
+
+        // ---------- Step 2: save CORPUS draft referencing the dataset ----------
+        setBusy(true, "Saving corpus…");
+        const corpusResp = await fetch(SAVE_CORPUS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            datasets: [{ id: dataset_id }], // shape expected by /drafts/corpus/save
+            model_name: corpusName          // stored in corpus draft metadata
+            // Optionally include:
+            // model: "...",
+            // training_params: {...}
+          })
+        });
+        if (!corpusResp.ok) {
+          const txt = await corpusResp.text().catch(() => "");
+          throw new Error(`Corpus save failed: ${corpusResp.status} ${txt}`);
+        }
+        const corpusResult = await corpusResp.json(); // { draft_id: "c_...", training_config: {...} }
+        if (corpusResult?.draft_id) {
+          sessionStorage.setItem("draft_id", corpusResult.draft_id);
+        }
+
         setBusy(false);
         window.location.href = "/model";
       } catch (err) {
         console.error(err);
         setBusy(false);
-        feedback.classList.add('text-danger');
-        feedback.textContent = err.message || 'Failed to save draft.';
+        feedback.classList.add("text-danger");
+        feedback.textContent = err.message || "Failed to save draft.";
       }
     }
+
   
     /* ---------- Replace the old Continue binding with a guarded handler ---------- */
 if (continueBtn) {
