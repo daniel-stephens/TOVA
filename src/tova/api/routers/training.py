@@ -3,7 +3,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import uuid
 from typing import Dict, List, Optional
 from fastapi import Body
 
@@ -18,6 +17,7 @@ from tova.api.models.train_schemas import TrainRequest, TrainResponse
 from tova.core.dispatchers import train_model_dispatch
 from tova.core.tfidf_lsi import *
 from tova.utils.cancel import CancellationToken, CancelledError
+from tova.utils.common import get_unique_id
 from tova.utils.tm_utils import normalize_json_data
 from tova.core.tfidf_lsi import _save_training_payload
 router = APIRouter(tags=["Training"])
@@ -95,7 +95,7 @@ async def _enqueue_training_job(
     training_params: Optional[Dict],
     bg: BackgroundTasks,
 ) -> TrainResponse:
-    model_id = f"m_{uuid.uuid4().hex[:8]}"
+    model_id = get_unique_id(prefix="m_")
 
     job = await job_store.create(
         type=JobType.train_model,
@@ -146,7 +146,7 @@ async def train_model_from_json(req: TrainRequest, bg: BackgroundTasks, response
             do_preprocess=req.do_preprocess,
             training_params=req.training_params,
             bg=bg,
-        )  # this is the response body
+        )
 
         # add location to the response header
         response.headers["Location"] = f"/status/jobs/{train_response.job_id}"
@@ -262,15 +262,3 @@ def get_training_payload(corpus_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.exception("Failed to read training payload for corpus %s", corpus_id)
         raise HTTPException(status_code=500, detail=f"Failed to read training payload: {e}")
-
-
-#Place holder for data from database
-#########################################################
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "dashboard"
-
-@router.get("/dashboard-data/{model_id}/")
-def get_dashboard_data(model_id: str) -> Dict[str, Any]:
-    ## to implement
-    return None
-

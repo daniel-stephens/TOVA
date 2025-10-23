@@ -17,7 +17,6 @@ def list_models():
 def list_datasets(model_name):
     return ["documents"]  # For now, static. You can expand this.
 
-
 def init_dash_app(server):
     # === ChromaDB connection ===
     client = chromadb.PersistentClient(path="database/myDB")

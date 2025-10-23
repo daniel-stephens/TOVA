@@ -1,9 +1,11 @@
+import json
 import logging
+import os
 import pathlib
 import pickle
 from datetime import datetime
 import sys
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -190,3 +192,31 @@ def pickler(file: str, ob: object) -> int:
     with open(file, 'wb') as f:
         pickle.dump(ob, f)
     return 0
+
+def get_unique_id(prefix: str = "") -> str:
+    """
+    Generate a unique ID with an optional prefix.
+
+    Parameters
+    ----------
+    prefix : str, optional
+        The prefix to add to the unique ID, by default "".
+
+    Returns
+    -------
+    str
+        The generated unique ID.
+    """
+    import uuid
+    return f"{prefix}{uuid.uuid4().hex}"
+
+
+def write_json_atomic(path: pathlib.Path, payload: Any) -> None:
+    """Safely write JSON to file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)

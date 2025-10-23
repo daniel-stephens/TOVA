@@ -925,8 +925,8 @@
     // POST to backend + Loader UI
     // ===============================
     //const SAVE_URL = "/drafts/corpus/save/"; // Flask route -> FastAPI /data/drafts/corpus
-    const SAVE_DATASET_URL = "/draft/create/dataset/"; 
-    const SAVE_CORPUS_URL  = "/draft/create/corpus/";  
+    const SAVE_DATASET_URL = "/data/create/dataset/"; 
+    const SAVE_CORPUS_URL  = "/data/create/corpus/";  
 
     // Use your existing overlay block (#loader-overlay). We'll just set its <p> text.
     function setBusy(on, message = "Processing... Please wait.") {
@@ -1085,8 +1085,8 @@
         setBusy(true, "Building documents…");
         const documents = (await buildDocuments(files, mappings)).map(d => ({
           id: d.id,
-          text: d.text,                              // REQUIRED by /drafts/dataset/save
-          sourcefile: d.sourcefile,                  // REQUIRED by /drafts/dataset/save
+          text: d.text,                              
+          sourcefile: d.sourcefile,                  
           ...(d.label !== undefined ? { label: d.label } : {})
         }));
 
@@ -1108,7 +1108,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             metadata,
-            data: { documents },          // shape expected by /drafts/dataset/save
+            data: { documents },         
             owner_id
           })
         });
@@ -1128,11 +1128,8 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            datasets: [{ id: dataset_id }], // shape expected by /drafts/corpus/save
-            model_name: corpusName          // stored in corpus draft metadata
-            // Optionally include:
-            // model: "...",
-            // training_params: {...}
+            datasets: [{ id: dataset_id }], 
+            corpus_name: corpusName
           })
         });
         if (!corpusResp.ok) {
@@ -1159,14 +1156,14 @@
 if (continueBtn) {
   continueBtn.addEventListener("click", async (e) => {
     e.preventDefault();
-    const ok = await validateCorpusNameOnSubmit({ endpoint: '/drafts/corpus' });
+    const ok = await validateCorpusNameOnSubmit({ endpoint: '/getAllCorpora' });
     if (!ok) return;                  // duplicate or empty -> show inline error and stop
     await onContinueClick(e);         // proceed with your existing save flow
   }, { passive: false });
 }
 
 /* ---------- Fetch & dedupe (strings OR objects) ---------- */
-async function getUniqueCorpusNames(endpoint = '/drafts/corpus') {
+async function getUniqueCorpusNames(endpoint = '/getAllCorpora') {
   const res = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
   if (!res.ok) throw new Error(`Failed to load corpuses: ${res.status}`);
   const items = await res.json();
@@ -1201,7 +1198,7 @@ async function getUniqueCorpusNames(endpoint = '/drafts/corpus') {
 let __cachedCorpusNames = null;
 let __cachedCorpusSet = null;
 
-async function loadCorpusNameCache(endpoint = '/drafts/corpus') {
+async function loadCorpusNameCache(endpoint = '/getAllCorpora') {
   if (__cachedCorpusNames) return __cachedCorpusNames;
   const names = await getUniqueCorpusNames(endpoint);
   __cachedCorpusNames = names;
@@ -1223,7 +1220,7 @@ function ensureCorpusInvalidFeedbackEl(input) {
 }
 
 /* ---------- Live validation while typing (uses cache) ---------- */
-async function validateCorpusNameField({ endpoint = '/drafts/corpus' } = {}) {
+async function validateCorpusNameField({ endpoint = '/getAllCorpora' } = {}) {
   const input = document.getElementById('corpusName');
   if (!input) return true;
 
@@ -1250,7 +1247,7 @@ async function validateCorpusNameField({ endpoint = '/drafts/corpus' } = {}) {
   return ok;
 }
 
-function initCorpusNameValidator({ endpoint = '/drafts/corpus' } = {}) {
+function initCorpusNameValidator({ endpoint = '/getAllCorpora' } = {}) {
   const input = document.getElementById('corpusName');
   if (!input) return;
 
@@ -1263,7 +1260,7 @@ function initCorpusNameValidator({ endpoint = '/drafts/corpus' } = {}) {
 }
 
 /* ---------- Submit-time guard (fresh fetch for race safety) ---------- */
-async function validateCorpusNameOnSubmit({ endpoint = '/drafts/corpus' } = {}) {
+async function validateCorpusNameOnSubmit({ endpoint = '/getAllCorpora' } = {}) {
   const input = document.getElementById('corpusName');
   if (!input) return true;
 
@@ -1299,7 +1296,7 @@ async function validateCorpusNameOnSubmit({ endpoint = '/drafts/corpus' } = {}) 
 }
 
 /* ---------- Initialize live validator (we are already inside DOMContentLoaded) ---------- */
-initCorpusNameValidator({ endpoint: '/drafts/corpus' });
+initCorpusNameValidator({ endpoint: '/getAllCorpora' });
 
 }); // <-- end of the outer DOMContentLoaded handler
 

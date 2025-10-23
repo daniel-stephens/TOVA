@@ -10,7 +10,7 @@ from pathlib import Path
 server = Flask(__name__)
 
 server.secret_key = 'your-secret-key'
-    
+
 API = os.getenv("API_BASE_URL", "http://api:8000")
 
 # @daniel-stephens: maybe we can remove this and move to a config or something
@@ -20,12 +20,11 @@ topicinfourl = f"{API}/queries/model-info"
 textinfourl = f"{API}/queries/thetas-by-docs-ids"
 
 
-
-
 # 1. Home Page
 @server.route('/')
 def home():
     return render_template('homepage.html')
+
 
 @server.route('/check-backend')
 def check_backend():
@@ -46,16 +45,13 @@ def load_data_page():
 
 @server.route("/trained-models")
 def trained_models():
-
     return render_template("trained_models.html")
-
-
 
 
 @server.route("/get-trained-models", methods=["GET"])
 def get_trained_models():
     try:
-        resp = requests.get(f"{API}/data/drafts", params={"type": "model"}, timeout=10)
+        resp = requests.get(f"{API}/data/models", timeout=10)
     except requests.Timeout:
         return jsonify({"error": "Upstream request timed out"}), 504
     except requests.RequestException as e:
@@ -74,49 +70,115 @@ def get_trained_models():
     return Response(resp.content, status=resp.status_code, headers={"Content-Type": content_type})
 
 
-@server.route("/draft/create/corpus/", methods=["POST"])
+@server.route("/data/create/corpus/", methods=["POST"])
 def create_corpus():
     payload = request.get_json(silent=True)
     if not payload:
         return jsonify({"error": "No JSON payload received"}), 400
 
+    # Transform the payload to match Corpus schema
+    datasets = payload.get("datasets", [])  # List of dictionaries with dataset IDs
+    datasets_lst = []
+
+    for el in datasets:
+        try:
+            # Use GET instead of POST to retrieve datasets
+            upstream = requests.get(
+                f"{API}/data/datasets/{el['id']}",
+                timeout=(3.05, 30),
+            )
+            if not upstream.ok:
+                return Response(
+                    upstream.content,
+                    status=upstream.status_code,
+                    mimetype=upstream.headers.get("Content-Type", "application/json"),
+                )
+            # Parse the JSON response and append to the list
+            datasets_lst.append(upstream.json())
+        except requests.Timeout:
+            return jsonify({"error": "Upstream timeout"}), 504
+        except requests.RequestException as e:
+            return jsonify({"error": f"Upstream connection error: {e}"}), 502
+
+    corpus_payload = {
+        "name": payload.get("corpus_name", ""),
+        "description": f"Corpus from datasets {', '.join([d['id'] for d in datasets])}",
+        "datasets": datasets_lst,
+    }
+
+    current_app.logger.info("Payload sent to /data/corpora: %s", corpus_payload)
+
     try:
         upstream = requests.post(
-            f"{API}/data/drafts/corpus/save",  # <-- note: "corpus" not "dataset"
-            json=payload,
+            f"{API}/data/corpora",
+            json=corpus_payload,
             timeout=(3.05, 30),
+        )
+        if not upstream.ok:
+            return Response(
+                upstream.content,
+                status=upstream.status_code,
+                mimetype=upstream.headers.get("Content-Type", "application/json"),
+            )
+
+        return Response(
+            upstream.content,
+            status=upstream.status_code,
+            mimetype=upstream.headers.get("Content-Type", "application/json"),
         )
     except requests.Timeout:
         return jsonify({"error": "Upstream timeout"}), 504
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
-    print(upstream)
-    return Response(
-        upstream.content,
-        status=upstream.status_code,
-        mimetype=upstream.headers.get("Content-Type", "application/json"),
-    )
-
-@server.route("/draft/create/dataset/", methods=["POST"])
+@server.route("/data/create/dataset/", methods=["POST"])
 def create_dataset():
     payload = request.get_json(silent=True) or {}
+
+    # Transform the payload to match Dataset schema
+    # The frontend sends: { metadata: {...}, data: { documents: [...] }, owner_id: "..." }
+    # We need to create a Dataset object
+
+    metadata = payload.get("metadata", {})
+    data = payload.get("data", {})
+    documents = data.get("documents", [])
+    owner_id = payload.get("owner_id")
+
+    # Build Dataset object structure
+    dataset_payload = {
+        "name": metadata.get("name", ""),
+        "description": metadata.get("description", ""),
+        "owner_id": owner_id,
+        "documents": documents,
+        "metadata": metadata
+    }
+
     try:
         upstream = requests.post(
-            f"{API}/data/drafts/dataset/save",  # <-- IMPORTANT: /data prefix
-            json=payload,
+            f"{API}/data/datasets",  # Updated endpoint
+            json=dataset_payload,
             timeout=(3.05, 30),
         )
+        if not upstream.ok:
+            return Response(
+                upstream.content,
+                status=upstream.status_code,
+                mimetype=upstream.headers.get(
+                    "Content-Type", "application/json"),
+            )
+
+        # The API now returns DraftCreatedResponse which has the draft_id
+        # So we can just pass it through directly
+        return Response(
+            upstream.content,
+            status=upstream.status_code,
+            mimetype=upstream.headers.get("Content-Type", "application/json"),
+        )
+
     except requests.Timeout:
         return jsonify({"error": "Upstream timeout"}), 504
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream connection error: {e}"}), 502
-
-    return Response(
-        upstream.content,
-        status=upstream.status_code,
-        mimetype=upstream.headers.get("Content-Type", "application/json"),
-    )
 
 
 @server.route("/train/corpus/<corpus_id>/tfidf/", methods=["POST"])
@@ -144,7 +206,7 @@ def train_tfidf_corpus(corpus_id):
             status=upstream.status_code,
             mimetype=upstream.headers.get("Content-Type", "application/json"),
         )
-    
+
 
 @server.route("/training/", methods=["GET"])
 def training_page():
@@ -152,11 +214,11 @@ def training_page():
     return render_template("training.html", corpus_id=corpus_id)
 
 
-
 @server.route("/train/corpus/<corpus_id>/tfidf/", methods=["GET"])
 def proxy_corpus_tfidf(corpus_id):
     try:
-        up = requests.get(f"{API}/train/corpus/{corpus_id}/tfidf/", timeout=(3.05, 30))
+        up = requests.get(
+            f"{API}/train/corpus/{corpus_id}/tfidf/", timeout=(3.05, 30))
         return Response(up.content, status=up.status_code,
                         mimetype=up.headers.get("Content-Type", "application/json"))
     except requests.Timeout:
@@ -196,7 +258,8 @@ def get_tfidf_data(corpus_id):
 def replay_training_from_saved(corpus_id):
     try:
         # 1) Fetch saved training params/payload from upstream
-        up = requests.get(f"{API}/train/trainingInfo/{corpus_id}/", timeout=(3.05, 30))
+        up = requests.get(
+            f"{API}/train/trainingInfo/{corpus_id}/", timeout=(3.05, 30))
         up.raise_for_status()
 
         try:
@@ -274,7 +337,8 @@ def replay_training_from_saved(corpus_id):
 @server.route("/status/", methods=["GET"])
 def get_status(job_id=None):
     # 1) Resolve job_id from path or query/header
-    job_id = job_id or request.args.get("job_id") or request.headers.get("X-Job-Id")
+    job_id = job_id or request.args.get(
+        "job_id") or request.headers.get("X-Job-Id")
     if not job_id:
         return jsonify({"error": "Missing job_id"}), 400
 
@@ -297,33 +361,29 @@ def get_status(job_id=None):
     except requests.Timeout:
         return jsonify({"error": "Upstream timeout"}), 504
     except requests.RequestException as e:
-        return jsonify({"error": f"Upstream connection error: {e}"}), 502   
-
-
-
-
-
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
 
 # # 2. Select Model Page
 @server.route('/model')
 def loadModel():
-    
+
     return render_template('loadModel.html')
 
 
-@server.route("/drafts/corpus", methods=["GET"])
+@server.route("/getUniqueCorpusNames", methods=["GET"])
 def get_unique_corpus_names():
     """
     Return a deduped (case-insensitive), A→Z list of corpus names.
     Prefers the most recent 'created_at' when duplicates exist.
     """
     try:
-        r = requests.get(f"{API}/data/drafts", timeout=10)
+        r = requests.get(f"{API}/data/corpora", timeout=10)
         r.raise_for_status()
         items = r.json()
     except requests.RequestException:
-        server.logger.exception("Failed to fetch drafts from upstream")  # note: server.logger
+        # note: server.logger
+        server.logger.exception("Failed to fetch drafts from upstream")
         return jsonify({"error": "Upstream drafts service failed"}), 502
 
     pick = {}  # lower(name) -> {"name": original, "created_at": ts}
@@ -340,70 +400,39 @@ def get_unique_corpus_names():
     names = sorted((v["name"] for v in pick.values()), key=str.casefold)
     return jsonify(names), 200
 
-@server.route("/getallcorpuses", methods=["GET"])
-def getallcorpuses():
-    """
-    Pulls both /data/drafts and /data/corpus from the upstream API,
-    normalizes them into a single list of items:
-      { id, name, is_draft, created_at }
-    and returns JSON for the frontend to render.
-    """
-    def _safe_get(url):
-        try:
-            r = requests.get(url, timeout=10)
-            r.raise_for_status()
-            return r.json() or []
-        except requests.RequestException:
-            server.logger.exception("Failed fetching %s", url)
-            return []
 
-    drafts_raw = _safe_get(f"{API}/data/drafts?type=dataset")
-    # corpus_raw = _safe_get(f"{API}/data/corpora/")
+@server.route("/getAllCorpora", methods=["GET"])
+def getAllCorpora():
+    """
+    Pulls all corpora (draft or permanent storage) from the upstream API.
+    """
 
-    def _norm_draft(d):
-        meta = (d or {}).get("metadata") or {}
-        return {
-            "id": d.get("id") or meta.get("draft_id") or "",
-            "name": (meta.get("name") or "").strip(),
-            "is_draft": True,
-            "created_at": meta.get("created_at") or "",
-        }
+    try:
+        r = requests.get(f"{API}/data/corpora", timeout=10)
+        r.raise_for_status()
+        items = r.json()
+    except requests.RequestException:
+        # note: server.logger
+        server.logger.exception("Failed to fetch drafts from upstream")
+        return jsonify({"error": "Upstream drafts service failed"}), 502
 
     def _norm_corpus(c):
-        # Support a couple of shapes: flat or metadata-based
-        name = (c.get("name") or (c.get("metadata") or {}).get("name") or "").strip()
-        created = c.get("created_at") or (c.get("metadata") or {}).get("created_at") or ""
+        location = c.get("location")
+        if location == "database":
+            is_draft = False
+        else:
+            is_draft = True
         return {
-            "id": c.get("id") or (c.get("metadata") or {}).get("id") or name,  # fallback to name
-            "name": name,
-            "is_draft": False,
-            "created_at": created,
+            "id": c.get("id"),
+            "name": c.get("metadata", {}).get("name", ""),
+            "is_draft": is_draft,
+            "created_at": c.get("metadata", {}).get("created_at", ""),
         }
 
-    drafts = [_norm_draft(d) for d in drafts_raw if (d.get("metadata") or {}).get("name")]
-    # corpuses = [_norm_corpus(c) for c in corpus_raw if (c.get("name") or (c.get("metadata") or {}).get("name"))]
+    corpora = [_norm_corpus(c) for c in items]
+    corpora.sort(key=lambda x: (x["name"].lower(), not x["is_draft"]))
 
-    # Optional: within each category, dedupe by name (case-insensitive), keeping latest created_at
-    def _dedupe(items):
-        pick = {}
-        for it in items:
-            key = it["name"].lower()
-            if not it["name"]:
-                continue
-            if key not in pick or it["created_at"] > pick[key]["created_at"]:
-                pick[key] = it
-        return list(pick.values())
-
-    drafts = _dedupe(drafts)
-    # corpuses = _dedupe(corpuses)
-
-    # Merge (we KEEP both if same name exists in both; drafts will be marked on the UI)
-    combined = drafts #+ corpuses
-
-    # Sort: by name A→Z, and show drafts first for the same name
-    combined.sort(key=lambda x: (x["name"].lower(), not x["is_draft"]))
-
-    return jsonify(combined), 200
+    return jsonify(corpora), 200
 
 
 # This function gets the configuration file for the Models
@@ -411,7 +440,7 @@ def getallcorpuses():
 def get_model_config():
     with open("static/config/model_config.json") as f:
         return jsonify(json.load(f))
-    
+
 
 # This function gets the model registry
 @server.route("/model-registry")
@@ -420,13 +449,12 @@ def get_model_registry():
         return jsonify(json.load(f))
 
 
-
 ##########################################################
 
 @server.route("/get-models-names", methods=["GET"])
 def get_model_names():
     try:
-        r = requests.get(f"{API}/data/drafts", params={"type": "model"}, timeout=10)
+        r = requests.get(f"{API}/data/models", timeout=10)
         r.raise_for_status()
         data = r.json()
         if not isinstance(data, list):
@@ -436,7 +464,7 @@ def get_model_names():
         for item in data:
             # Defensive access
             meta = item.get("metadata") or {}
-            tr   = meta.get("tr_params") or {}
+            tr = meta.get("tr_params") or {}
             name = tr.get("model_name")
             if isinstance(name, str) and name.strip():
                 names.append(name.strip())
@@ -460,8 +488,6 @@ def get_model_names():
         return jsonify({"error": str(e)}), 500
 
 
-    
-    
 @server.route("/delete-model", methods=["POST"])
 def delete_model():
     """
@@ -471,7 +497,8 @@ def delete_model():
     """
 
 ##########################################################
-    
+
+
 @server.route("/dashboard/<modelId>", methods=["GET", "POST"])
 def dashboard(modelId):
 
@@ -487,7 +514,6 @@ def get_data():
         payload = json.load(f)
     # jsonify sets the correct Content-Type and handles UTF-8 safely
     return jsonify(payload)
-
 
 
 @server.post("/save-settings")

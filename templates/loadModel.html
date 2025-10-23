@@ -424,7 +424,7 @@
     }
   
     async function fetchAllCorpora() {
-      const res = await fetch('/getallcorpuses', { headers: { 'Accept': 'application/json' } });
+      const res = await fetch('/getAllCorpora', { headers: { 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Failed to load corpora: ${res.status}`);
       const items = await res.json();
       return Array.isArray(items) ? items : [];

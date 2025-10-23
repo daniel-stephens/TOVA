@@ -155,7 +155,7 @@ async function loadModelOptions() {
    Corpuses (drafts + saved)
 ========================= */
 async function fetchAllCorpuses() {
-  const res = await fetch("/getallcorpuses", { headers: { "Accept": "application/json" } });
+  const res = await fetch("/getAllCorpora", { headers: { "Accept": "application/json" } });
   if (!res.ok) throw new Error(`Failed to load corpuses: ${res.status}`);
   const items = await res.json();
   // Expect [{id, name, is_draft, created_at}]
