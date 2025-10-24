@@ -1,25 +1,28 @@
 import logging
 import pathlib
 import spacy
-from sentence_transformers import SentenceTransformer # type: ignore
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer # type: ignore
+from sentence_transformers import SentenceTransformer  # type: ignore
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer  # type: ignore
 from scipy import sparse
 from typing import Iterable, List, Optional, Sequence, Tuple, Union
-#from spacy_download import load_spacy
+# from spacy_download import load_spacy
 from tova.utils.common import load_yaml_config_file
+
 
 class TMPreprocessor(object):
     """Topic Modeling Preprocessor
-    
+
     This class handles:
     - NLP preprocessing (tokenization, lemmatization, stopword removal)
     - Document vectorization (BoW, TF-IDF)
     - Contextualized embeddings calculation
     """
+
     def __init__(
         self,
         logger: logging.Logger = None,
-        config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
+        config_path: pathlib.Path = pathlib.Path(
+            "./static/config/config.yaml"),
     ) -> None:
         """Initialize the TMPreprocessor.
 
@@ -30,10 +33,11 @@ class TMPreprocessor(object):
         config_path : pathlib.Path, optional
             Path to the configuration file.
         """
-        
+
         self._logger = logger if logger else init_logger(config_path, __name__)
 
-        self.config = load_yaml_config_file(config_path, "topic_modeling", logger)
+        self.config = load_yaml_config_file(
+            config_path, "topic_modeling", logger)
         nlp_cfg = self.config.get("nlp", {})
 
         spacy_model = nlp_cfg.get("spacy_model", "en_core_web_sm")
@@ -48,9 +52,10 @@ class TMPreprocessor(object):
             )
 
         # POS + stopwords
-        self._valid_pos = set(nlp_cfg.get("valid_pos", ["VERB", "NOUN", "ADJ", "PROPN"]))
+        self._valid_pos = set(nlp_cfg.get(
+            "valid_pos", ["VERB", "NOUN", "ADJ", "PROPN"]))
         self._stw_list = set()
-        #self._prepare_stopwords(nlp_cfg.get("extra_stopwords_files") or nlp_cfg.get("extra_stopwords") or [])
+        # self._prepare_stopwords(nlp_cfg.get("extra_stopwords_files") or nlp_cfg.get("extra_stopwords") or [])
 
         # Placeholders for cached results
         self._processed_docs: Optional[List[List[str]]] = None
@@ -90,7 +95,8 @@ class TMPreprocessor(object):
                             if w:
                                 self._stw_list.add(w)
             except Exception as e:
-                self._logger.warning(f"Could not load stopwords from {entry}: {e}")
+                self._logger.warning(
+                    f"Could not load stopwords from {entry}: {e}")
 
     def preprocess_one(self, rawtext) -> List[str]:
         """
@@ -167,108 +173,6 @@ class TMPreprocessor(object):
         """Analyzer for scikit-learn that passes through already tokenized docs."""
         return doc_tokens
 
-    def get_bow(
-        self,
-        docs: Optional[Iterable[str]] = None,
-        *,
-        max_features: Optional[int] = None,
-        min_df: Union[int, float, None] = None,
-        max_df: Union[int, float, None] = None,
-        ngram_range: Tuple[int, int] = None,
-        binary: Optional[bool] = None,
-        fit: bool = True,
-    ) -> Tuple[sparse.spmatrix, CountVectorizer]:
-        """
-        @ TODO: Add docs
-        """
-        vec_cfg = self._cfg.get("vectorization", {})
-        max_features = max_features if max_features is not None else vec_cfg.get("max_features")
-        min_df = min_df if min_df is not None else vec_cfg.get("min_df", 1)
-        max_df = max_df if max_df is not None else vec_cfg.get("max_df", 1.0)
-        ngram_range = ngram_range if ngram_range is not None else tuple(vec_cfg.get("ngram_range", [1, 1]))
-        binary = binary if binary is not None else bool(vec_cfg.get("binary", False))
-
-        if docs is None:
-            if self._processed_docs is None:
-                raise ValueError("No cached preprocessed docs. Pass `docs` or call preprocess() first.")
-            tokenized_docs = self._processed_docs
-        else:
-            tokenized_docs = self.preprocess(docs, cache=False)
-
-        if fit or self._bow_vectorizer is None:
-            self._bow_vectorizer = CountVectorizer(
-                analyzer=self._identity_analyzer,
-                tokenizer=None,
-                preprocessor=None,
-                token_pattern=None,
-                lowercase=False,  # already lowercased
-                max_features=max_features,
-                min_df=min_df,
-                max_df=max_df,
-                ngram_range=ngram_range,
-                binary=binary,
-            )
-            X = self._bow_vectorizer.fit_transform(tokenized_docs)
-        else:
-            X = self._bow_vectorizer.transform(tokenized_docs)
-
-        self._bow_matrix = X
-        return X, self._bow_vectorizer
-
-    def get_tfidf(
-        self,
-        docs: Optional[Iterable[str]] = None,
-        *,
-        max_features: Optional[int] = None,
-        min_df: Union[int, float, None] = None,
-        max_df: Union[int, float, None] = None,
-        ngram_range: Tuple[int, int] = None,
-        use_idf: Optional[bool] = None,
-        smooth_idf: Optional[bool] = None,
-        sublinear_tf: Optional[bool] = None,
-        fit: bool = True,
-    ) -> Tuple[sparse.spmatrix, TfidfVectorizer]:
-        """
-        @ TODO: Add docs
-        """
-        vec_cfg = self._cfg.get("vectorization", {})
-        max_features = max_features if max_features is not None else vec_cfg.get("max_features")
-        min_df = min_df if min_df is not None else vec_cfg.get("min_df", 1)
-        max_df = max_df if max_df is not None else vec_cfg.get("max_df", 1.0)
-        ngram_range = ngram_range if ngram_range is not None else tuple(vec_cfg.get("ngram_range", [1, 1]))
-        use_idf = use_idf if use_idf is not None else True
-        smooth_idf = smooth_idf if smooth_idf is not None else True
-        sublinear_tf = sublinear_tf if sublinear_tf is not None else False
-
-        if docs is None:
-            if self._processed_docs is None:
-                raise ValueError("No cached preprocessed docs. Pass `docs` or call preprocess() first.")
-            tokenized_docs = self._processed_docs
-        else:
-            tokenized_docs = self.preprocess(docs, cache=False)
-
-        if fit or self._tfidf_vectorizer is None:
-            self._tfidf_vectorizer = TfidfVectorizer(
-                analyzer=self._identity_analyzer,
-                tokenizer=None,
-                preprocessor=None,
-                token_pattern=None,
-                lowercase=False,
-                max_features=max_features,
-                min_df=min_df,
-                max_df=max_df,
-                ngram_range=ngram_range,
-                use_idf=use_idf,
-                smooth_idf=smooth_idf,
-                sublinear_tf=sublinear_tf,
-            )
-            X = self._tfidf_vectorizer.fit_transform(tokenized_docs)
-        else:
-            X = self._tfidf_vectorizer.transform(tokenized_docs)
-
-        self._tfidf_matrix = X
-        return X, self._tfidf_vectorizer
-
     def _ensure_st_model(
         self,
         model_name: Optional[str] = None,
@@ -299,22 +203,28 @@ class TMPreprocessor(object):
         @ TODO: Add docc
         """
         emb_cfg = self._cfg.get("embeddings", {})
-        batch_size = batch_size if batch_size is not None else int(emb_cfg.get("batch_size", 32))
-        normalize = normalize if normalize is not None else bool(emb_cfg.get("normalize", True))
+        batch_size = batch_size if batch_size is not None else int(
+            emb_cfg.get("batch_size", 32))
+        normalize = normalize if normalize is not None else bool(
+            emb_cfg.get("normalize", True))
         model = self._ensure_st_model(model_name)
 
         # Determine input texts
         if docs is None:
             if use_preprocessed_text:
                 if self._processed_docs is None:
-                    raise ValueError("No cached preprocessed docs. Pass `docs` or call preprocess() first.")
-                texts = [" ".join(toks) if toks else "" for toks in self._processed_docs]
+                    raise ValueError(
+                        "No cached preprocessed docs. Pass `docs` or call preprocess() first.")
+                texts = [
+                    " ".join(toks) if toks else "" for toks in self._processed_docs]
             else:
-                raise ValueError("When docs=None, set use_preprocessed_text=True to encode cached tokens.")
+                raise ValueError(
+                    "When docs=None, set use_preprocessed_text=True to encode cached tokens.")
         else:
             if use_preprocessed_text:
                 tokenized_docs = self.preprocess(docs, cache=False)
-                texts = [" ".join(toks) if toks else "" for toks in tokenized_docs]
+                texts = [
+                    " ".join(toks) if toks else "" for toks in tokenized_docs]
             else:
                 texts = [d if isinstance(d, str) else str(d) for d in docs]
 

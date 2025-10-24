@@ -1,11 +1,14 @@
 
-from typing import List, Optional
+import os
 from datetime import datetime
 from pathlib import Path
-import os
+import shutil
+from typing import List, Optional
 
-from tova.api.models.data_schemas import Corpus, DataRecord, StorageType, Draft, DraftType, DraftCreatedResponse
-from tova.core import drafts
+from tova.api.models.data_schemas import (Corpus, DataRecord, Draft,
+                                          DraftCreatedResponse, DraftType,
+                                          StorageType)
+from tova.core import drafts as drafts
 from tova.utils.common import get_unique_id
 
 # Import constants from drafts module
@@ -16,25 +19,18 @@ DATA_FILENAME = "data.json"
 
 def list_corpora() -> List[Corpus]:
     """
-    List all corpora, including both the "temporary" and the ones indexed in the database, if any
+    List all corpora, including both the "temporary" and the ones indexed in the database, if any.
     """
-    return drafts.list_drafts(type=DraftType.corpus)
+    # list drafts and transform to Corpus objects
+    corpora_drafts = drafts.list_drafts(type=DraftType.corpus)
+    corpora_lst = [drafts.draft_to_corpus(draft) for draft in corpora_drafts]
+    # do not list the documents inside each corpus for listing purposes
+    #  remove the documents field
+    for corpus in corpora_lst:
+        corpus.documents = None
 
-
-def get_corpus(corpus_id: str) -> Optional[Corpus]:
-    """
-    Get a specific corpus by its ID.
-    """
-    return None
-
-
-def delete_corpus(corpus_id: str) -> bool:
-    """
-    Delete a corpus by ID.
-    """
-    # TODO: Implement actual database deletion
-    # Should handle both permanent storage and drafts
-    return False
+    # TODO: Implement actual database query and merge with drafts
+    return corpora_lst
 
 
 def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
@@ -50,16 +46,18 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
 
     documents_data = []
     if not corpus.datasets:
-        raise ValueError("At least one dataset must be provided to create a corpus.")
+        raise ValueError(
+            "At least one dataset must be provided to create a corpus.")
 
     for dataset in corpus.datasets:
         if not dataset.documents:
-            raise ValueError("Datasets must contain documents to create a corpus.")
+            raise ValueError(
+                "Datasets must contain documents to create a corpus.")
 
         for doc in dataset.documents:
-            # Just access attributes directly
             if not isinstance(doc.text, str) or not doc.text.strip():
-                raise ValueError("Every document must include a non-empty 'text' field.")
+                raise ValueError(
+                    "Every document must include a non-empty 'text' field.")
 
             documents_data.append(DataRecord(
                 id=get_unique_id(prefix="doc_"),
@@ -68,7 +66,7 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
                 label=doc.label,
                 original_id=doc.id
             ))
-    
+
     draft = Draft(
         id=corpus.id,
         type=DraftType.corpus,
@@ -82,3 +80,43 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
         data=documents_data
     )
     return drafts.save_draft(draft)
+
+
+def get_corpus(corpus_id: str) -> Optional[Corpus]:
+    """
+    Get a specific corpus by its ID.
+    """
+    # list drafts datasets
+    corpora_drafts = drafts.list_drafts(type=DraftType.corpus)
+    if corpus_id in [d.id for d in corpora_drafts]:
+        #  convert draft to corpus
+        corpus = drafts.draft_to_corpus(
+            drafts.get_draft(corpus_id, DraftType.corpus))
+        return corpus
+    else:  # search in database
+        # TODO: Implement actual database retrieval
+        pass
+    return None
+
+
+def delete_corpus(corpus_id: str) -> bool:
+    """
+    Delete a corpus by ID.
+    """
+    
+    # list drafts datasets
+    corpora_drafts = drafts.list_drafts(type=DraftType.corpus)
+    if corpus_id in [d.id for d in corpora_drafts]:
+        #  convert draft to corpus
+        corpus = drafts.draft_to_corpus(
+            drafts.get_draft(corpus_id, DraftType.corpus))
+    else:  # search in database
+        # TODO: Implement actual database deletion
+        pass
+
+    path_corpus = DRAFTS_SAVE / corpus.id
+    
+    if path_corpus.exists() and path_corpus.is_dir():
+        shutil.rmtree(path_corpus)
+        return True
+    return False

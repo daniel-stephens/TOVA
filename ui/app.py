@@ -43,46 +43,18 @@ def load_data_page():
     return render_template('index.html')
 
 
-@server.route("/trained-models")
-def trained_models():
-    return render_template("trained_models.html")
-
-
-@server.route("/get-trained-models", methods=["GET"])
-def get_trained_models():
-    try:
-        resp = requests.get(f"{API}/data/models", timeout=10)
-    except requests.Timeout:
-        return jsonify({"error": "Upstream request timed out"}), 504
-    except requests.RequestException as e:
-        return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
-
-    # Pass through JSON when possible
-    content_type = resp.headers.get("Content-Type", "")
-    if "application/json" in content_type.lower():
-        try:
-            data = resp.json()
-        except ValueError:
-            return jsonify({"error": "Invalid JSON from upstream"}), 502
-        return jsonify(data), resp.status_code
-
-    # Fallback: return raw content with original content type
-    return Response(resp.content, status=resp.status_code, headers={"Content-Type": content_type})
-
-
 @server.route("/data/create/corpus/", methods=["POST"])
 def create_corpus():
     payload = request.get_json(silent=True)
     if not payload:
         return jsonify({"error": "No JSON payload received"}), 400
 
-    # Transform the payload to match Corpus schema
     datasets = payload.get("datasets", [])  # List of dictionaries with dataset IDs
+    # @TODO: daniel-stephens: this is fixed in the html code and it should not always be a list of one dictionary
     datasets_lst = []
 
     for el in datasets:
         try:
-            # Use GET instead of POST to retrieve datasets
             upstream = requests.get(
                 f"{API}/data/datasets/{el['id']}",
                 timeout=(3.05, 30),
@@ -93,7 +65,6 @@ def create_corpus():
                     status=upstream.status_code,
                     mimetype=upstream.headers.get("Content-Type", "application/json"),
                 )
-            # Parse the JSON response and append to the list
             datasets_lst.append(upstream.json())
         except requests.Timeout:
             return jsonify({"error": "Upstream timeout"}), 504
@@ -133,18 +104,13 @@ def create_corpus():
 
 @server.route("/data/create/dataset/", methods=["POST"])
 def create_dataset():
+    
     payload = request.get_json(silent=True) or {}
-
-    # Transform the payload to match Dataset schema
-    # The frontend sends: { metadata: {...}, data: { documents: [...] }, owner_id: "..." }
-    # We need to create a Dataset object
-
     metadata = payload.get("metadata", {})
     data = payload.get("data", {})
     documents = data.get("documents", [])
     owner_id = payload.get("owner_id")
 
-    # Build Dataset object structure
     dataset_payload = {
         "name": metadata.get("name", ""),
         "description": metadata.get("description", ""),
@@ -155,7 +121,7 @@ def create_dataset():
 
     try:
         upstream = requests.post(
-            f"{API}/data/datasets",  # Updated endpoint
+            f"{API}/data/datasets",
             json=dataset_payload,
             timeout=(3.05, 30),
         )
@@ -166,9 +132,6 @@ def create_dataset():
                 mimetype=upstream.headers.get(
                     "Content-Type", "application/json"),
             )
-
-        # The API now returns DraftCreatedResponse which has the draft_id
-        # So we can just pass it through directly
         return Response(
             upstream.content,
             status=upstream.status_code,
@@ -450,26 +413,78 @@ def get_model_registry():
 
 
 ##########################################################
+# MODEL-RELATED ROUTES
+##########################################################
+@server.route("/trained-models")
+def trained_models():
+    return render_template("trained_models.html")
+
+def fetch_trained_models():
+    try:
+        # Fetch corpora
+        corpora_response = requests.get(f"{API}/data/corpora", timeout=10)
+        corpora_response.raise_for_status()
+        corpora = corpora_response.json()
+        current_app.logger.info("Corpora response: %s", corpora)
+
+        # Fetch models for each corpus
+        for corpus in corpora:
+            corpus_id = corpus.get("id")
+            if not corpus_id:
+                current_app.logger.warning("Corpus without ID: %s", corpus)
+                continue
+
+            try:
+                models_response = requests.get(f"{API}/data/corpora/{corpus_id}/models", timeout=10)
+                models_response.raise_for_status()
+                corpus["models"] = models_response.json()
+            except requests.Timeout:
+                current_app.logger.error("Timeout fetching models for corpus ID %s", corpus_id)
+                corpus["models"] = {"error": "Timeout fetching models"}
+            except requests.RequestException as e:
+                current_app.logger.error("Error fetching models for corpus ID %s: %s", corpus_id, str(e))
+                corpus["models"] = {"error": "Failed to fetch models", "detail": str(e)}
+
+        return corpora
+
+    except requests.Timeout:
+        current_app.logger.error("Timeout fetching corpora")
+        raise
+    except requests.RequestException as e:
+        current_app.logger.error("Error fetching corpora: %s", str(e))
+        raise
+    except ValueError:
+        current_app.logger.error("Invalid JSON response from corpora endpoint")
+        raise
+
+@server.route("/get-trained-models", methods=["GET"])
+def get_trained_models():
+    try:
+        corpora = fetch_trained_models()
+        return jsonify(corpora), 200
+    except requests.Timeout:
+        return jsonify({"error": "Upstream request timed out"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
+    except ValueError:
+        return jsonify({"error": "Invalid JSON from upstream"}), 502
 
 @server.route("/get-models-names", methods=["GET"])
 def get_model_names():
     try:
-        r = requests.get(f"{API}/data/models", timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if not isinstance(data, list):
-            return jsonify({"error": "Unexpected response format"}), 502
+        corpora = fetch_trained_models()
 
         names = []
-        for item in data:
-            # Defensive access
-            meta = item.get("metadata") or {}
-            tr = meta.get("tr_params") or {}
-            name = tr.get("model_name")
-            if isinstance(name, str) and name.strip():
-                names.append(name.strip())
+        for corpus in corpora:
+            models = corpus.get("models", [])
+            for model in models:
+                meta = model.get("metadata") or {}
+                tr = meta.get("tr_params") or {}
+                name = tr.get("model_name")
+                if isinstance(name, str) and name.strip():
+                    names.append(name.strip())
 
-        # Deduplicate (case-insensitive), preserve first occurrence casing
+        # Deduplicate
         seen = set()
         unique = []
         for n in names:
@@ -486,7 +501,6 @@ def get_model_names():
         return jsonify({"error": f"Upstream request failed: {e}"}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @server.route("/delete-model", methods=["POST"])
 def delete_model():

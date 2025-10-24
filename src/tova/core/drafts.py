@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import shutil
 import logging
 
-from tova.api.models.data_schemas import Draft, DraftCreatedResponse, DraftType, DataRecord, Model, Dataset, StorageType
+from tova.api.models.data_schemas import Corpus, Draft, DraftCreatedResponse, DraftType, DataRecord, Model, Dataset, StorageType
 from tova.utils.common import get_unique_id, write_json_atomic
 
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))
@@ -119,7 +119,6 @@ def save_draft(draft: Draft) -> bool:
         draft_dir = DRAFTS_SAVE / draft.id
         draft_dir.mkdir(parents=True, exist_ok=False)
         write_json_atomic(draft_dir / METADATA_FILENAME, draft.metadata)
-        # Convert DataRecord objects to dictionaries for JSON serialization
         data_serialized = [record.dict() for record in draft.data]
         write_json_atomic(draft_dir / DATA_FILENAME, data_serialized)
         logger.info("Draft saved successfully: %s", draft.id)
@@ -185,3 +184,20 @@ def draft_to_dataset(draft: Draft) -> Dataset:
         documents=draft_to_data(draft)
     )
 
+def draft_to_corpus(draft: Draft) -> Corpus:
+    """
+    Convert a Draft to a Corpus object.
+    """
+    if draft.type != DraftType.corpus:
+        raise ValueError("Draft type must be 'corpus' to convert to Corpus.")
+
+    return Corpus(
+        id=draft.id,
+        owner_id=draft.owner_id,
+        name=draft.metadata.get("name"),
+        description=draft.metadata.get("description"),
+        created_at=draft.metadata.get("created_at"),
+        location=StorageType.temporal,
+        metadata=draft.metadata,
+        documents=draft_to_data(draft)
+    )
