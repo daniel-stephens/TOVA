@@ -530,7 +530,7 @@
     /* ==============================
        Boot
     ============================== */
-    document.addEventListener("DOMContentLoaded", async () => {
+    /*document.addEventListener("DOMContentLoaded", async () => {
       const params = new URLSearchParams(location.search);
       const corpusId = params.get("corpus_id");
     
@@ -545,8 +545,35 @@
     
       // Auto-start training status polling
       await initTraining(corpusId);
+    });*/
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const params = new URLSearchParams(location.search);
+        const corpusId = params.get("corpus_id");
+        const jobId    = params.get("job_id"); // should be present
+
+        if (!corpusId) {
+          alert("Missing corpus_id.");
+          return;
+        }
+
+        await loadVisualization(corpusId);
+        wireUI();
+
+        if (jobId) {
+          // Poll directly with job_id
+          startPolling(`/status/jobs/${encodeURIComponent(jobId)}`, 1000);
+        } else {
+          // Fallback if you ever render without job_id (optional)
+          const { statusUrl } = await callTrainingInfo(corpusId);
+          if (statusUrl) startPolling(statusUrl, 1000);
+        }
+      } catch (err) {
+        console.error("Error during initialization:", err);
+        alert(err.message || "An error occurred during initialization.");
+      }
     });
-    
+
     /* ==============================
        Visualization (independent)
     ============================== */
@@ -648,7 +675,9 @@
        Training helpers
     ============================== */
     async function callTrainingInfo(corpusId) {
+      //const url = `/train/trainingInfo/${encodeURIComponent(corpusId)}/`;
       const url = `/train/trainingInfo/${encodeURIComponent(corpusId)}/`;
+      
       if (DEBUG) console.info("[training] GET", url);
       const resp = await fetch(url, { method: "GET", cache: "no-store" });
     

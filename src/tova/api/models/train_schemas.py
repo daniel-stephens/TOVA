@@ -15,7 +15,7 @@ class TrainRequest(BaseModel):
     )
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to YAML config file", example="static/config/config.yaml")
     model_name: Optional[str] = Field("tomotopyLDA", description="Name of the model", example="tomotopyLDA")
-    
+    corpus_id: Optional[str] = Field(None, description="Name of the corpus used for training", example="c_cbf054a0b4f44581b6c2e56c71836458")
     class Config:
         json_schema_extra = {
             "example": TRAIN_REQUEST_EXAMPLE

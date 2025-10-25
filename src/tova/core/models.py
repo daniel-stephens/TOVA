@@ -20,25 +20,25 @@ def list_models(corpus_id: str) -> List[Model]:
     # list drafts and transform to Model objects
     models_drafts = drafts.list_drafts(type=DraftType.model)
     models_lst = [drafts.draft_to_model(draft) for draft in models_drafts]
-    # do not list the documents inside each model for listing purposes
-    #  remove the documents field
-    for model in models_lst:
-        model.documents = None
 
     # TODO: Implement actual database query and merge with drafts
     return models_lst
 
 
-def get_model(corpus_id: str, model_id: str) -> Optional[Model]:
+def get_model(model_id: str) -> Optional[Model]:
     """
-    Get a specific model by its ID within a corpus.
+    Get a specific model by its ID.
     """
-    # TODO: Implement actual database query
-    # Should check both permanent storage and drafts
+    model_drafts = drafts.list_drafts(type=DraftType.model)
+    if model_id in [d.id for d in model_drafts]:
+        #  convert draft to model
+        model = drafts.draft_to_model(
+            drafts.get_draft(model_id, DraftType.model))
+        return model
     return None
 
 
-def delete_model(corpus_id: str, model_id: str) -> bool:
+def delete_model(model_id: str) -> bool:
     """
     Delete a model by ID within a corpus.
     """

@@ -1,19 +1,25 @@
-from flask import Flask, request, jsonify, render_template, current_app, send_from_directory
-import os
-from util import *
-import requests
-from flask import session
 import json
-from flask import render_template, Response
+import os
 from pathlib import Path
+from time import time
+
+import requests
+from flask import (Flask, Response, current_app, jsonify, render_template,
+                   request, session)
+from util import *
 
 server = Flask(__name__)
 
 server.secret_key = 'your-secret-key'
 
+DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts")
+                   )  # this needs to be removed
 API = os.getenv("API_BASE_URL", "http://api:8000")
 
-# @daniel-stephens: maybe we can remove this and move to a config or something
+_CACHE_MODELS = {}
+_CACHE_CORPORA = {}
+CACHE_TTL = 600
+
 modelurl = f"{API}/model"
 inferurl = f"{API}/infer/json"
 topicinfourl = f"{API}/queries/model-info"
@@ -42,6 +48,9 @@ def check_backend():
 def load_data_page():
     return render_template('index.html')
 
+@server.route("/load-corpus-page/")
+def load_corpus_page():
+    return render_template('manageCorpora.html')
 
 @server.route("/data/create/corpus/", methods=["POST"])
 def create_corpus():
@@ -49,7 +58,8 @@ def create_corpus():
     if not payload:
         return jsonify({"error": "No JSON payload received"}), 400
 
-    datasets = payload.get("datasets", [])  # List of dictionaries with dataset IDs
+    # List of dictionaries with dataset IDs
+    datasets = payload.get("datasets", [])
     # @TODO: daniel-stephens: this is fixed in the html code and it should not always be a list of one dictionary
     datasets_lst = []
 
@@ -63,7 +73,8 @@ def create_corpus():
                 return Response(
                     upstream.content,
                     status=upstream.status_code,
-                    mimetype=upstream.headers.get("Content-Type", "application/json"),
+                    mimetype=upstream.headers.get(
+                        "Content-Type", "application/json"),
                 )
             datasets_lst.append(upstream.json())
         except requests.Timeout:
@@ -77,7 +88,8 @@ def create_corpus():
         "datasets": datasets_lst,
     }
 
-    current_app.logger.info("Payload sent to /data/corpora: %s", corpus_payload)
+    current_app.logger.info(
+        "Payload sent to /data/corpora: %s", corpus_payload)
 
     try:
         upstream = requests.post(
@@ -89,7 +101,8 @@ def create_corpus():
             return Response(
                 upstream.content,
                 status=upstream.status_code,
-                mimetype=upstream.headers.get("Content-Type", "application/json"),
+                mimetype=upstream.headers.get(
+                    "Content-Type", "application/json"),
             )
 
         return Response(
@@ -102,9 +115,10 @@ def create_corpus():
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
+
 @server.route("/data/create/dataset/", methods=["POST"])
 def create_dataset():
-    
+
     payload = request.get_json(silent=True) or {}
     metadata = payload.get("metadata", {})
     data = payload.get("data", {})
@@ -146,18 +160,43 @@ def create_dataset():
 
 @server.route("/train/corpus/<corpus_id>/tfidf/", methods=["POST"])
 def train_tfidf_corpus(corpus_id):
-    payload = request.get_json(silent=True) or {}
-    payload.setdefault("n_clusters", 15)
 
+    # get config from browser
+    payload = request.get_json(silent=True) or {}
+    try:
+        n_clusters = int(payload.get("n_clusters") or 15)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid n_clusters"}), 400
+
+    # fetch corpus from backend
+    try:
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up.raise_for_status()
+        corpus = up.json()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout fetching corpus"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream error fetching corpus: {e}"}), 502
+
+    documents = [
+        {"id": str(d.get("id")), "raw_text": str(d.get("text", ""))}
+        for d in (corpus.get("documents") or [])
+    ]
+    if not documents:
+        return jsonify({"error": "No documents found in corpus"}), 400
+
+    # call TF-IDF upstream
+    upstream_payload = {"n_clusters": n_clusters, "documents": documents}
     try:
         upstream = requests.post(
             f"{API}/train/corpus/{corpus_id}/tfidf/",
-            json=payload,
-            timeout=(3.05, 60),
+            json=upstream_payload,
+            timeout=(3.05, 120),
         )
         upstream.raise_for_status()
     except requests.Timeout:
-        return jsonify({"error": "Upstream timeout"}), 504
+        return jsonify({"error": "Upstream timeout calling TF-IDF"}), 504
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
@@ -171,10 +210,20 @@ def train_tfidf_corpus(corpus_id):
         )
 
 
-@server.route("/training/", methods=["GET"])
-def training_page():
-    corpus_id = request.args.get("corpus_id")  # e.g. "c_93e37bf9"
-    return render_template("training.html", corpus_id=corpus_id)
+@server.get("/training/")
+def training_page_get():
+    return render_template("training.html")
+
+
+@server.route("/get-training-session", methods=["GET"])
+def get_training_session():
+    corpus_id = session.get("corpus_id")
+    tmReq = session.get("tmReq")
+
+    if not corpus_id or not tmReq:
+        return jsonify({"error": "Training session data not found"}), 404
+
+    return jsonify({"corpus_id": corpus_id, "tmReq": tmReq}), 200
 
 
 @server.route("/train/corpus/<corpus_id>/tfidf/", methods=["GET"])
@@ -217,38 +266,89 @@ def get_tfidf_data(corpus_id):
         )
 
 
+@server.post("/training/start")
+def training_start():
+    payload = request.get_json(silent=True) or {}
+    corpus_id = payload.get("corpus_id")
+    model = payload.get("model")
+    model_name = payload.get("model_name")
+    training_params = payload.get("training_params") or {}
+
+    if not corpus_id or not model or not model_name:
+        return jsonify({"error": "Missing corpus_id/model/model_name"}), 400
+
+    # 1) Fetch corpus docs server-side
+    try:
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up.raise_for_status()
+        corpus = up.json()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout fetching corpus"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream error fetching corpus: {e}"}), 502
+
+    docs = [
+        {"id": str(d.get("id")), "text": str(d.get("text", ""))}
+        for d in (corpus.get("documents") or [])
+    ]
+    if not docs:
+        return jsonify({"error": "No documents found in corpus"}), 400
+
+    # 2) Build TrainRequest payload (server-side)
+    tm_req = {
+        "model": model,
+        "corpus_id": corpus_id,
+        "data": docs,
+        "id_col": "id",
+        "text_col": "text",
+        "do_preprocess": False,
+        "training_params": training_params,
+        "config_path": "static/config/config.yaml",
+        "model_name": model_name,
+    }
+
+    # 3) Kick off training upstream
+    try:
+        tr = requests.post(f"{API}/train/json",
+                           json=tm_req, timeout=(3.05, 120))
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout starting training"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream error starting training: {e}"}), 502
+
+    # Proxy errors (e.g., 422 from Pydantic validation)
+    if tr.status_code >= 400:
+        return Response(
+            tr.content,
+            status=tr.status_code,
+            mimetype=tr.headers.get("Content-Type", "application/json"),
+        )
+
+    # Extract job_id (and optional Location)
+    job_id = None
+    try:
+        body = tr.json()
+        job_id = (body or {}).get("job_id")
+    except Exception:
+        body = {}
+
+    loc = tr.headers.get("Location")
+    return jsonify({
+        "job_id": job_id,
+        "status_url": loc or (f"/status/jobs/{job_id}" if job_id else None),
+        "corpus_id": corpus_id,
+    }), 200
+
+
 @server.route("/train/trainingInfo/<corpus_id>/", methods=["GET"])
 def replay_training_from_saved(corpus_id):
     try:
-        # 1) Fetch saved training params/payload from upstream
-        up = requests.get(
-            f"{API}/train/trainingInfo/{corpus_id}/", timeout=(3.05, 30))
-        up.raise_for_status()
+        # Retrieve tmReq from the session
+        tm_req = session.get("tmReq")
+        if not tm_req:
+            return jsonify({"error": "tmReq not found in session"}), 400
 
-        try:
-            payload = up.json()
-        except ValueError:
-            return jsonify({"error": "Upstream returned non-JSON training payload"}), 502
-
-        # --- FIX #1: unwrap training_config if upstream wraps it ---
-        if isinstance(payload, dict) and "training_config" in payload and isinstance(payload["training_config"], dict):
-            payload = payload["training_config"]
-
-        # --- FIX #2 (defensive): normalize data records to TrainRequest shape ---
-        # Expected: payload["data"] is a list of {id: ..., raw_text: ...}
-        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
-            normalized = []
-            for rec in payload["data"]:
-                if not isinstance(rec, dict):
-                    continue
-                rid = rec.get("id")
-                # some sources use "text" instead of "raw_text"
-                rtxt = rec.get("raw_text", rec.get("text"))
-                if rid is not None and rtxt is not None:
-                    normalized.append({"id": str(rid), "raw_text": str(rtxt)})
-            payload["data"] = normalized
-
-        # 2) Forward (POST) to upstream training endpoint
         headers = {}
         auth = request.headers.get("Authorization")
         if auth:
@@ -256,27 +356,25 @@ def replay_training_from_saved(corpus_id):
 
         tr = requests.post(
             f"{API}/train/json",
-            json=payload,
+            json=tm_req,
             headers=headers,
             timeout=(3.05, 30),
         )
 
         # If validation failed, surface the upstream error body to help debugging
         if tr.status_code == 422:
-            # Return exactly what upstream said (Pydantic error details)
             return Response(
                 tr.content,
                 status=tr.status_code,
                 mimetype=tr.headers.get("Content-Type", "application/json"),
             )
 
-        # 3) Build Flask response mirroring upstream body/status
+        # Build Flask response mirroring upstream body/status
         resp = Response(
             tr.content,
             status=tr.status_code,
             mimetype=tr.headers.get("Content-Type", "application/json"),
         )
-        # Propagate Location header (FastAPI sets: /status/jobs/<job_id>)
         loc = tr.headers.get("Location")
         if loc:
             resp.headers["Location"] = loc
@@ -285,12 +383,6 @@ def replay_training_from_saved(corpus_id):
 
     except requests.Timeout:
         return jsonify({"error": "Upstream timeout"}), 504
-    except requests.HTTPError as e:
-        # Bubble up details from the initial GET
-        return jsonify({
-            "error": f"Upstream GET returned {e.response.status_code}",
-            "detail": e.response.text
-        }), e.response.status_code
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
@@ -398,26 +490,43 @@ def getAllCorpora():
     return jsonify(corpora), 200
 
 
-# This function gets the configuration file for the Models
+@server.route("/getCorpus/<corpus_id>")
+def get_corpus(corpus_id):
+    try:
+        response = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=10)
+        response.raise_for_status()
+        return Response(
+            response.content,
+            status=response.status_code,
+            mimetype=response.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        current_app.logger.error(f"Failed to fetch corpus {corpus_id}: {e}")
+        return jsonify({"error": f"Failed to fetch corpus {corpus_id}: {e}"}), 502
+
+##########################################################
+# MODEL-RELATED ROUTES
+##########################################################
+
+
 @server.route("/model-config")
 def get_model_config():
     with open("static/config/model_config.json") as f:
         return jsonify(json.load(f))
 
 
-# This function gets the model registry
 @server.route("/model-registry")
 def get_model_registry():
     with open("static/config/modelRegistry.json") as f:
         return jsonify(json.load(f))
 
 
-##########################################################
-# MODEL-RELATED ROUTES
-##########################################################
 @server.route("/trained-models")
 def trained_models():
     return render_template("trained_models.html")
+
 
 def fetch_trained_models():
     try:
@@ -435,15 +544,19 @@ def fetch_trained_models():
                 continue
 
             try:
-                models_response = requests.get(f"{API}/data/corpora/{corpus_id}/models", timeout=10)
+                models_response = requests.get(
+                    f"{API}/data/corpora/{corpus_id}/models", timeout=10)
                 models_response.raise_for_status()
                 corpus["models"] = models_response.json()
             except requests.Timeout:
-                current_app.logger.error("Timeout fetching models for corpus ID %s", corpus_id)
+                current_app.logger.error(
+                    "Timeout fetching models for corpus ID %s", corpus_id)
                 corpus["models"] = {"error": "Timeout fetching models"}
             except requests.RequestException as e:
-                current_app.logger.error("Error fetching models for corpus ID %s: %s", corpus_id, str(e))
-                corpus["models"] = {"error": "Failed to fetch models", "detail": str(e)}
+                current_app.logger.error(
+                    "Error fetching models for corpus ID %s: %s", corpus_id, str(e))
+                corpus["models"] = {
+                    "error": "Failed to fetch models", "detail": str(e)}
 
         return corpora
 
@@ -457,6 +570,7 @@ def fetch_trained_models():
         current_app.logger.error("Invalid JSON response from corpora endpoint")
         raise
 
+
 @server.route("/get-trained-models", methods=["GET"])
 def get_trained_models():
     try:
@@ -468,6 +582,7 @@ def get_trained_models():
         return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
     except ValueError:
         return jsonify({"error": "Invalid JSON from upstream"}), 502
+
 
 @server.route("/get-models-names", methods=["GET"])
 def get_model_names():
@@ -502,6 +617,7 @@ def get_model_names():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @server.route("/delete-model", methods=["POST"])
 def delete_model():
     """
@@ -513,21 +629,71 @@ def delete_model():
 ##########################################################
 
 
-@server.route("/dashboard/<modelId>", methods=["GET", "POST"])
-def dashboard(modelId):
+# @server.route("/dashboard/<modelId>", methods=["GET", "POST"])
+# def dashboard(modelId):
+#     modelId = modelId
+#     return render_template("dashboard.html", model_id=modelId)
+@server.route("/dashboard", methods=["POST"])
+def dashboard():
+    model_id = request.form.get("model_id", "")
+    # TODO: temporary; the backend should know whether is BBDD or draft
+    model_path = DRAFTS_SAVE / model_id
 
-    modelId = modelId
-    return render_template("dashboard.html", model_id=modelId)
+    return render_template(
+        "dashboard.html",
+        model_id=model_id,
+        model_name=model_path
+    )
 
 
-@server.route("/get-dashboard-data", methods=["GET", "POST"])
-def get_data():
-    data_path = Path("dashboardData.json")
-    # Read the JSON file from disk and return it
-    with data_path.open("r", encoding="utf-8") as f:
-        payload = json.load(f)
-    # jsonify sets the correct Content-Type and handles UTF-8 safely
-    return jsonify(payload)
+@server.route("/get-dashboard-data", methods=["POST"])
+def proxy_dashboard_data():
+    payload = request.get_json(silent=True) or {}
+    payload.setdefault("config_path", "static/config/config.yaml")
+
+    # get info from model
+    model_id = payload.get("model_id", "")
+    try:
+        up = requests.get(
+            f"{API}/data/models/{model_id}", timeout=(3.05, 60))
+        up.raise_for_status()
+        model_metadata = up.json()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout fetching model"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream error fetching model: {e}"}), 502
+
+    corpus_id = model_metadata.get("corpus_id", "")
+
+    # get info from corpus
+    try:
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up.raise_for_status()
+        corpus_training_data = up.json()
+    except requests.Timeout:
+        return jsonify({"error": "Upstream timeout fetching corpus"}), 504
+    except requests.RequestException as e:
+        return jsonify({"error": f"Upstream error fetching corpus: {e}"}), 502
+
+    # corpus_training_data.documents is a list of dictionaries with id, original_id, text, sourcefile, label, embeddings, tfidf, bow
+    enriched = {
+        **payload,
+        "model_metadata": model_metadata["metadata"],                
+        "model_training_corpus": corpus_training_data,  
+    }
+    try:
+        r = requests.post(f"{API}/queries/dashboard-data",
+                          json=enriched, timeout=60)
+        r.raise_for_status()
+        return r.json()
+    except requests.HTTPError:
+        try:
+            return jsonify(r.json()), r.status_code
+        except Exception:
+            return jsonify({"detail": r.text}), r.status_code
+    except Exception as e:
+        return jsonify({"detail": f"Proxy error: {e}"}), 502
 
 
 @server.post("/save-settings")
@@ -535,3 +701,108 @@ def save_settings():
     payload = request.get_json(silent=True) or {}
     server.logger.info("Dummy /save-settings received: %s", payload)
     return jsonify({"ok": True, "echo": payload}), 200
+
+
+@server.route("/text-info", methods=["POST"])
+def text_info():
+    """
+    Used by the document row click in dashboard.html.
+    Returns:
+      {
+        "theme": "<label to show>",           
+        "top_themes": [
+          {"theme_id": <int>, "label": "", "score": <float>, "keywords": ""}
+        ],
+        "rationale": "",
+        "text": "<the actual document text>"
+      }
+    """
+    payload = request.get_json(silent=True) or {}
+    model_id = payload.get("model_id", "")
+    model_path = payload.get("model_path", "")
+    doc_id = str(payload.get("document_id", "")).strip()
+
+    if not model_id or not doc_id:
+        return jsonify({"detail": "model_id and document_id are required."}), 400
+
+    # model info
+    model_entry = _CACHE_MODELS.get(model_id)
+    if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
+        try:
+            up = requests.get(
+                f"{API}/data/models/{model_id}", timeout=(3.05, 30))
+            up.raise_for_status()
+            model = up.json()
+            _CACHE_MODELS[model_id] = {"ts": time(), "data": model}
+        except requests.RequestException as e:
+            return jsonify({"detail": f"Failed to fetch model info: {e}"}), 502
+    else:
+        model = model_entry["data"]
+
+    corpus_id = model.get("corpus_id", "")
+    if not corpus_id:
+        return jsonify({"detail": "Model missing corpus_id."}), 400
+
+    # corpus info
+    corpus_entry = _CACHE_CORPORA.get(corpus_id)
+    if not corpus_entry or (time() - corpus_entry["ts"] > CACHE_TTL):
+        try:
+            up = requests.get(
+                f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+            up.raise_for_status()
+            corpus = up.json()
+            _CACHE_CORPORA[corpus_id] = {"ts": time(), "data": corpus}
+        except requests.RequestException as e:
+            return jsonify({"detail": f"Failed to fetch corpus info: {e}"}), 502
+    else:
+        corpus = corpus_entry["data"]
+
+    docs = corpus.get("documents", [])
+    doc_text = next((d.get("text", "")
+                    for d in docs if str(d.get("id")) == doc_id), "")
+    if not doc_text:
+        doc_text = f"(Text not found for document {doc_id})"
+
+    # thetas
+    try:
+        r = requests.post(
+            f"{API}/queries/thetas-by-docs-ids",
+            json={
+                "model_path": model_path,
+                "config_path": "static/config/config.yaml",
+                "docs_ids": doc_id,
+            },
+            timeout=60
+        )
+        r.raise_for_status()
+        thetas_by_doc = r.json()
+    except requests.RequestException as e:
+        return jsonify({"detail": f"Failed to fetch thetas: {e}"}), 502
+
+    doc_thetas = thetas_by_doc.get(doc_id) or {}
+    if not doc_thetas:
+        return jsonify({
+            "theme": "Unknown",
+            "top_themes": [],
+            "rationale": "",
+            "text": doc_text
+        })
+
+    top_themes = sorted(
+        (
+            {"theme_id": int(k), "label": f"Topic {k}",
+             "score": float(v), "keywords": ""}
+            for k, v in doc_thetas.items() if v is not None
+        ),
+        key=lambda x: x["score"],
+        reverse=True,
+    )
+    top_theme = top_themes[0] if top_themes else {
+        "theme_id": None, "label": "Unknown", "score": 0, "keywords": ""}
+
+    return jsonify({
+        "theme": top_theme["label"],
+        "top_themes": top_themes,
+        "rationale": "",
+        "text": doc_text
+    })

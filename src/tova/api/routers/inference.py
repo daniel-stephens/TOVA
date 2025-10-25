@@ -15,7 +15,6 @@ router = APIRouter()
 # -----------------------
 # Helpers
 # -----------------------
-
 def _infer_via_api(
     model_path: str,
     data: List[Dict],
@@ -46,7 +45,6 @@ def _infer_via_api(
 # -----------------------
 # API Routes
 # -----------------------
-
 @router.post("/json", tags=["Inference"])
 def infer_from_json(req: InferRequest):
         

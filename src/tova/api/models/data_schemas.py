@@ -47,7 +47,6 @@ class StorageType(str, Enum):
     database = "database"
     temporal = "temporal"
 
-
 class Dataset(BaseModel):
     id: Optional[str] = None            
     owner_id: Optional[str] = None
@@ -74,12 +73,12 @@ class Model(BaseModel):
     id: str  # system-assigned, unique
     owner_id: Optional[str] = None
     name: Optional[str] = None
-    corpus_id: str  # ID of the corpus with which it was trained
+    corpus_id: str
     created_at: str
     location: StorageType = StorageType.database
     metadata: Dict[str, Any] = None
     # this can be None since we can create a model and just add its metadata
-    topics: List[TopicRecord] = None
+    topics: Optional[List[TopicRecord]] = None
 
 
 class DraftType(str, Enum):
@@ -91,10 +90,9 @@ class DraftType(str, Enum):
 class Draft(BaseModel):
     id: str
     type: DraftType
-    owner_id: str | None = None
+    owner_id: Optional[str] | None = None
     metadata: Dict[str, Any] | None = None
-    data: List[DataRecord] | None = None
-
+    data: Optional[List[DataRecord]] = None
 
 class PromoteDraftResponse(BaseModel):
     job_id: str

@@ -619,7 +619,7 @@ footer {
             <dd class="col-sm-8">A measure of how semantically consistent the top keywords of a theme are. Higher is better.</dd>
   
             <dt class="col-sm-4 fw-semibold">Keyword Uniqueness</dt>
-            <dd class="col-sm-8">Indicates how exclusive a theme’s keywords are compared to those in other themes.</dd>
+            <dd class="col-sm-8">Indicates how exclusive a theme's keywords are compared to those in other themes.</dd>
   
             <dt class="col-sm-4 fw-semibold">Theme Summary</dt>
             <dd class="col-sm-8">A brief, human-readable description of what the theme represents.</dd>
@@ -683,7 +683,8 @@ footer {
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const modelName = document.getElementById("modelName")?.textContent?.trim() || "";
+  const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
+  const modelId   = document.getElementById("model_id")?.textContent?.trim() || ""; 
 
   // ---------------------------
   // Stacked modal helper (bring-to-front)
@@ -771,12 +772,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   }
 
-  // Robust rationale renderer (string/array/object). Hides wrapper when empty.
+  // Rationale renderer; hides wrapper when empty.
   function setRationale({ wrapperId, textId, value, parentId }) {
     let wrapper = document.getElementById(wrapperId);
     let textEl  = document.getElementById(textId);
 
-    // Create wrapper if missing
+    // Create wrapper if missing (same as before)
     if (!wrapper && parentId) {
       const parent = document.getElementById(parentId);
       if (parent) {
@@ -794,15 +795,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (!wrapper || !textEl) return;
 
-    let str = "";
-    if (Array.isArray(value)) str = value.map(x => (x ?? "")).join("\n");
-    else if (typeof value === "string") str = value;
-    else if (value && typeof value === "object") str = pickRationale(value) || "";
-    else if (value != null) str = String(value);
+    // Helper: "non-empty" means string with non-whitespace
+    const nonEmpty = v => typeof v === "string" ? v.trim().length > 0 : v != null && String(v).trim().length > 0;
 
-    str = str.replace(/\r\n/g, "\n").trim();
+    let show = false;
+    let str  = "";
 
-    if (str) {
+    if (typeof value === "string") {
+      show = nonEmpty(value);
+      str  = value.trim();
+    } else if (Array.isArray(value)) {
+      // Only show if ALL items are non-empty
+      const allGood = value.length > 0 && value.every(nonEmpty);
+      show = allGood;
+      if (allGood) str = value.map(v => String(v).trim()).join("\n");
+    } else if (value && typeof value === "object") {
+      if (Array.isArray(value.bullets)) {
+        const allGood = value.bullets.length > 0 && value.bullets.every(nonEmpty);
+        show = allGood;
+        if (allGood) str = value.bullets.map(v => String(v).trim()).join("\n");
+      } else if (typeof value.text === "string") {
+        show = nonEmpty(value.text);
+        str  = value.text.trim();
+      }
+    }
+
+    if (show && str) {
       textEl.textContent = str;
       wrapper.style.display = "";
     } else {
@@ -839,13 +857,16 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const id of dashboardV2.documents.allIds) {
       const d = dashboardV2.documents.byId[id];
       const t = themeById(d.themeId);
-      out.push({
+      const r = (typeof d.rationale === "string" && d.rationale.trim()) ? d.rationale.trim() : undefined;
+      const row = {
         id: d.id,
         text: d.text,
         theme: t?.label || "—",
-        score: d.score,
-        rationale: d.rationale
-      });
+        theme_id: t?.id ?? null,
+        score: d.score
+      };
+      if (r) row.rationale = r;
+      out.push(row);
     }
     return out;
   }
@@ -855,11 +876,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const t = themeById(id);
       const d = diagByThemeId(id) || {};
       return {
-        theme: t.label,
-        prevalence: typeof d.prevalence === "number" ? d.prevalence : null,
-        coherence:  typeof d.coherence  === "number" ? d.coherence  : null,
-        uniqueness: typeof d.uniqueness === "number" ? d.uniqueness : null,
-        theme_matches: typeof d.themeMatches === "number" ? d.themeMatches : null
+        theme: t.label,                                           
+        Size: typeof d.size === "number" ? d.size : null,
+        Entropy: typeof d.entropy === "number" ? d.entropy : null,
+        "Coherence (NPMI)": typeof d.coherence === "number" ? d.coherence : null,
+        "# Docs Active": typeof d.docsActive === "number" ? d.docsActive : null
       };
     });
   }
@@ -1161,18 +1182,28 @@ document.addEventListener("DOMContentLoaded", () => {
       columns.forEach(col => {
         const td = document.createElement("td");
         let value = doc[col];
+
         if (col === "score" && typeof value === "number") {
           td.textContent = value.toFixed(3);
-          td.title = value.toFixed(3);
+          td.title = td.textContent;
         } else {
           td.textContent = value !== undefined && value !== null ? String(value) : "—";
           td.title = td.textContent;
         }
+
+        // 🎨 Color the theme name to match the charts
+        if (col === "theme") {
+          const color = themeColorMap[Number(doc.theme_id)] || null;
+          if (color) {
+            td.style.color = color;
+            td.style.fontWeight = "600";
+          }
+        }
+
         td.classList.add("truncate-cell", "small-text");
         td.style.width = columnWidths[col] || "auto";
         row.appendChild(td);
       });
-
       tbody.appendChild(row);
     });
   }
@@ -1257,8 +1288,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const allKeys = Object.keys(rows[0]);
-    const dynamicKeys = allKeys.filter(k => k !== "theme");
+    const dynamicKeys = allKeys.filter(k => k.toLowerCase() !== "theme");
     const columns = ["theme", ...dynamicKeys];
+
 
     const headerRow = document.createElement("tr");
     columns.forEach(col => {
@@ -1430,7 +1462,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------------------------
   async function showInferenceModal(doc) {
     const docId = doc.id;
-    const cached = dashboardV2?.inferences?.[docId];
+    /*const cached = dashboardV2?.inferences?.[docId];
     let result = null;
 
     if (cached) {
@@ -1452,8 +1484,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await fetch("/text-info", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model_id: dashboardV2.model, document_id: docId })
-        });
+          body: JSON.stringify({
+          model_id: modelId,          
+          model_path: modelPath,      
+          document_id: docId          
+        })
+      });
         if (!response.ok) throw new Error("Failed to fetch inference");
         result = await response.json();
       } catch (error) {
@@ -1461,7 +1497,27 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Failed to infer topic.");
         return;
       }
+    }*/
+    const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
+    const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
+
+    const response = await fetch("/text-info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model_id: modelId,
+        model_path: modelPath,
+        document_id: String(doc.id)
+      })
+    });
+
+    if (!response.ok) {
+      console.error(await response.text());
+      alert("Failed to infer topic.");
+      return;
     }
+
+    const result = await response.json();
 
     const fullTextEl = document.getElementById("modalFullText");
     const themeEl    = document.getElementById("modalTheme");
@@ -1554,8 +1610,6 @@ document.addEventListener("DOMContentLoaded", () => {
       `
       : "";
 
-    const corpora = Array.isArray(model.corpus_names) ? model.corpus_names.join(", ") : (model.corpus_names || "—");
-
     modalBody.innerHTML = `
       <div class="row mb-2">
         <div class="col-4 fw-semibold text-muted">Model Name:</div>
@@ -1573,10 +1627,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="col-4 fw-semibold text-muted">Trained On:</div>
         <div class="col-8">${model.trained_on}</div>
       </div>
-      <div class="row mb-3">
-        <div class="col-4 fw-semibold text-muted">Corpora Used:</div>
-        <div class="col-8">${corpora}</div>
-      </div>
 
       <hr />
       <p class="text-muted small">
@@ -1588,7 +1638,6 @@ document.addEventListener("DOMContentLoaded", () => {
       <h6 class="fw-semibold">Training Parameters</h6>
       ${trainingParamsHTML}
       ${trainingMetricsHTML}
-      ${model.notes ? `<hr /><div class="text-muted small">${model.notes}</div>` : ""}
     `;
 
     const modalEl = document.getElementById("modelInfoModal");
@@ -1598,11 +1647,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------------------------
   // One fetch + boot
   // ---------------------------
-  async function fetchDashboard(name) {
+  async function fetchDashboard(modelPath) {
+    console.log("this is the model path:", modelPath);
+    console.log("this is the model id:", modelId);
+
     const res = await fetch("/get-dashboard-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: name })
+      body: JSON.stringify({ model_path: modelPath, model_id: modelId })
     });
     if (!res.ok) throw new Error(`Dashboard fetch failed: ${res.status}`);
     return res.json();
@@ -1610,7 +1662,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   (async () => {
     try {
-      dashboardV2 = await fetchDashboard(modelName);
+      //dashboardV2 = await fetchDashboard(modelName);
+      const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
+      const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
+      dashboardV2 = await fetchDashboard(modelPath, modelId);
 
       const themeArray = themesForChart();
       themeArray.forEach((t, i) => { themeColorMap[t.id] = t.color || computeColor(i, dashboardV2.color); });
@@ -1673,7 +1728,7 @@ document.addEventListener("DOMContentLoaded", () => {
               const response = await fetch("/infer-text", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, id: "temp_id", model: modelName })
+                body: JSON.stringify({ text, id: "temp_id", model_path: modelPath })
               });
               if (!response.ok) throw new Error("Failed to fetch inference");
               const result = await response.json();
@@ -1820,7 +1875,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
 
                 <div class="modal-body">
-                  <p class="mb-2 small text-muted">Choose what you’d like to save:</p>
+                  <p class="mb-2 small text-muted">Choose what you'd like to save:</p>
 
                   <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="saveModel" name="saveModel">
@@ -1869,9 +1924,7 @@ document.addEventListener("DOMContentLoaded", () => {
             theme_count: window.dashboardV2?.themes?.allIds?.length ?? null,
             document_count: window.dashboardV2?.documents?.allIds?.length ?? null,
             num_topics: modelInfo?.num_topics ?? null,
-            corpus_names: Array.isArray(modelInfo?.corpus_names)
-              ? modelInfo.corpus_names
-              : (modelInfo?.corpus_names ? [modelInfo.corpus_names] : [])
+            corpus_name: modelInfo?.trained_on ?? null,
           },
           ts: new Date().toISOString()
         };
@@ -1935,14 +1988,5 @@ document.addEventListener("DOMContentLoaded", () => {
   window.openThemeModal = openThemeModal;
 });
 </script>
-
-    
-    
-    
-    
-    
-
-
-
 </body>
 </html>

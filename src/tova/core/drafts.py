@@ -44,11 +44,10 @@ def list_drafts(type: Optional[DraftType] = None) -> List[Draft]:
         if type and draft_type != type:
             continue
 
-        
         draft = get_draft(dir.name, draft_type)
         if draft:
             drafts.append(draft)
-            
+
     return drafts
 
 
@@ -82,7 +81,7 @@ def get_draft(draft_id: str, kind: Optional[DraftType] = None) -> Optional[Draft
     if kind and draft_type != kind:
         return None
 
-    # Load data
+    # Load data if corpus / dataset
     data = None
     data_path = draft_dir / DATA_FILENAME
     if data_path.exists():
@@ -132,7 +131,8 @@ def save_draft(draft: Draft) -> bool:
         try:
             shutil.rmtree(draft_dir, ignore_errors=True)
         except Exception as cleanup_error:
-            logger.exception("Failed to clean up draft directory: %s", cleanup_error)
+            logger.exception(
+                "Failed to clean up draft directory: %s", cleanup_error)
         return DraftCreatedResponse(
             draft_id="",
             status_code=500
@@ -146,6 +146,7 @@ def draft_to_data(draft: Draft) -> List[DataRecord]:
     if draft.data is None:
         return []
     return [record if isinstance(record, DataRecord) else DataRecord(**record) for record in draft.data]
+
 
 def draft_to_model(draft: Draft) -> Model:
     """
@@ -184,6 +185,7 @@ def draft_to_dataset(draft: Draft) -> Dataset:
         documents=draft_to_data(draft)
     )
 
+
 def draft_to_corpus(draft: Draft) -> Corpus:
     """
     Convert a Draft to a Corpus object.
@@ -201,3 +203,21 @@ def draft_to_corpus(draft: Draft) -> Corpus:
         metadata=draft.metadata,
         documents=draft_to_data(draft)
     )
+
+def modify_draft_metadata(draft_id: str, kind: DraftType, new_metadata: dict) -> bool:
+    """
+    Modify the metadata of an existing draft.
+
+    new_metadata: dict
+        Dictionary containing the new metadata to update the draft with (it does not include all fields).
+    """
+    draft = get_draft(draft_id, kind)
+    if not draft:
+        return False
+
+    # Update metadata
+    draft.metadata.update(new_metadata)
+
+    # Save updated draft
+    saved_draft = save_draft(draft)
+    return saved_draft.status_code == 201

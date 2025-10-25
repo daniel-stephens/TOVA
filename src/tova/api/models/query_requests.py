@@ -1,12 +1,14 @@
 from pydantic import BaseModel, Field # type: ignore
-from typing import Optional
+from typing import List, Optional
 
 from tova.api.docs.examples import MODEL_INFO_REQUEST_EXAMPLE, THETAS_BY_DOCS_IDS_REQUEST_EXAMPLE, TOPIC_INFO_REQUEST_EXAMPLE
+from tova.api.models.data_schemas import Corpus
 
 class ModelInfoRequest(BaseModel):
     model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to the YAML configuration file", example="static/config/config.yaml")
-
+    model_metadata: Optional[dict] = Field(None, description="Optional model metadata to include in the response")
+    model_training_corpus:  Optional[Corpus] = None
     class Config:
         json_schema_extra = {
             "example": MODEL_INFO_REQUEST_EXAMPLE

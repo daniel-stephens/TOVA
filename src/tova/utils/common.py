@@ -220,3 +220,30 @@ def write_json_atomic(path: pathlib.Path, payload: Any) -> None:
         f.flush()
         os.fsync(f.fileno())
     tmp.replace(path)
+    
+    
+def pydantic_to_dict(model: Any) -> Dict[str, Any]:
+    if model is None:
+        return {}
+    if isinstance(model, dict):
+        return model
+    # handle list-like passed by mistake
+    if isinstance(model, (list, tuple)):
+        return {"items": [pydantic_to_dict(m) if not isinstance(m, dict) else m for m in model]}
+
+    dump_method = getattr(model, "model_dump", None)
+    if callable(dump_method):
+        return dump_method(by_alias=True)
+    dict_method = getattr(model, "dict", None)
+    if callable(dict_method):
+        return dict_method(by_alias=True)
+
+    try:
+        return dict(model)
+    except Exception:
+        try:
+            import json
+            return json.loads(json.dumps(model, default=lambda o: getattr(o, "__dict__", {})))
+        except Exception:
+            return {}
+

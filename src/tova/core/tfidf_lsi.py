@@ -18,21 +18,21 @@ class InvalidCorpusError(ValueError): ...
 
 def _load_corpus_documents(corpus_dir: Path) -> List[Dict[str, Any]]:
     """
-    Reads <corpus_dir>/corpus.json and returns normalized documents:
+    Reads <corpus_dir>/data.json and returns normalized documents:
     [{ id: str, raw_text: str }, ...]
     """
-    corpus_file = corpus_dir / "corpus.json"
+    corpus_file = corpus_dir / "data.json"
     if not corpus_file.exists():
-        raise CorpusNotFoundError(f"corpus.json not found in {corpus_dir}")
+        raise CorpusNotFoundError(f"data.json not found in {corpus_dir}")
 
     try:
         payload = json.loads(corpus_file.read_text(encoding="utf-8")) or {}
     except Exception as e:
-        raise InvalidCorpusError(f"Failed to parse corpus.json: {e}")
+        raise InvalidCorpusError(f"Failed to parse data.json: {e}")
 
     docs = payload.get("documents") or []
     if not isinstance(docs, list) or not docs:
-        raise InvalidCorpusError("No documents found in corpus.json")
+        raise InvalidCorpusError("No documents found in data.json")
 
     out: List[Dict[str, Any]] = []
     for d in docs:
@@ -192,6 +192,7 @@ def _compute_global_metrics(per_cluster: Dict[str, Any], n_clusters: int, tfidf_
 def analyze_corpus_draft_folder(
     drafts_root: Path,
     corpus_id: str,
+    documents: List[Dict[str, Any]],
     n_clusters: int = 15,
 ) -> Dict[str, Any]:
     """
@@ -219,7 +220,7 @@ def analyze_corpus_draft_folder(
             pass
 
     # Load documents (id, raw_text)
-    documents = _load_corpus_documents(corpus_dir)
+    #documents = _load_corpus_documents(corpus_dir)
     texts = [d["raw_text"] for d in documents]
     n_docs = len(documents)
 

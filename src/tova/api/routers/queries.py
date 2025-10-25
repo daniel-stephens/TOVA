@@ -13,6 +13,27 @@ router = APIRouter()
 # -----------------------
 # API Route
 # -----------------------
+@router.post("/dashboard-data", tags=["Queries"])
+def get_dashboard_data(req: ModelInfoRequest) -> Dict[str, Any]:
+    """
+    Returns topic model data formatted for dashboard visualization.
+    """
+    if not os.path.isdir(req.model_path):
+        raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
+
+    try:
+        model_info = get_model_info_dispatch(
+            model_path=req.model_path,
+            config_path=req.config_path,
+            model_metadata=req.model_metadata,
+            model_training_corpus=req.model_training_corpus,
+            logger=logger,
+            output="dashboard",
+        )
+        return model_info
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/model-info", tags=["Queries"])
 def get_model_info(req: ModelInfoRequest) -> Dict[str, Any]:

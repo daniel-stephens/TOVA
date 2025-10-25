@@ -1,354 +1,343 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Trained Models - TOVA</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trained Models - TOVA</title>
 
-  <!-- Bootstrap & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
 
-  <style>
-    body { background-color: #f8f9fa; }
-    .card-title { font-size: 1.1rem; }
-    .model-meta { font-size: 0.9rem; color: #343a40; }
-    .badge { font-size: 0.8rem; }
-    .popover { max-width: 420px; }
-    .kv-row {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: .35rem .75rem;
-      font-size: .875rem;
-      margin-bottom: .25rem;
-    }
-    .badge.rounded-pill { padding: .45em .65em; }
-    h4.lh-sm { line-height: 1.1; }
+    <style>
+      body { background-color: #f8f9fa; }
+      .popover { max-width: 420px; }
+      .kv-row {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 0.35rem 0.75rem;
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+      }
+      .kv-row .k { color: #6c757d; }
+      .kv-row .v { color: #212529; word-break: break-word; }
+    </style>
+  </head>
 
-    .kv-row .k { color: #6c757d; }
-    .kv-row .v { color: #212529; word-break: break-word; }
-    .card-title { font-size: 1.05rem; }
-    .badge.text-bg-light { background-color: #f8f9fa !important; }
-  </style>
-</head>
+  <body class="bg-light">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="/">TOVA</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+          <span class="navbar-toggler-icon"></span>
+        </button>
 
-<body class="bg-light">
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="/">TOVA</a>
-
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-        aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-
-      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <ul class="navbar-nav">
+        <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
+          <ul class="navbar-nav">
+            <li class="nav-item"><a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Home</a></li>
+            <li class="nav-item"><a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Train Models</a></li>
+            <li class="nav-item"><a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">View Models</a></li>
+          </ul>
           <li class="nav-item">
-            <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/">Home</a>
+            <button class="btn btn-sm btn-outline-secondary ms-3" onclick="history.back()">Back</button>
           </li>
-          <li class="nav-item">
-            <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Train Models</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">View Models</a>
-          </li>
-        </ul>
+        </div>
+      </div>
+    </nav>
 
-        <li class="nav-item">
-          <button class="btn btn-sm btn-outline-secondary ms-3" onclick="history.back()">Back</button>
-        </li>
+    <!-- Main -->
+    <div class="container-sm py-4">
+      <h3 class="mb-4 text-center">Trained Models</h3>
+
+      <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
+        <!-- spinner -->
+        <div id="modelsSpinner" class="d-flex justify-content-center py-4">
+          <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+        </div>
+
+        <!-- grid -->
+        <div id="modelsGrid" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 d-none"></div>
+
+        <!-- empty state -->
+        <div id="noModels" class="alert alert-warning text-center mt-5 d-none">No trained models found.</div>
       </div>
     </div>
-  </nav>
 
-  <!-- Main -->
-  <div class="container-sm py-4">
-    <h3 class="mb-4 text-center">Trained Models</h3>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
-      <!-- spinner -->
-      <div id="modelsSpinner" class="d-flex justify-content-center py-4">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
-        </div>
-      </div>
+    <script>
+      (function () {
+        const grid    = document.getElementById("modelsGrid");
+        const spinner = document.getElementById("modelsSpinner");
+        const noModels= document.getElementById("noModels");
 
-      <!-- grid -->
-      <div id="modelsGrid" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 d-none"></div>
+        // ========= Utils =========
+        const escapeHtml = (str) =>
+          String(str ?? "").replace(/[&<>\"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 
-      <!-- empty state -->
-      <div id="noModels" class="alert alert-warning text-center mt-5 d-none">
-        No trained models found.
-      </div>
-    </div>
-  </div>
+        function prettyModelType(typeStr) {
+          const last = String(typeStr || "").split(".").pop() || "";
+          return last.replace(/TMmodel$/i,"").replace(/Model$/i,"") || "—";
+        }
+        function fmtDate(isoStr) {
+          if (!isoStr) return "—";
+          const d = new Date(isoStr);
+          return isNaN(d) ? escapeHtml(isoStr) : d.toLocaleString();
+        }
+        function kvRow(label, value) {
+          return `<div class="kv-row"><div class="k"><strong>${escapeHtml(label)}:</strong></div><div class="v">${escapeHtml(value == null ? "—" : String(value))}</div></div>`;
+        }
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        // ========= Normalization =========
+        // API  returns: [{ id: c_..., name, metadata, models: [ { id: m_..., metadata: { tr_params... } } ] }, ...]
+        function normalizeCorporaToModels(corpora) {
+          const out = [];
+          (corpora || []).forEach((c) => {
+            const corpusId   = c?.id || c?.metadata?.id || "";
+            const corpusName = c?.name || c?.metadata?.name || "";
+            const corpusLoc  = c?.location || c?.metadata?.location || "";
+            const corpusCreated = c?.created_at || c?.metadata?.created_at || "";
 
-  <script>
-  (function () {
-    const grid     = document.getElementById('modelsGrid');
-    const spinner  = document.getElementById('modelsSpinner');
-    const noModels = document.getElementById('noModels');
+            (c?.models || []).forEach((m) => {
+              // build a model object we render from, and embed corpus info
+              const md = m?.metadata || {};
+              const tr = md?.tr_params || {};
+              out.push({
+                // model fields
+                id: m?.id || tr?.id || "",
+                name: m?.name || md?.name || tr?.model_name || "",
+                owner_id: m?.owner_id ?? md?.owner_id ?? null,
+                location: m?.location || md?.location || "",
+                created_at: m?.created_at || md?.created_at || "",
+                metadata: m?.metadata || {},
+                // attach corpus info for rendering
+                __corpus: {
+                  id: corpusId,
+                  name: corpusName,
+                  location: corpusLoc,
+                  created_at: corpusCreated
+                }
+              });
+            });
+          });
+          return out;
+        }
 
-    // ===== Utilities =====
-    const escapeHtml = (str) => String(str ?? '').replace(/[&<>\"']/g, m => (
-      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])
-    ));
+        function getFields(model) {
+          const md = model?.metadata || {};
+          const tr = md?.tr_params || {};
 
-    function shortType(typeStr) {
-      if (!typeStr) return 'model';
-      const parts = String(typeStr).split('.');
-      return parts[parts.length - 1] || 'model';
-    }
+          // model id MUST be m_*
+          const id = (typeof model?.id === "string" && model.id.startsWith("m_"))
+            ? model.id
+            : (typeof tr?.id === "string" && tr.id.startsWith("m_")) ? tr.id : (model?.id || "");
 
-    function kvRow(label, value) {
-      return `
-        <div class="kv-row">
-          <div class="k"><strong>${escapeHtml(label)}:</strong></div>
-          <div class="v">${escapeHtml(value == null ? '—' : String(value))}</div>
-        </div>`;
-    }
+          const name = md?.name || tr?.model_name || model?.name || id || "—";
+          const typeFull   = md?.type || "";
+          const typePretty = prettyModelType(typeFull);
+          const numTopics  = (typeof tr?.num_topics === "number") ? tr.num_topics : "—";
 
-    function buildPopoverContent(model) {
-      const md = model?.metadata || {};
-      const tr = md?.tr_params || {};
-      const lines = [
-        kvRow('Name', md.name ?? tr.model_name ?? model.id),
-        kvRow('ID', model.id),
-        kvRow('Type', md.type),
-        kvRow('Path', md.path),
-        kvRow('Owner', model.owner_id),
-        kvRow('Created', md.creation_date),
-        '<hr class="my-2">',
-      ];
+          const corpusId   = tr?.corpus_id || model?.__corpus?.id || "";
+          const corpusName = model?.__corpus?.name || md?.corpus_name || "";
 
-      // Append all tr_params (stable order: alphabetical)
-      Object.keys(tr).sort().forEach(k => {
-        lines.push(kvRow(k, tr[k]));
-      });
+          const location   = model?.location || md?.location || model?.__corpus?.location || "";
+          const createdAt  = model?.created_at || md?.created_at || "";
 
-      return `<div class="popover-body-inner">${lines.join('')}</div>`;
-    }
+          return { id, name, typeFull, typePretty, numTopics, corpusId, corpusName, location, createdAt, ownerId: model?.owner_id ?? "" };
+        }
 
-    // ===== Data fetch =====
-    async function fetchModels() {
-      try {
-        const res = await fetch('/get-trained-models', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = await res.json();
-        return Array.isArray(data) ? data : [];
-      } catch (e) {
-        console.error('Failed to load models:', e);
-        return [];
-      }
-    }
+        function buildPopoverContent(model) {
+          const f = getFields(model);
+          const tr = model?.metadata?.tr_params || {};
+          const lines = [
+            kvRow("Name", f.name),
+            kvRow("ID", f.id || "—"),
+            kvRow("Type", f.typeFull ? `${f.typePretty} (${f.typeFull})` : f.typePretty),
+            kvRow("Location", f.location || "—"),
+            kvRow("Corpus ID", f.corpusId || "—"),
+            kvRow("Corpus Name", f.corpusName || "—"),
+            kvRow("Owner", f.ownerId || "—"),
+            kvRow("Created", fmtDate(f.createdAt)),
+            '<hr class="my-2">'
+          ];
+          Object.keys(tr).sort().forEach((k) => lines.push(kvRow(k, tr[k])));
+          return `<div class="popover-body-inner">${lines.join("")}</div>`;
+        }
 
-    // ===== Rendering =====
-    function renderCard(model) {
-      const id        = model?.id || '';
-      const name      = model?.metadata?.name || model?.metadata?.tr_params?.model_name || id;
-      const typeFull  = model?.metadata?.type || '';
-      const typeShort = shortType(typeFull);
-      const numTopics = model?.metadata?.tr_params?.num_topics ?? '—';
+        // ========= Data fetch =========
+        async function fetchModels() {
+          try {
+            const res = await fetch("/get-trained-models", { cache: "no-store" });
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+            const corpora = await res.json();
+            return normalizeCorporaToModels(Array.isArray(corpora) ? corpora : []);
+          } catch (e) {
+            console.error("Failed to load models:", e);
+            return [];
+          }
+        }
 
-      const col = document.createElement('div');
-      col.className = 'col d-flex';
+        // ========= Rendering =========
+        function renderCard(model) {
+          const f = getFields(model);
 
-      const card = document.createElement('div');
-      card.className = 'card shadow-sm position-relative w-100 h-100 model-card';
-      card.style.border = '1px solid #e2e6ea';
-      card.tabIndex = 0; // allow focus-trigger popover
-      // attach model object to element so we can build the popover later
-      card.__model = model;
+          const col = document.createElement("div");
+          col.className = "col d-flex";
 
-      // delete icon
-      const del = document.createElement('a');
-      del.href = '#';
-      del.className = 'position-absolute top-0 end-0 m-2 text-danger delete-model';
-      del.title = 'Delete model';
-      del.innerHTML = '<i class="bi bi-x-circle-fill fs-5"></i>';
-      del.dataset.modelId = id;
-      del.dataset.modelName = name;
+          const card = document.createElement("div");
+          card.className = "card shadow-sm position-relative w-100 h-100 model-card";
+          card.style.border = "1px solid #e2e6ea";
+          card.tabIndex = 0;
+          card.__model = model;
 
-      // body
-      const body = document.createElement('div');
-      body.className = 'card-body d-flex flex-column justify-content-between';
+          // delete icon
+          const del = document.createElement("a");
+          del.href = "#";
+          del.className = "position-absolute top-0 end-0 m-2 text-danger delete-model";
+          del.title = "Delete model";
+          del.innerHTML = '<i class="bi bi-x-circle-fill fs-5"></i>';
+          del.dataset.modelId = f.id;
+          del.dataset.modelName = f.name;
 
+          // body
+          const body = document.createElement("div");
+          body.className = "card-body d-flex flex-column justify-content-between";
 
-      // ===== Top (ID → Name → subtitle) =====
-      const top = document.createElement('div');
-      top.className = 'text-center';
+          const top = document.createElement("div");
+          top.className = "text-center";
+          top.innerHTML = `
+            <h4 class="fw-bold mb-1 text-break">${escapeHtml(f.name)}</h4>
+            <div class="text-muted">
+              Model Type: <span class="fw-semibold">${escapeHtml(f.typePretty)}</span>
+            </div>
+            <div class="text-muted">
+              Number of topics: <span class="fw-semibold">${escapeHtml(String(f.numTopics))}</span>
+            </div>
+            <div class="text-muted">
+              Corpus: <span class="fw-semibold">${escapeHtml(f.corpusName || f.corpusId || "—")}</span>
+            </div>
+            <div class="text-muted">
+              Location: <span class="fw-semibold">${escapeHtml(f.location || "—")}</span>
+            </div>
+          `;
 
-      const shortId = id ? `#${id.slice(-8)}` : '#—';
+          const actions = document.createElement("div");
+          actions.className = "mt-3";
+          actions.innerHTML = `
+            <button class="btn btn-primary btn-sm use-model-btn"
+                    data-model-id="${escapeHtml(f.id)}"
+                    data-model-name="${escapeHtml(f.name)}"
+                    aria-label="Use model ${escapeHtml(f.name)}">
+              Open Dashboard
+            </button>
+          `;
 
-      top.innerHTML = `
-        
-      <!-- Big name in the middle -->
-        <h4 class="fw-bold mb-1 text-break">
-          ${escapeHtml(name)}
-        </h4>
-      
-      
-      <!-- Topic ID on top -->
-        <div class="small text-muted mb-1" title="${escapeHtml(id)}">
-          Topic ID: <span class="fw-semibold">${escapeHtml(shortId)}</span>
-        </div>
-      
-        <!-- Subtitle: model type · number of topics -->
-        <div class="text-muted">
-          Model Type: <span class="fw-semibold">${escapeHtml(typeShort)}</span>
-        </div>
-        <div class="text-muted">
-          Number of topics: <span class="fw-semibold">${escapeHtml(String(numTopics))}</span>
-        </div>
-        
+          body.appendChild(top);
+          body.appendChild(actions);
+          card.appendChild(del);
+          card.appendChild(body);
+          col.appendChild(card);
+          return col;
+        }
 
-        
-      `;
+        function wireCardInteractions(scope) {
+          // Delete
+          scope.querySelectorAll(".delete-model").forEach((a) => {
+            a.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              const modelId = a.dataset.modelId;
+              const modelName = a.dataset.modelName;
+              deleteModel(modelId, modelName);
+            });
+          });
 
-      // ===== Primary action (Use Model button below all that) =====
-      const actions = document.createElement('div');
-      actions.className = 'mt-3';
+          // Open Dashboard (send model_id = m_…)
+          scope.querySelectorAll(".use-model-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const modelId = btn.getAttribute("data-model-id");
 
-      actions.innerHTML = `
-    
-          <button class="btn btn-primary btn-sm use-model-btn"
-                  data-model-id="${escapeHtml(id)}"
-                  data-model-name="${escapeHtml(name)}"
-                  aria-label="Use model ${escapeHtml(name)}">
-            Open Dashboard
-          </button>
-      
-      `;
+              const form = document.createElement("form");
+              form.method = "POST";
+              //form.action = `/dashboard/${encodeURIComponent(modelId)}`;
+              form.action = `/dashboard`;
 
+              const inputId = document.createElement("input");
+              inputId.type = "hidden";
+              inputId.name = "model_id";
+              inputId.value = modelId;
+              form.appendChild(inputId);
 
-      body.appendChild(top);
-      body.appendChild(actions);
+              document.body.appendChild(form);
+              form.submit();
+            });
+          });
+        }
 
-      card.appendChild(del);
-      card.appendChild(body);
-      col.appendChild(card);
-      return col;
-    }
+        // Popovers
+        function enablePopovers(scope) {
+          const cards = scope.querySelectorAll(".model-card");
+          cards.forEach((card) => {
+            const existing = bootstrap.Popover.getInstance(card);
+            if (existing) existing.dispose();
+            new bootstrap.Popover(card, {
+              container: "body",
+              html: true,
+              trigger: "hover focus",
+              placement: "auto",
+              boundary: "viewport",
+              delay: { show: 150, hide: 100 },
+              sanitize: false,
+              content: () => buildPopoverContent(card.__model),
+            });
+          });
+        }
 
-    function wireCardInteractions(scope) {
-      // Delete
-      scope.querySelectorAll('.delete-model').forEach(a => {
-        a.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          const modelId = a.dataset.modelId;
-          const modelName = a.dataset.modelName;
-          deleteModel(modelId, modelName);
-        });
-      });
+        // Delete call
+        window.deleteModel = function deleteModel(modelId, modelName) {
+          if (!confirm("Are you sure you want to delete this model?")) return;
+          fetch("/delete-model", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: modelId, model_name: modelName }),
+          })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({ message: "Delete completed." }));
+            if (!res.ok) throw new Error(data?.message || res.statusText);
+            alert(data?.message || "Model deleted.");
+            location.reload();
+          })
+          .catch((err) => {
+            console.error("Delete failed:", err);
+            alert("Failed to delete model.");
+          });
+        };
 
-      // Use model
-      scope.querySelectorAll('.use-model-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const modelId = btn.getAttribute('data-model-id');
-          const modelName = btn.getAttribute('data-model-name');
+        // ===== Main =====
+        async function main() {
+          const models = await fetchModels();
+          spinner?.classList.add("d-none");
 
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = `/dashboard/${encodeURIComponent(modelId)}`;
+          if (!models.length) {
+            noModels?.classList.remove("d-none");
+            return;
+          }
 
-          const inputId = document.createElement('input');
-          inputId.type = 'hidden';
-          inputId.name = 'model_id';
-          inputId.value = modelId;
-          form.appendChild(inputId);
+          grid?.classList.remove("d-none");
 
-          document.body.appendChild(form);
-          form.submit();
-        });
-      });
-    }
+          const frag = document.createDocumentFragment();
+          models.forEach((m) => frag.appendChild(renderCard(m)));
+          grid?.appendChild(frag);
 
-    // Initialize Bootstrap popovers with dynamic content
-    function enablePopovers(scope) {
-      const cards = scope.querySelectorAll('.model-card');
-      cards.forEach(card => {
-        const existing = bootstrap.Popover.getInstance(card);
-        if (existing) existing.dispose();
+          wireCardInteractions(grid);
+          enablePopovers(grid);
 
-        new bootstrap.Popover(card, {
-          container: 'body',
-          html: true,
-          trigger: 'hover focus',
-          placement: 'auto',
-          boundary: 'viewport',
-          delay: { show: 150, hide: 100 },
-          sanitize: false, // we escape values ourselves
-          content: () => buildPopoverContent(card.__model),
-        });
-      });
-    }
+        console.log([...document.querySelectorAll('.use-model-btn')].map(b=>b.dataset.modelId));
+        }
 
-    // ===== Delete function (kept compatible with your backend) =====
-    window.deleteModel = function deleteModel(modelId, modelName) {
-      if (!confirm('Are you sure you want to delete this model?')) return;
-
-      fetch('/delete-model', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_id: modelId, model_name: modelName })
-      })
-      .then(async res => {
-        const data = await (res.json().catch(() => ({ message: 'Delete completed.' })));
-        if (!res.ok) throw new Error(data?.message || res.statusText);
-        alert(data?.message || 'Model deleted.');
-        location.reload();
-      })
-      .catch(err => {
-        console.error('Delete failed:', err);
-        alert('Failed to delete model.');
-      });
-    };
-
-      // Delegate once at the grid/container level
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.copy-id-btn');
-    if (!btn) return;
-    try {
-      await navigator.clipboard.writeText(btn.getAttribute('data-model-id') || '');
-      btn.classList.add('btn-success');
-      btn.classList.remove('btn-outline-secondary');
-      setTimeout(() => {
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-outline-secondary');
-      }, 1200);
-    } catch {
-      alert('Could not copy model ID');
-    }
-  });
-
-    // ===== Main =====
-    async function main() {
-      const models = await fetchModels();
-
-      spinner?.classList.add('d-none');
-
-      if (!models.length) {
-        noModels?.classList.remove('d-none');
-        return;
-      }
-
-      grid?.classList.remove('d-none');
-
-      const frag = document.createDocumentFragment();
-      models.forEach(m => frag.appendChild(renderCard(m)));
-      grid?.appendChild(frag);
-
-      wireCardInteractions(grid);
-      enablePopovers(grid);
-    }
-
-    main();
-  })();
-  </script>
-</body>
+        main();
+      })();
+    </script>
+  </body>
 </html>

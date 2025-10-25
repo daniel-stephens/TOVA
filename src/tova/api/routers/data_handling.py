@@ -255,19 +255,19 @@ def list_corpus_models(corpus_id: str):
     return models.list_models(corpus_id)
 
 
-@router.get("/corpora/{corpus_id}/models/{model_id}", response_model=Model)
-def get_model(corpus_id: str, model_id: str):
+@router.get("/models/{model_id}", response_model=Model)
+def get_model(model_id: str):
     """Get a model by ID."""
-    m = models.get_model(corpus_id, model_id)
+    m = models.get_model(model_id)
     if m is None:
         raise HTTPException(404, "Model not found")
     return m
 
 
-@router.delete("/corpora/{corpus_id}/models/{model_id}", status_code=204)
-def delete_model(corpus_id: str, model_id: str):
+@router.delete("/models/{model_id}", status_code=204)
+def delete_model(model_id: str):
     """Delete a model by ID."""
-    ok = models.delete_model(corpus_id, model_id)
+    ok = models.delete_model(model_id)
     if not ok:
         raise HTTPException(404, "Model not found")
     return
