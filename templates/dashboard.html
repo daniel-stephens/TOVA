@@ -58,9 +58,9 @@ main {
   border: 1px solid #ddd;
   padding: 1rem;
   width: 100%;
-  height: auto;            /* ⬅️ Let height adjust to content */
+  height: auto;           
   box-sizing: border-box;
-  overflow: visible;       /* ⬅️ Ensure nothing gets cut off */
+  overflow: visible;
 }
 
 
@@ -168,8 +168,11 @@ footer {
           <!-- Current model pill (optional; remove if not needed) -->
           <li class="nav-item d-none d-lg-block">
             <span class="badge text-bg-light border">
-              Model: <span id="navCurrentModel">{{ model_name|e }}</span>
+              Model: <span id="navCurrentModel">{{ model_id|e }}</span>
             </span>
+            <!--<span class="badge text-bg-light border">
+              Model: <span id="navCurrentModel">{{ model_name|e }}</span>
+            </span>-->
           </li>
   
           <!-- Model Info (modal) -->
@@ -221,13 +224,9 @@ footer {
     </div>
   </nav>
   
-  
-  
-
   <div hidden id="modelName">{{model_name}}</div>
   <div hidden id="model_id">{{model_id}}</div>
   
-
   <!-- Full Workspace -->
   <main class="flex-grow-1 px-4 py-3">
     <div class="d-flex flex-grow-1 gap-3 h-100">
@@ -330,8 +329,7 @@ footer {
             </div>
           </div>
         </div>
-        
-        
+
         
         <div class="flex-grow-1 overflow-auto">
           <table class="table table-sm table-hover mb-0">
@@ -387,7 +385,6 @@ footer {
             </div>
           </div>
   
-  
         <!-- Inference Results -->
         <div  class="mt-6">
             <!-- <h6 class="fw-bold mb-3">Inference Summary</h6> -->
@@ -409,7 +406,7 @@ footer {
             <div id="inferredResults" class="col-md-5" style="display: none;">
                 <div class="mb-3 mt-1 d-flex align-items-center">
                 <strong>Top Theme:</strong>
-                <p id="inferredTheme" class="fw-semibold text-primary mb-0">–</p>
+                <p id="inferredTheme" class="fw-semibold text-primary mb-0">-</p>
                 </div>
 
                 <div id="inferredKeywordsWrapper" class="mb-2">
@@ -420,7 +417,7 @@ footer {
         
                 <div class="mb-3">
                   <div id="inferredRationaleWrapper">
-                    <p><strong>Rationale:</strong> <span id="inferredRationale">–</span></p>
+                    <p><strong>Rationale:</strong> <span id="inferredRationale">-</span></p>
                   </div>                  
               </div>
         
@@ -433,8 +430,6 @@ footer {
             </div>
             </div>
         </div>
-        
-  
   
           <!-- File Input Section -->
           <div id="fileInputGroup" style="display: none;">
@@ -490,7 +485,9 @@ footer {
                 <!-- Top Theme -->
                 <div class="mb-3 mt-1 d-flex align-items-center">
                   <strong>Top Theme:</strong>
-                  <p id="modalTheme" class="fw-semibold text-primary mb-0">–</p>
+                  <!-- <p id="modalTheme" class="fw-semibold text-primary mb-0">-</p> -->
+                  <p id="modalTheme" class="fw-semibold mb-0">-</p>
+
                 </div>
 
                 <div>
@@ -516,9 +513,7 @@ footer {
               </div>
             </div>
           </div>
-          
-          
-  
+
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
@@ -542,7 +537,7 @@ footer {
             <div class="col-lg-6 d-flex">
               <div id="leftPanel" class="panel d-flex flex-column p-3 bg-white border rounded w-100">
                 <p><strong>Summary:</strong></p>
-                <p id="selectedThemeSummary" class="small text-muted fst-italic">–</p>
+                <p id="selectedThemeSummary" class="small text-muted fst-italic">-</p>
         
                 <p><strong>Top Keywords:</strong></p>
                 <div id="selectedThemeKeywords" class="d-flex flex-wrap gap-1 small mb-3"></div>
@@ -558,7 +553,7 @@ footer {
                   <p class="fw-semibold small text-muted">Similar Themes to Selected Theme</p>
                   <canvas id="similarityDotPlot" height="150"></canvas>
                   <p class="small text-muted mt-2">
-                    <strong>Note:</strong> Lower similarity scores (closer to 0) indicate stronger similarity to the selected theme. Higher negative values mean less similarity.
+                    <strong>Note:</strong> Higher similarity scores (closer to +1) indicate stronger co-occurrence and greater similarity between topics. Values near 0 suggest little or no relationship, while negative values indicate that the topics rarely appear together (less similar).
                   </p>
                 </div>
               </div>
@@ -749,86 +744,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return "rgba(0,0,0,0.04)";
   }
 
-  // Choose the first non-empty rationale among several shapes
-  function pickRationale(...candidates) {
-    for (const v of candidates) {
-      if (v == null) continue;
-
-      if (typeof v === "string" && v.trim()) return v.trim();
-
-      if (Array.isArray(v)) {
-        const joined = v.map(x => (x ?? "")).join("\n").replace(/\r\n/g, "\n").trim();
-        if (joined) return joined;
-      }
-
-      if (typeof v === "object") {
-        if (typeof v.text === "string" && v.text.trim()) return v.text.trim();
-        if (Array.isArray(v.bullets)) {
-          const joined = v.bullets.map(x => (x ?? "")).join("\n").replace(/\r\n/g, "\n").trim();
-          if (joined) return joined;
-        }
-      }
-    }
-    return "";
-  }
-
-  // Rationale renderer; hides wrapper when empty.
-  function setRationale({ wrapperId, textId, value, parentId }) {
-    let wrapper = document.getElementById(wrapperId);
-    let textEl  = document.getElementById(textId);
-
-    // Create wrapper if missing (same as before)
-    if (!wrapper && parentId) {
-      const parent = document.getElementById(parentId);
-      if (parent) {
-        wrapper = document.createElement("div");
-        wrapper.id = wrapperId;
-        wrapper.className = "mb-3";
-        wrapper.style.display = "none";
-        wrapper.innerHTML = `
-          <strong>Rationale:</strong>
-          <p id="${textId}" class="fst-italic small text-muted mb-0" style="white-space: pre-wrap;">—</p>
-        `;
-        parent.appendChild(wrapper);
-        textEl = document.getElementById(textId);
-      }
-    }
-    if (!wrapper || !textEl) return;
-
-    // Helper: "non-empty" means string with non-whitespace
-    const nonEmpty = v => typeof v === "string" ? v.trim().length > 0 : v != null && String(v).trim().length > 0;
-
-    let show = false;
-    let str  = "";
-
-    if (typeof value === "string") {
-      show = nonEmpty(value);
-      str  = value.trim();
-    } else if (Array.isArray(value)) {
-      // Only show if ALL items are non-empty
-      const allGood = value.length > 0 && value.every(nonEmpty);
-      show = allGood;
-      if (allGood) str = value.map(v => String(v).trim()).join("\n");
-    } else if (value && typeof value === "object") {
-      if (Array.isArray(value.bullets)) {
-        const allGood = value.bullets.length > 0 && value.bullets.every(nonEmpty);
-        show = allGood;
-        if (allGood) str = value.bullets.map(v => String(v).trim()).join("\n");
-      } else if (typeof value.text === "string") {
-        show = nonEmpty(value.text);
-        str  = value.text.trim();
-      }
-    }
-
-    if (show && str) {
-      textEl.textContent = str;
-      wrapper.style.display = "";
-    } else {
-      textEl.textContent = "—";
-      wrapper.style.display = "none";
-    }
-  }
-
   // ---------------------------
   // Accessors for normalized bundle
   // ---------------------------
@@ -875,13 +790,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return themeIds().map(id => {
       const t = themeById(id);
       const d = diagByThemeId(id) || {};
-      return {
-        theme: t.label,                                           
-        Size: typeof d.size === "number" ? d.size : null,
-        Entropy: typeof d.entropy === "number" ? d.entropy : null,
-        "Coherence (NPMI)": typeof d.coherence === "number" ? d.coherence : null,
-        "# Docs Active": typeof d.docsActive === "number" ? d.docsActive : null
-      };
+      return { theme: t.label, ...d };
     });
   }
 
@@ -1139,6 +1048,87 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------------------------
   // Tables & Filters
   // ---------------------------
+  // If the backend sends the metric order, we'll use it
+  function getMetricOrder() {
+    return Array.isArray(dashboardV2?.metric_order) ? dashboardV2.metric_order.slice() : null;
+  }
+  function getMetricLabels() {
+    return (dashboardV2?.metric_labels && typeof dashboardV2.metric_labels === "object")
+      ? dashboardV2.metric_labels
+      : {};
+  }
+
+  // Human label: prefer backend labels; otherwise Title Case from key
+  function prettyLabel(key) {
+    const L = getMetricLabels();
+    if (L[key]) return String(L[key]);
+    return String(key)
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2") // split camelCase
+      .replace(/[_\-]+/g, " ")                // split snake/kebab
+      .trim()
+      .split(/\s+/)
+      .map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w)
+      .join(" ");
+  }
+
+  // format numbers
+  function fmtValue(_key, value) {
+    if (value == null || (typeof value === "number" && Number.isNaN(value))) return "—";
+    if (typeof value === "number") {
+      return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
+    }
+    return String(value);
+  }
+
+  // Build the active diagnostics key list:
+  // If backend provides metric_order, use it (but only keys that actually appear with a value).
+  // Otherwise, preserve first-seen order across diagnostics objects sent by the backend.
+  function getActiveDiagnosticKeys() {
+    const presence = new Map();
+    const seenOrder = [];
+
+    for (const id of themeIds()) {
+      const d = diagByThemeId(id) || {};
+      for (const k of Object.keys(d)) {
+        if (!presence.has(k)) { presence.set(k, false); seenOrder.push(k); }
+        const v = d[k];
+        const ok = v != null && !(typeof v === "number" && Number.isNaN(v));
+        if (ok) presence.set(k, true);
+      }
+    }
+
+    const observed = seenOrder.filter(k => presence.get(k));
+    const backendOrder = getMetricOrder();
+
+    if (backendOrder) {
+      const ordered = backendOrder.filter(k => observed.includes(k));
+      const leftovers = observed.filter(k => !backendOrder.includes(k));
+      return [...ordered, ...leftovers];
+    }
+    return observed;
+  }
+
+  function ensureDocDiagnosticsBlock() {
+    // Right column of the Document Details modal
+    const rightCol = document.querySelector("#docDetailModal .modal-body .col-md-6:nth-child(2)");
+    if (!rightCol) return null;
+
+    let holder = document.getElementById("docDiagnosticsHolder");
+    if (!holder) {
+      holder = document.createElement("div");
+      holder.id = "docDiagnosticsHolder";
+      holder.className = "mt-3";
+      holder.innerHTML = `
+        <div class="mb-2"><strong>Theme Diagnostics (for this document's theme)</strong></div>
+        <div id="docDiagnosticsGrid" class="row row-cols-2 g-2"></div>
+      `;
+      // Insert before the probabilities chart block if present, otherwise at top
+      const chartBlock = rightCol.querySelector(".mt-4");
+      rightCol.insertBefore(holder, chartBlock || rightCol.firstChild);
+    }
+    return document.getElementById("docDiagnosticsGrid");
+  }
+
   function renderDocumentTable(docs = []) {
     const thead = document.getElementById("docTableHead");
     const tbody = document.getElementById("docTableBody");
@@ -1191,7 +1181,7 @@ document.addEventListener("DOMContentLoaded", () => {
           td.title = td.textContent;
         }
 
-        // 🎨 Color the theme name to match the charts
+        // Color the theme name to match the charts
         if (col === "theme") {
           const color = themeColorMap[Number(doc.theme_id)] || null;
           if (color) {
@@ -1275,45 +1265,40 @@ document.addEventListener("DOMContentLoaded", () => {
   function populateThemeDiagnosticsTable(rows = []) {
     const tableHead = document.querySelector("#themeStatsTable thead");
     const tableBody = document.querySelector("#themeStatsTable tbody");
-    const wrapper   = document.querySelector("#themeStatsTable")?.parentElement;
-    if (!tableHead || !tableBody || !wrapper) return;
+    if (!tableHead || !tableBody) return;
 
     tableHead.innerHTML = "";
     tableBody.innerHTML = "";
 
-    if (rows.length === 0) {
+    if (!rows.length) {
       tableHead.innerHTML = `<tr><th>No Data</th></tr>`;
       tableBody.innerHTML = `<tr><td class="text-muted">No diagnostics available.</td></tr>`;
       return;
     }
 
-    const allKeys = Object.keys(rows[0]);
-    const dynamicKeys = allKeys.filter(k => k.toLowerCase() !== "theme");
-    const columns = ["theme", ...dynamicKeys];
+    const diagKeys = getActiveDiagnosticKeys();
+    const columns = ["theme", ...diagKeys];
 
-
+    // Header
     const headerRow = document.createElement("tr");
     columns.forEach(col => {
       const th = document.createElement("th");
-      th.textContent = col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      th.textContent = prettyLabel(col);
       th.style.position = "sticky"; th.style.top = "0"; th.style.backgroundColor = "#fff"; th.style.zIndex = "1";
       headerRow.appendChild(th);
     });
     tableHead.appendChild(headerRow);
 
+    // Body
     rows.forEach(r => {
-      const row = document.createElement("tr");
+      const tr = document.createElement("tr");
       columns.forEach(col => {
-        let value = r[col];
-        if (typeof value === "number") {
-          value = col.toLowerCase().includes("prevalence") ? `${(value * 100).toFixed(1)}%` : value.toFixed(3);
-        }
         const td = document.createElement("td");
-        td.title = value ?? "—";
-        td.textContent = value ?? "—";
-        row.appendChild(td);
+        td.textContent = (col === "theme") ? (r[col] ?? "—") : fmtValue(col, r[col]);
+        td.title = td.textContent;
+        tr.appendChild(td);
       });
-      tableBody.appendChild(row);
+      tableBody.appendChild(tr);
     });
   }
 
@@ -1364,24 +1349,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const summaryEl = document.getElementById("selectedThemeSummary");
     if (summaryEl) summaryEl.textContent = t.summary || "—";
 
-    // diagnostics
+    // dynamic diagnostics grid
     const d = diagByThemeId(themeId) || {};
     const diagContainer = document.getElementById("themeDiagnosticsGrid");
     if (diagContainer) {
+      diagContainer.classList.add("row", "row-cols-2", "g-2");
       diagContainer.innerHTML = "";
-      const diagnostics = {
-        "Prevalence": (typeof d.prevalence === "number") ? `${(d.prevalence * 100).toFixed(3)}%` : "—",
-        "Coherence": (typeof d.coherence === "number") ? d.coherence.toFixed(3) : "—",
-        "Keyword Uniqueness": (typeof d.uniqueness === "number") ? d.uniqueness.toFixed(3) : "—",
-        "Document Matches": (typeof d.themeMatches === "number") ? String(d.themeMatches) : "—"
-      };
-      Object.entries(diagnostics).forEach(([label, value]) => {
+
+      const keys = getActiveDiagnosticKeys();
+      keys.forEach(k => {
+        const v = d[k];
+        if (v == null || (typeof v === "number" && Number.isNaN(v))) return;
         const div = document.createElement("div");
-        div.innerHTML = `<div class="border rounded p-2 bg-light-subtle h-100 small">
-          <strong>${label}:</strong> <span class="text-muted">${value}</span>
-        </div>`;
+        div.className = "col";
+        div.innerHTML = `
+          <div class="border rounded p-2 bg-light-subtle h-100 small">
+            <strong>${prettyLabel(k)}:</strong>
+            <span class="text-muted">${fmtValue(k, v)}</span>
+          </div>`;
         diagContainer.appendChild(div);
       });
+
+      if (!diagContainer.children.length) {
+        diagContainer.innerHTML = `<div class="col-12"><div class="border rounded p-2 bg-light-subtle small">No diagnostics available.</div></div>`;
+      }
     }
 
     // keywords
@@ -1458,46 +1449,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ---------------------------
-  // Inference modal (bundle-first, fetch fallback)
+  // Inference modal 
   // ---------------------------
   async function showInferenceModal(doc) {
     const docId = doc.id;
-    /*const cached = dashboardV2?.inferences?.[docId];
-    let result = null;
-
-    if (cached) {
-      result = {
-        theme: themeById(cached.themeId)?.label,
-        top_themes: cached.topThemes.map(([tid, score]) => {
-          const t = themeById(tid);
-          return {
-            theme_id: tid,
-            label: t?.label,
-            score,
-            keywords: (t?.keywords || []).join(", ")
-          };
-        }),
-        rationale: cached.rationale
-      };
-    } else {
-      try {
-        const response = await fetch("/text-info", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-          model_id: modelId,          
-          model_path: modelPath,      
-          document_id: docId          
-        })
-      });
-        if (!response.ok) throw new Error("Failed to fetch inference");
-        result = await response.json();
-      } catch (error) {
-        console.error("Inference failed:", error);
-        alert("Failed to infer topic.");
-        return;
-      }
-    }*/
     const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
     const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
 
@@ -1524,6 +1479,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fullTextEl) fullTextEl.textContent = doc.text || "—";
     if (themeEl)    themeEl.textContent    = result.theme || "—";
 
+    // theme color
+    const top = result?.top_themes?.[0];
+    const resolvedThemeId = top?.theme_id != null ? Number(top.theme_id) : null;
+    const inferredThemeColor = resolvedThemeId != null ? (themeColorMap[resolvedThemeId] || null) : null;
+
+    if (themeEl) {
+      themeEl.style.color = inferredThemeColor || "";       
+      themeEl.style.fontWeight = inferredThemeColor ? "600" : "";
+    }
+
     const topTheme = result.top_themes?.[0];
     const keywordsRaw = topTheme?.keywords || "—";
     const formatted = typeof keywordsRaw === "string"
@@ -1537,29 +1502,51 @@ document.addEventListener("DOMContentLoaded", () => {
     const kwEl = document.getElementById("modalKeywords");
     if (kwEl) kwEl.textContent = formatted;
 
-    // Use best-available rationale (cached/server/doc)
-    const rationaleVal = pickRationale(
-      result?.rationale,
-      result?.explanation,
-      result?.reason,
-      doc?.rationale
-    );
-
-    setRationale({
-      wrapperId: "rationalDiv",
-      textId: "modalRationale",
-      parentId: "inferenceOutput",
-      value: rationaleVal
-    });
+    // rationale
+    const rationaleText = (result?.rationale || "").trim();
+    const rationaleEl = document.getElementById("modalRationale");
+    const rationaleWrapper = document.getElementById("rationalDiv");
+    if (rationaleEl && rationaleWrapper) {
+      if (rationaleText) {
+        rationaleEl.textContent = rationaleText;
+        rationaleWrapper.style.display = "";
+      } else {
+        rationaleEl.textContent = "—";
+        rationaleWrapper.style.display = "none";
+      }
+    }
 
     renderDocInferenceChart(result.top_themes);
+    const docThemeId = resolvedThemeId;
+
+    const grid = ensureDocDiagnosticsBlock();
+    if (grid && docThemeId != null) {
+      grid.innerHTML = "";
+      const d = diagByThemeId(docThemeId) || {};
+      const keys = getActiveDiagnosticKeys();
+      keys.forEach(k => {
+        const v = d[k];
+        if (v == null || (typeof v === "number" && Number.isNaN(v))) return;
+        const col = document.createElement("div");
+        col.className = "col";
+        col.innerHTML = `
+          <div class="border rounded p-2 bg-light-subtle h-100 small">
+            <strong>${prettyLabel(k)}:</strong>
+            <span class="text-muted">${fmtValue(k, v)}</span>
+          </div>`;
+        grid.appendChild(col);
+      });
+      if (!grid.children.length) {
+        grid.innerHTML = `<div class="col-12"><div class="border rounded p-2 bg-light-subtle small">No diagnostics for this document.</div></div>`;
+      }
+    }
 
     const modal = document.getElementById("docDetailModal");
     if (modal) bringModalToFront(modal);
   }
 
   // ---------------------------
-  // Model details (bundle only)
+  // Model details
   // ---------------------------
   function showModelDetails(name) {
     if (!dashboardV2) {
@@ -1644,9 +1631,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalEl) bringModalToFront(modalEl);
   }
 
-  // ---------------------------
-  // One fetch + boot
-  // ---------------------------
+
   async function fetchDashboard(modelPath) {
     console.log("this is the model path:", modelPath);
     console.log("this is the model id:", modelId);
@@ -1735,13 +1720,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
               const inferredThemeEl = document.getElementById("inferredTheme");
               const inferredKeywordsEl = document.getElementById("inferredKeywords");
-              if (inferredThemeEl) inferredThemeEl.textContent = result.top_themes?.[0]?.label || "–";
 
-              setRationale({
-                wrapperId: "inferredRationaleWrapper",
-                textId: "inferredRationale",
-                value: pickRationale(result?.rationale, result?.explanation, result?.reason)
-              });
+              const top = result?.top_themes?.[0] || null;
+
+              if (inferredThemeEl) {
+                inferredThemeEl.textContent = top?.label || "-";
+              }
+
+              const inferredColor =
+                top?.theme_id != null ? (themeColorMap[Number(top.theme_id)] || null) : null;
+
+              if (inferredThemeEl) {
+                inferredThemeEl.style.color = inferredColor || "";     
+                inferredThemeEl.style.fontWeight = inferredColor ? "600" : "";
+              }
+
+              const infRationaleText = (result?.rationale || "").trim();
+              const infRationaleEl = document.getElementById("inferredRationale");
+              const infRationaleWrapper = document.getElementById("inferredRationaleWrapper");
+              if (infRationaleEl && infRationaleWrapper) {
+                if (infRationaleText) {
+                  infRationaleEl.textContent = infRationaleText;
+                  infRationaleWrapper.style.display = "";
+                } else {
+                  infRationaleEl.textContent = "—";
+                  infRationaleWrapper.style.display = "none";
+                }
+              }
 
               if (inferredKeywordsEl) {
                 const kw = result.top_themes?.[0]?.keywords || "";

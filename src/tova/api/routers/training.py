@@ -36,7 +36,6 @@ async def _run_training_job(
     corpus_id: str,
     id: str,  # this is the model id
     config_path: str,
-    do_preprocess: bool,
     training_params: Optional[Dict],
     logger: logging.Logger,
     cancel: CancellationToken,
@@ -69,7 +68,6 @@ async def _run_training_job(
                 id=id,
                 config_path=config_path,
                 logger=logger,
-                do_preprocess=do_preprocess,
                 tr_params=training_params,
                 progress_callback=progress_callback,
                 cancel=cancel
@@ -97,7 +95,6 @@ async def _enqueue_training_job(
     model_name: str,
     corpus_id: str,
     config_path: str,
-    do_preprocess: bool,
     training_params: Optional[Dict],
     bg: BackgroundTasks,
 ) -> TrainResponse:
@@ -123,7 +120,6 @@ async def _enqueue_training_job(
         corpus_id=corpus_id,
         id=model_id,
         config_path=config_path,
-        do_preprocess=do_preprocess,
         training_params=training_params,
         logger=logger,
     )
@@ -152,7 +148,6 @@ async def train_model_from_json(req: TrainRequest, bg: BackgroundTasks, response
             model_name=req.model_name,
             corpus_id=req.corpus_id,
             config_path=req.config_path,
-            do_preprocess=req.do_preprocess,
             training_params=req.training_params,
             bg=bg,
         )

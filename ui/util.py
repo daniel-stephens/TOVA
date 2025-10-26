@@ -1,8 +1,9 @@
+from pathlib import Path
+import requests
 import pandas as pd
 from datetime import datetime
 from langchain_community.document_loaders import (
     TextLoader, CSVLoader)
-import chromadb
 import json
 import sqlite3
 import numpy as np
@@ -14,15 +15,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import entropy as scipy_entropy
 from sklearn.preprocessing import normalize
 import os
-
-
-
-
-
-
-#client = chromadb.PersistentClient(path="database/myDB")
-#collection = client.get_or_create_collection(name="documents")
-#registry = client.get_or_create_collection("corpus_model_registry")
 
 
 def preprocess_file(file_path, file_type, label_column):
@@ -86,6 +78,7 @@ def excel_confirmation(file, text_column, label_column=None) -> dict:
             "message": f"Validation failed: {str(e)}"
         }
 
+
 def load_file(file_path):
     ext = file_path.split('.')[-1].lower()
     docs = []
@@ -98,7 +91,8 @@ def load_file(file_path):
         loader = CSVLoader(file_path)
         docs = loader.load()
 
-    elif ext in ['json', 'jsonl', 'xls', 'xlsx']:  # 🔁 Use your custom processor (which uses pandas)
+    # 🔁 Use your custom processor (which uses pandas)
+    elif ext in ['json', 'jsonl', 'xls', 'xlsx']:
         preprocessed = preprocess_file(file_path, ext)
         return [{
             "content": row["content"],
@@ -126,16 +120,14 @@ def load_file(file_path):
     } for i in range(len(docs))]
 
 
-import json
-
 def parse_multiline_key_value_string(text, to_json=False):
     """
     Parses a string with key-value pairs separated by newlines into a dictionary.
-    
+
     Args:
         text (str): String with format 'Key: Value\\nKey: Value\\n...'
         to_json (bool): If True, returns a JSON string instead of a dict.
-        
+
     Returns:
         dict or str: Parsed data as a dict or JSON string.
     """
@@ -201,23 +193,23 @@ def get_corpus_data(corpus_name, coll):
     """
     results = coll.get(
         where={"corpus_name": corpus_name},  # 👈 Filter by corpus name
-        include=["documents", "metadatas"],  # 👈 Only need documents and metadatas
+        # 👈 Only need documents and metadatas
+        include=["documents", "metadatas"],
         limit=10000  # Adjust if you expect very large corpora
     )
 
     documents = results.get("documents", [])
     metadatas = results.get("metadatas", [])
-    ids = results.get("ids", [])  # ✅ ids are automatically returned even without include
+    # ✅ ids are automatically returned even without include
+    ids = results.get("ids", [])
 
     return documents, metadatas, ids
 
 
-import requests
-
 def fetch_and_process_model_info(
-    model_path: str,
-    endpoint: str = "http://127.0.0.1:8989/queries/model-info",
-    db_path: str = "database/mydatabase.db"):
+        model_path: str,
+        endpoint: str = "http://127.0.0.1:8989/queries/model-info",
+        db_path: str = "database/mydatabase.db"):
     """
     Fetches model info from external service, and extracts summary, theme data, and metrics.
     Uses SQLite to retrieve document content.
@@ -233,16 +225,18 @@ def fetch_and_process_model_info(
 
     response = requests.post(endpoint, headers=headers, json=payload)
     print("Status Code:", response.status_code)
-    
+
     if response.status_code != 200:
-        raise Exception(f"Request failed with status code {response.status_code}: {response.text}")
-    
+        raise Exception(
+            f"Request failed with status code {response.status_code}: {response.text}")
+
     allInfo = response.json()
 
     modelLevelMetrics = allInfo.get("Model-Level Metrics", {})
     themeDetails = build_theme_data_dict(allInfo, db_path=db_path)
     summary = extract_topic_summaries(allInfo)
-    themeSummary = sorted(summary, key=lambda t: t["document_count"], reverse=True)
+    themeSummary = sorted(
+        summary, key=lambda t: t["document_count"], reverse=True)
 
     return themeSummary, themeDetails, modelLevelMetrics
 
@@ -306,7 +300,8 @@ def build_theme_data_dict(allInfo, db_path="database/mydatabase.db"):
         if docs_prob:
             ids = list(docs_prob.keys())
             placeholders = ','.join('?' for _ in ids)
-            cursor.execute(f"SELECT id, document FROM documents WHERE id IN ({placeholders})", ids)
+            cursor.execute(
+                f"SELECT id, document FROM documents WHERE id IN ({placeholders})", ids)
             fetched = cursor.fetchall()
 
             assigned_results = [
@@ -351,7 +346,8 @@ def get_assigned_documents_with_scores(docs_prob, db_path="database/mydatabase.d
     cursor = conn.cursor()
 
     placeholders = ','.join('?' for _ in doc_ids)
-    cursor.execute(f"SELECT id, document FROM documents WHERE id IN ({placeholders})", doc_ids)
+    cursor.execute(
+        f"SELECT id, document FROM documents WHERE id IN ({placeholders})", doc_ids)
     results = cursor.fetchall()
     conn.close()
 
@@ -387,7 +383,6 @@ def extract_topic_summaries(allInfo):
     return topic_summaries
 
 
-
 def load_or_create_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
     """
     Loads existing dashboard JSON data if available,
@@ -421,7 +416,7 @@ def load_or_create_dashboard_json(path: str = "static/config/dashboardData.json"
     return data
 
 
-def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, modelLevelMetrics,path: str = "static/config/dashboardData.json") -> dict:
+def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, modelLevelMetrics, path: str = "static/config/dashboardData.json") -> dict:
     """
     Adds a new model entry to an existing dashboard JSON file.
 
@@ -453,8 +448,6 @@ def add_model_to_dashboard(model_name: str, themeSummary, themeDetails, modelLev
     print(f"✅ Added model '{model_name}' to dashboard JSON")
     # return data
 
-import json
-from pathlib import Path
 
 def read_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
     """
@@ -469,16 +462,19 @@ def read_dashboard_json(path: str = "static/config/dashboardData.json") -> dict:
     file_path = Path(path)
 
     if not file_path.exists():
-        print(f"⚠️ File not found at {file_path.resolve()}. Returning empty dict.")
+        print(
+            f"⚠️ File not found at {file_path.resolve()}. Returning empty dict.")
         return {}
 
     try:
         with file_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
-            print(f"📂 Successfully read dashboard data from {file_path.resolve()}")
+            print(
+                f"📂 Successfully read dashboard data from {file_path.resolve()}")
             return data
     except json.JSONDecodeError:
-        print(f"❌ JSON format error in {file_path.resolve()}. Returning empty dict.")
+        print(
+            f"❌ JSON format error in {file_path.resolve()}. Returning empty dict.")
         return {}
 
 
@@ -487,11 +483,14 @@ def extract_metrics_from_theme_details(theme_details: dict) -> list:
 
     for topic_id, topic_data in theme_details.items():
         try:
-            prevalence_str = topic_data.get("prevalence", "0%").replace("%", "")
-            prevalence = round(float(prevalence_str) / 100, 3)  # Convert "18.44%" → 0.184
+            prevalence_str = topic_data.get(
+                "prevalence", "0%").replace("%", "")
+            prevalence = round(float(prevalence_str) / 100,
+                               3)  # Convert "18.44%" → 0.184
 
             metrics.append({
-                "theme": topic_data.get("label", topic_id),  # 👈 now uses 'theme'
+                # 👈 now uses 'theme'
+                "theme": topic_data.get("label", topic_id),
                 "prevalence": prevalence,
                 "coherence": topic_data.get("coherence"),
                 "entropy": topic_data.get("entropy")
@@ -501,7 +500,6 @@ def extract_metrics_from_theme_details(theme_details: dict) -> list:
 
     return metrics
 
-import requests
 
 def infer_text_(id, raw_text, config_path="static/config/config.yaml", url="http://127.0.0.1:8989/infer/json"):
     payload = {
@@ -528,8 +526,7 @@ def infer_text_(id, raw_text, config_path="static/config/config.yaml", url="http
         return None
 
 
-
-def get_thetas_by_doc_ids( doc_id, model):
+def get_thetas_by_doc_ids(doc_id, model):
     url = 'http://127.0.0.1:8989/queries/thetas-by-docs-ids'
     headers = {
         'accept': 'application/json',
@@ -596,8 +593,6 @@ def format_theta_output_dict(thetas, theme_summary, rationale=None):
     return results
 
 
-import sqlite3
-
 def create_normalized_schema(db_path="database/mydatabase.db"):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -639,7 +634,6 @@ def create_normalized_schema(db_path="database/mydatabase.db"):
     );
 """)
 
-
     # `model_corpus_map` table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS model_corpus_map (
@@ -655,16 +649,15 @@ def create_normalized_schema(db_path="database/mydatabase.db"):
     conn.close()
     print("✅ Database schema with corpus timestamps created.")
 
+
 def get_model_corpora(model_id):
     conn = sqlite3.connect("database/mydatabase.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT corpus_name FROM model_corpus_map WHERE model_id = ?", (model_id,))
+    cursor.execute(
+        "SELECT corpus_name FROM model_corpus_map WHERE model_id = ?", (model_id,))
     corpora = [row[0] for row in cursor.fetchall()]
     conn.close()
     return ", ".join(sorted(corpora))
-
-
-
 
 
 def analyze_corpus_documents(
@@ -677,7 +670,8 @@ def analyze_corpus_documents(
     # === 1. Load documents ===
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, document FROM documents WHERE corpus_name = ?", (corpus_name,))
+    cursor.execute(
+        "SELECT id, document FROM documents WHERE corpus_name = ?", (corpus_name,))
     rows = cursor.fetchall()
     conn.close()
 
@@ -693,7 +687,8 @@ def analyze_corpus_documents(
     feature_names = vectorizer.get_feature_names_out()
 
     # === 3. LSI (SVD) ===
-    lsi = TruncatedSVD(n_components=min(200, tfidf_matrix.shape[1]), random_state=42)
+    lsi = TruncatedSVD(n_components=min(
+        200, tfidf_matrix.shape[1]), random_state=42)
     lsi_matrix = lsi.fit_transform(tfidf_matrix)
 
     # === 4. Clustering ===
@@ -719,8 +714,10 @@ def analyze_corpus_documents(
 
     for i, row in enumerate(tfidf_array):
         top_indices = row.argsort()[::-1][:top_k]
-        keywords = [{"term": feature_names[j], "score": float(row[j])} for j in top_indices if row[j] > 0]
-        tfidf_top_terms.append({"id": documents[i]["id"], "keywords": keywords})
+        keywords = [{"term": feature_names[j], "score": float(
+            row[j])} for j in top_indices if row[j] > 0]
+        tfidf_top_terms.append(
+            {"id": documents[i]["id"], "keywords": keywords})
         doc_outputs.append({
             "id": documents[i]["id"],
             "text": documents[i]["raw_text"],
@@ -743,7 +740,8 @@ def analyze_corpus_documents(
             # Coherence: mean cosine similarity
             sims = cosine_similarity(keyword_vectors)
             if len(sims) > 1:
-                coherence = float(np.mean([sims[i, j] for i in range(len(sims)) for j in range(i + 1, len(sims))]))
+                coherence = float(np.mean([sims[i, j] for i in range(
+                    len(sims)) for j in range(i + 1, len(sims))]))
             else:
                 coherence = None
 
@@ -777,9 +775,11 @@ def analyze_corpus_documents(
     average_coherence = float(np.mean([
         v["coherence"] for v in per_cluster_metrics.values() if v["coherence"] is not None
     ]))
-    average_entropy = float(np.mean([v["entropy"] for v in per_cluster_metrics.values()]))
+    average_entropy = float(np.mean([v["entropy"]
+                            for v in per_cluster_metrics.values()]))
 
-    irbo = 1 - (np.std(prevalence) / np.mean(prevalence)) if np.mean(prevalence) > 0 else 0
+    irbo = 1 - (np.std(prevalence) / np.mean(prevalence)
+                ) if np.mean(prevalence) > 0 else 0
 
     # === 10. Assemble output ===
     metrics = {
@@ -812,9 +812,3 @@ def analyze_corpus_documents(
 
     print(f"✅ Saved metrics to {output_path}")
     print(f"🧠 TF-IDF terms to {tfidf_info_path}")
-
-
-
-
-
-    

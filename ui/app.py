@@ -1,30 +1,42 @@
 import json
+import logging
 import os
 from pathlib import Path
 from time import time
 
 import requests
+from dashboard_utils import pydantic_to_dict, to_dashboard_bundle
 from flask import (Flask, Response, current_app, jsonify, render_template,
                    request, session)
 from util import *
 
 server = Flask(__name__)
+server.logger.setLevel(logging.INFO)
 
 server.secret_key = 'your-secret-key'
 
-DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts")
-                   )  # this needs to be removed
+DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))  # this needs to be removed
 API = os.getenv("API_BASE_URL", "http://api:8000")
 
 _CACHE_MODELS = {}
 _CACHE_CORPORA = {}
+_CACHE_MODEL_INFO = {}      # key: model_path
+_CACHE_THETAS = {}          # key: (model_path, doc_id)
+_CACHE_THETAS_BULK = {}     # key: (model_path, tuple(sorted_doc_ids))
 CACHE_TTL = 600
 
-modelurl = f"{API}/model"
-inferurl = f"{API}/infer/json"
-topicinfourl = f"{API}/queries/model-info"
-textinfourl = f"{API}/queries/thetas-by-docs-ids"
 
+def _cache_get(cache, key):
+    entry = cache.get(key)
+    if not entry:
+        return None, "miss"
+    if time() - entry["ts"] > CACHE_TTL:
+        return None, "expired"
+    return entry["data"], "hit"
+
+
+def _cache_set(cache, key, data):
+    cache[key] = {"ts": time(), "data": data}
 
 # 1. Home Page
 @server.route('/')
@@ -48,9 +60,11 @@ def check_backend():
 def load_data_page():
     return render_template('index.html')
 
+
 @server.route("/load-corpus-page/")
 def load_corpus_page():
     return render_template('manageCorpora.html')
+
 
 @server.route("/data/create/corpus/", methods=["POST"])
 def create_corpus():
@@ -340,54 +354,9 @@ def training_start():
         "corpus_id": corpus_id,
     }), 200
 
-
-@server.route("/train/trainingInfo/<corpus_id>/", methods=["GET"])
-def replay_training_from_saved(corpus_id):
-    try:
-        # Retrieve tmReq from the session
-        tm_req = session.get("tmReq")
-        if not tm_req:
-            return jsonify({"error": "tmReq not found in session"}), 400
-
-        headers = {}
-        auth = request.headers.get("Authorization")
-        if auth:
-            headers["Authorization"] = auth
-
-        tr = requests.post(
-            f"{API}/train/json",
-            json=tm_req,
-            headers=headers,
-            timeout=(3.05, 30),
-        )
-
-        # If validation failed, surface the upstream error body to help debugging
-        if tr.status_code == 422:
-            return Response(
-                tr.content,
-                status=tr.status_code,
-                mimetype=tr.headers.get("Content-Type", "application/json"),
-            )
-
-        # Build Flask response mirroring upstream body/status
-        resp = Response(
-            tr.content,
-            status=tr.status_code,
-            mimetype=tr.headers.get("Content-Type", "application/json"),
-        )
-        loc = tr.headers.get("Location")
-        if loc:
-            resp.headers["Location"] = loc
-
-        return resp
-
-    except requests.Timeout:
-        return jsonify({"error": "Upstream timeout"}), 504
-    except requests.RequestException as e:
-        return jsonify({"error": f"Upstream connection error: {e}"}), 502
-
-
 # Accept either /status/jobs/<job_id> or /status/jobs/?job_id=...
+
+
 @server.route("/status/jobs/<job_id>", methods=["GET"])
 @server.route("/status/", methods=["GET"])
 def get_status(job_id=None):
@@ -627,12 +596,10 @@ def delete_model():
     """
 
 ##########################################################
+# DASHBOARD-RELATED ROUTES
+##########################################################
 
 
-# @server.route("/dashboard/<modelId>", methods=["GET", "POST"])
-# def dashboard(modelId):
-#     modelId = modelId
-#     return render_template("dashboard.html", model_id=modelId)
 @server.route("/dashboard", methods=["POST"])
 def dashboard():
     model_id = request.form.get("model_id", "")
@@ -648,68 +615,144 @@ def dashboard():
 
 @server.route("/get-dashboard-data", methods=["POST"])
 def proxy_dashboard_data():
+    t0 = time()
     payload = request.get_json(silent=True) or {}
     payload.setdefault("config_path", "static/config/config.yaml")
 
-    # get info from model
     model_id = payload.get("model_id", "")
+    model_path = payload.get("model_path", "")
+    server.logger.info(
+        "GET-DASHBOARD start model_id=%s model_path=%s", model_id, model_path)
+
+    if not model_id:
+        server.logger.warning("GET-DASHBOARD missing model_id")
+        return jsonify({"error": "model_id is required"}), 400
+
+    # model metadata
     try:
-        up = requests.get(
-            f"{API}/data/models/{model_id}", timeout=(3.05, 60))
+        up0 = time()
+        up = requests.get(f"{API}/data/models/{model_id}", timeout=(3.05, 60))
         up.raise_for_status()
         model_metadata = up.json()
+        server.logger.info("GET-DASHBOARD model meta ok status=%s dt=%.3fs",
+                           up.status_code, time() - up0)
     except requests.Timeout:
+        server.logger.exception("GET-DASHBOARD timeout fetching model")
         return jsonify({"error": "Upstream timeout fetching model"}), 504
     except requests.RequestException as e:
+        server.logger.exception("GET-DASHBOARD error fetching model: %s", e)
         return jsonify({"error": f"Upstream error fetching model: {e}"}), 502
 
     corpus_id = model_metadata.get("corpus_id", "")
+    if not corpus_id:
+        server.logger.error("GET-DASHBOARD model missing corpus_id")
+        return jsonify({"error": "Model missing corpus_id"}), 400
 
-    # get info from corpus
+    # corpus data
     try:
+        up0 = time()
         up = requests.get(
             f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
         up.raise_for_status()
         corpus_training_data = up.json()
+        server.logger.info("GET-DASHBOARD corpus ok status=%s dt=%.3fs docs=%s",
+                           up.status_code, time() - up0,
+                           len(corpus_training_data.get("documents", []) or []))
     except requests.Timeout:
+        server.logger.exception("GET-DASHBOARD timeout fetching corpus")
         return jsonify({"error": "Upstream timeout fetching corpus"}), 504
     except requests.RequestException as e:
+        server.logger.exception("GET-DASHBOARD error fetching corpus: %s", e)
         return jsonify({"error": f"Upstream error fetching corpus: {e}"}), 502
 
-    # corpus_training_data.documents is a list of dictionaries with id, original_id, text, sourcefile, label, embeddings, tfidf, bow
-    enriched = {
-        **payload,
-        "model_metadata": model_metadata["metadata"],                
-        "model_training_corpus": corpus_training_data,  
-    }
-    try:
-        r = requests.post(f"{API}/queries/dashboard-data",
-                          json=enriched, timeout=60)
-        r.raise_for_status()
-        return r.json()
-    except requests.HTTPError:
+    # model info
+    model_info_key = model_path or f"__by_id__:{model_id}"
+    cached_info, info_state = _cache_get(_CACHE_MODEL_INFO, model_info_key)
+    if cached_info:
+        raw_model_info = cached_info
+        server.logger.debug("GET-DASHBOARD model-info cache %s", info_state)
+    else:
         try:
-            return jsonify(r.json()), r.status_code
-        except Exception:
-            return jsonify({"detail": r.text}), r.status_code
+            up0 = time()
+            r = requests.post(f"{API}/queries/model-info",
+                              json=payload, timeout=60)
+            r.raise_for_status()
+            raw_model_info = r.json()
+            _cache_set(_CACHE_MODEL_INFO, model_info_key, raw_model_info)
+            server.logger.info(
+                "GET-DASHBOARD model-info fetched status=%s dt=%.3fs (cached)", r.status_code, time() - up0)
+        except requests.HTTPError:
+            try:
+                return jsonify(r.json()), r.status_code
+            except Exception:
+                return jsonify({"detail": r.text}), r.status_code
+        except Exception as e:
+            server.logger.exception(
+                "GET-DASHBOARD model-info proxy error: %s", e)
+            return jsonify({"detail": f"Proxy error: {e}"}), 502
+
+    # Doc list and thetas
+    docs_list_raw = corpus_training_data.get("documents", []) or []
+    docs_list = [d if isinstance(d, dict) else pydantic_to_dict(d)
+                 for d in docs_list_raw]
+    doc_ids = [str(d.get("id")) for d in docs_list if d.get("id") is not None]
+
+    sorted_key = tuple(sorted(doc_ids))
+    bulk_key = (model_path, sorted_key)
+    cached_bulk, bulk_state = _cache_get(_CACHE_THETAS_BULK, bulk_key)
+    if cached_bulk:
+        doc_thetas = cached_bulk
+        server.logger.debug(
+            "GET-DASHBOARD thetas bulk cache %s | docs=%d", bulk_state, len(doc_ids))
+    else:
+        payload_thetas = {
+            "docs_ids": ",".join(doc_ids),
+            "model_path": model_path,
+        }
+        try:
+            up0 = time()
+            r = requests.post(
+                f"{API}/queries/thetas-by-docs-ids", json=payload_thetas, timeout=60)
+            r.raise_for_status()
+            doc_thetas = r.json()
+            _cache_set(_CACHE_THETAS_BULK, bulk_key, doc_thetas)
+            server.logger.info("GET-DASHBOARD thetas fetched status=%s dt=%.3fs (cached) docs=%d",
+                               r.status_code, time() - up0, len(doc_ids))
+        except requests.HTTPError:
+            try:
+                return jsonify(r.json()), r.status_code
+            except Exception:
+                return jsonify({"detail": r.text}), r.status_code
+        except Exception as e:
+            server.logger.exception("GET-DASHBOARD thetas proxy error: %s", e)
+            return jsonify({"detail": f"Proxy error: {e}"}), 502
+
+    # Build dashboard bundle
+    try:
+        model_training_corpus = pydantic_to_dict(corpus_training_data) or {}
+        bundle = to_dashboard_bundle(
+            raw_model_info,
+            Path(payload.get("model_path", "")),
+            model_metadata=model_metadata.get("metadata", {}),
+            model_training_corpus=model_training_corpus,
+            doc_thetas=doc_thetas,
+            logger=server.logger,
+        )
+        server.logger.info("GET-DASHBOARD done dt=%.3fs", time() - t0)
+        return jsonify(bundle), 200
     except Exception as e:
-        return jsonify({"detail": f"Proxy error: {e}"}), 502
-
-
-@server.post("/save-settings")
-def save_settings():
-    payload = request.get_json(silent=True) or {}
-    server.logger.info("Dummy /save-settings received: %s", payload)
-    return jsonify({"ok": True, "echo": payload}), 200
+        server.logger.exception("GET-DASHBOARD bundling error: %s", e)
+        return jsonify({"error": f"Failed to build dashboard data: {e}"}), 500
 
 
 @server.route("/text-info", methods=["POST"])
 def text_info():
     """
-    Used by the document row click in dashboard.html.
+    Get text and model information for a given document according to a topic model to display when a document is clicked through its row click in dashboard.html.
+
     Returns:
       {
-        "theme": "<label to show>",           
+        "theme": "<label to show>",
         "top_themes": [
           {"theme_id": <int>, "label": "", "score": <float>, "keywords": ""}
         ],
@@ -717,45 +760,61 @@ def text_info():
         "text": "<the actual document text>"
       }
     """
+    t0 = time()
     payload = request.get_json(silent=True) or {}
     model_id = payload.get("model_id", "")
     model_path = payload.get("model_path", "")
     doc_id = str(payload.get("document_id", "")).strip()
 
+    server.logger.info("TEXT-INFO start model_id=%s model_path=%s doc_id=%s",
+                       model_id, model_path, doc_id)
+
     if not model_id or not doc_id:
+        server.logger.warning("TEXT-INFO missing required fields")
         return jsonify({"detail": "model_id and document_id are required."}), 400
 
-    # model info
+    # model meta info (cached by _CACHE_MODELS)
     model_entry = _CACHE_MODELS.get(model_id)
     if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
         try:
+            up0 = time()
             up = requests.get(
                 f"{API}/data/models/{model_id}", timeout=(3.05, 30))
             up.raise_for_status()
             model = up.json()
             _CACHE_MODELS[model_id] = {"ts": time(), "data": model}
+            server.logger.info("TEXT-INFO model meta fetched status=%s dt=%.3fs (cached)",
+                               up.status_code, time() - up0)
         except requests.RequestException as e:
+            server.logger.exception("TEXT-INFO fetch model error: %s", e)
             return jsonify({"detail": f"Failed to fetch model info: {e}"}), 502
     else:
         model = model_entry["data"]
+        server.logger.debug("TEXT-INFO model meta cache hit")
 
     corpus_id = model.get("corpus_id", "")
     if not corpus_id:
+        server.logger.error("TEXT-INFO model missing corpus_id")
         return jsonify({"detail": "Model missing corpus_id."}), 400
 
-    # corpus info
+    # corpus info (cached by _CACHE_CORPORA)
     corpus_entry = _CACHE_CORPORA.get(corpus_id)
     if not corpus_entry or (time() - corpus_entry["ts"] > CACHE_TTL):
         try:
+            up0 = time()
             up = requests.get(
                 f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
             up.raise_for_status()
             corpus = up.json()
             _CACHE_CORPORA[corpus_id] = {"ts": time(), "data": corpus}
+            server.logger.info("TEXT-INFO corpus fetched status=%s dt=%.3fs (cached)",
+                               up.status_code, time() - up0)
         except requests.RequestException as e:
+            server.logger.exception("TEXT-INFO fetch corpus error: %s", e)
             return jsonify({"detail": f"Failed to fetch corpus info: {e}"}), 502
     else:
         corpus = corpus_entry["data"]
+        server.logger.debug("TEXT-INFO corpus cache hit")
 
     docs = corpus.get("documents", [])
     doc_text = next((d.get("text", "")
@@ -763,24 +822,65 @@ def text_info():
     if not doc_text:
         doc_text = f"(Text not found for document {doc_id})"
 
-    # thetas
-    try:
-        r = requests.post(
-            f"{API}/queries/thetas-by-docs-ids",
-            json={
-                "model_path": model_path,
-                "config_path": "static/config/config.yaml",
-                "docs_ids": doc_id,
-            },
-            timeout=60
-        )
-        r.raise_for_status()
-        thetas_by_doc = r.json()
-    except requests.RequestException as e:
-        return jsonify({"detail": f"Failed to fetch thetas: {e}"}), 502
+    # thetas for this document (cached by _CACHE_THETAS)
+    theta_key = (model_path, doc_id)
+    cached_theta, theta_state = _cache_get(_CACHE_THETAS, theta_key)
+    if cached_theta:
+        thetas_by_doc = {doc_id: cached_theta}
+        server.logger.debug(
+            "TEXT-INFO thetas cache %s for doc_id=%s", theta_state, doc_id)
+    else:
+        try:
+            up0 = time()
+            r = requests.post(
+                f"{API}/queries/thetas-by-docs-ids",
+                json={
+                    "model_path": model_path,
+                    "config_path": "static/config/config.yaml",
+                    "docs_ids": doc_id,
+                },
+                timeout=60
+            )
+            r.raise_for_status()
+            thetas_by_doc = r.json()
+            _cache_set(_CACHE_THETAS, theta_key,
+                       thetas_by_doc.get(doc_id) or {})
+            server.logger.info("TEXT-INFO thetas fetched status=%s dt=%.3fs (cached)",
+                               r.status_code, time() - up0)
+        except requests.RequestException as e:
+            server.logger.exception("TEXT-INFO fetch thetas error: %s", e)
+            return jsonify({"detail": f"Failed to fetch thetas: {e}"}), 502
 
     doc_thetas = thetas_by_doc.get(doc_id) or {}
+
+    # model-info (cached by _CACHE_MODEL_INFO)
+    model_info_key = model_path or f"__by_id__:{model_id}"
+    cached_info, info_state = _cache_get(_CACHE_MODEL_INFO, model_info_key)
+    if cached_info:
+        raw_model_info = cached_info
+        server.logger.debug("TEXT-INFO model-info cache %s", info_state)
+    else:
+        try:
+            up0 = time()
+            r = requests.post(f"{API}/queries/model-info",
+                              json=payload, timeout=60)
+            r.raise_for_status()
+            raw_model_info = r.json()
+            _cache_set(_CACHE_MODEL_INFO, model_info_key, raw_model_info)
+            server.logger.info(
+                "TEXT-INFO model-info fetched status=%s dt=%.3fs (cached)", r.status_code, time() - up0)
+        except requests.HTTPError:
+            try:
+                return jsonify(r.json()), r.status_code
+            except Exception:
+                return jsonify({"detail": r.text}), r.status_code
+        except Exception as e:
+            server.logger.exception("TEXT-INFO model-info proxy error: %s", e)
+            return jsonify({"detail": f"Proxy error: {e}"}), 502
+
     if not doc_thetas:
+        server.logger.info(
+            "TEXT-INFO no thetas for doc_id=%s dt=%.3fs", doc_id, time() - t0)
         return jsonify({
             "theme": "Unknown",
             "top_themes": [],
@@ -788,10 +888,16 @@ def text_info():
             "text": doc_text
         })
 
+    # top themes
+    topics_info = raw_model_info.get("Topics Info", {}) or {}
     top_themes = sorted(
         (
-            {"theme_id": int(k), "label": f"Topic {k}",
-             "score": float(v), "keywords": ""}
+            {
+                "theme_id": int(k),
+                "label": f"Topic {k}",
+                "score": float(v),
+                "keywords": (topics_info.get(str(k), {}) or {}).get("Keywords", "")
+            }
             for k, v in doc_thetas.items() if v is not None
         ),
         key=lambda x: x["score"],
@@ -800,9 +906,19 @@ def text_info():
     top_theme = top_themes[0] if top_themes else {
         "theme_id": None, "label": "Unknown", "score": 0, "keywords": ""}
 
+    server.logger.info("TEXT-INFO done doc_id=%s top_theme=%s dt=%.3fs",
+                       doc_id, top_theme.get("theme_id"), time() - t0)
+
     return jsonify({
         "theme": top_theme["label"],
         "top_themes": top_themes,
         "rationale": "",
         "text": doc_text
     })
+
+
+@server.post("/save-settings")
+def save_settings():
+    payload = request.get_json(silent=True) or {}
+    server.logger.info("Dummy /save-settings received: %s", payload)
+    return jsonify({"ok": True, "echo": payload}), 200

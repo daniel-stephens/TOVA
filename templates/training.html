@@ -28,8 +28,6 @@
       min-height: 0; /* important for flex children inside a fixed-height parent */
     }
 
-
-
     .xsmall {
         font-size: 0.7rem !important;
       }
@@ -432,7 +430,7 @@
       </div>
     </div>
   </div>
-  <!-- ✅ Training Complete Modal -->
+  <!-- Training Complete Modal -->
     <div class="modal fade" id="trainingCompleteModal" tabindex="-1" aria-labelledby="trainingCompleteLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -610,31 +608,6 @@
     }
     
     /* ==============================
-       Training (separate from viz)
-    ============================== */
-    async function initTraining(corpusId) {
-      console.groupCollapsed("[training] initTraining");
-      try {
-        const { statusUrl, jobId } = await callTrainingInfo(corpusId);
-    
-        if (!statusUrl && !jobId) {
-          console.warn("[training] No status URL or jobId returned. Training not started.");
-          return;
-        }
-    
-        const resolvedUrl = statusUrl || (jobId ? `/status/jobs/${encodeURIComponent(jobId)}` : FALLBACK_STATUS_URL);
-        if (DEBUG) console.info("[training] Polling URL:", resolvedUrl);
-    
-        startPolling(resolvedUrl, 1000);
-      } catch (err) {
-        console.error("[training] initTraining error:", err);
-        updateTrainingUI({ error: "Failed to start training." });
-      } finally {
-        console.groupEnd();
-      }
-    }
-    
-    /* ==============================
        UI Wiring
     ============================== */
     function wireUI() {
@@ -657,66 +630,11 @@
             : "Switch to Model Metrics";
         });
       }
-    
-      // Optional manual trigger if you add a button with this id
-      const startBtn = document.getElementById("startTrainingBtn");
-      if (startBtn && !startBtn.dataset.bound) {
-        startBtn.addEventListener("click", async () => {
-          const params = new URLSearchParams(location.search);
-          const corpusId = params.get("corpus_id");
-          if (!corpusId) return alert("Missing corpus_id.");
-          await initTraining(corpusId);
-        });
-        startBtn.dataset.bound = "1";
-      }
     }
     
     /* ==============================
        Training helpers
-    ============================== */
-    async function callTrainingInfo(corpusId) {
-      //const url = `/train/trainingInfo/${encodeURIComponent(corpusId)}/`;
-      const url = `/train/trainingInfo/${encodeURIComponent(corpusId)}/`;
-      
-      if (DEBUG) console.info("[training] GET", url);
-      const resp = await fetch(url, { method: "GET", cache: "no-store" });
-    
-      const contentType = resp.headers.get("Content-Type") || "";
-      const locationHeader = resp.headers.get("Location") || null;
-    
-      let body = null;
-      if (contentType.includes("application/json")) {
-        try { body = await resp.json(); } catch { body = null; }
-      } else {
-        body = await resp.text().catch(() => "");
-      }
-    
-      if (!resp.ok) {
-        console.error("[training] trainingInfo failed:", resp.status, body);
-        return { statusUrl: null, jobId: null };
-      }
-    
-      // Prefer JSON job_id, fall back to Location header
-      let jobId = (body && typeof body === "object" && body.job_id) ? body.job_id : null;
-      if (!jobId && locationHeader) {
-        const m = locationHeader.match(/\/status\/jobs\/([^/\s]+)/);
-        if (m) jobId = m[1];
-      }
-    
-      // Store it somewhere visible if you want
-      const jobIdEl = document.getElementById("job_id");
-      if (jobIdEl && jobId) {
-        if ("value" in jobIdEl) jobIdEl.value = jobId;
-        else jobIdEl.textContent = jobId;
-        jobIdEl.dataset.jobId = jobId;
-      }
-    
-      const statusUrl = locationHeader || (jobId ? `/status/jobs/${encodeURIComponent(jobId)}` : null);
-      if (DEBUG) console.info("[training] response:", body, "job_id:", jobId, "statusUrl:", statusUrl);
-    
-      return { statusUrl, jobId };
-    }
-    
+    ============================== */    
     function startPolling(statusUrl, intervalMs) {
       stopPolling(); // clear any previous
       updateTrainingUI({ status: "starting" });
@@ -911,7 +829,7 @@
     }
     
     /* ==============================
-       Renderers (from your code)
+       Renderers
     ============================== */
     function renderThemeVisualizations(docs) {
       const clusterCounts = {};
