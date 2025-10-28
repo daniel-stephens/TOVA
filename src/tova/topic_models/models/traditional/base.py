@@ -4,20 +4,22 @@ import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
-import matplotlib.pyplot as plt # type: ignore
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
+import pandas as pd
 from scipy import sparse
 from sklearn.preprocessing import normalize
 
+from tova.preprocessing.tm_preprocessor import TMPreprocessor
+from tova.topic_models.models.base_model import BaseTMModel
+from tova.topic_models.tm_model import TMmodel
 from tova.utils.cancel import CancellationToken, check_cancel
-from tova.utils.progress import ProgressCallback, ProgressReporter  # type: ignore
-
-from ...tm_model import TMmodel
-from ..base_model import BaseTMModel
+from tova.utils.progress import (ProgressCallback,  # type: ignore
+                                 ProgressReporter)
 
 
 class TradTMmodel(BaseTMModel, ABC):
-    
+
     def __init__(
         self,
         model_name: str,
@@ -25,30 +27,116 @@ class TradTMmodel(BaseTMModel, ABC):
         id: str,
         model_path: str = None,
         logger: logging.Logger = None,
-        config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
-        load_model: bool = False
+        config_path: pathlib.Path = pathlib.Path(
+            "./static/config/config.yaml"),
+        load_model: bool = False,
+        preprocess_text: bool = True,
+        do_embeddings: bool = False,
     ) -> None:
         """
         Initialize the TradTMmodel class.
         """
-        
-        super().__init__(model_name, corpus_id, id, model_path, logger, config_path, load_model)
-        
+
+        super().__init__(model_name, corpus_id, id,
+                         model_path, logger, config_path, load_model)
+
+        if preprocess_text:
+            self._logger.info("Text preprocessing is enabled.")
+            self.do_embeddings = do_embeddings
+            if do_embeddings:
+                self._logger.info(
+                    "Document embeddings will be generated during preprocessing.")
+            self._preprocessor = TMPreprocessor(
+                config_path=config_path, logger=self._logger)
+        else:
+            self._logger.info("Text preprocessing is disabled.")
+            self._preprocessor = None
+
         # Load parameters from config specific to traditional models
-        self.num_topics = int(self.config.get("traditional", {}).get("num_topics", 50))
-        self.thetas_thr = float(self.config.get("traditional", {}).get("thetas_thr", 3e-3))
+        self.num_topics = int(self.config.get(
+            "traditional", {}).get("num_topics", 50))
+        self.thetas_thr = float(self.config.get(
+            "traditional", {}).get("thetas_thr", 3e-3))
         self.topn = int(self.config.get("traditional", {}).get("topn", 15))
-        self.do_labeller = bool(self.config.get("traditional", {}).get("do_labeller", False))
-        self.do_summarizer = bool(self.config.get("traditional", {}).get("do_summarizer", False))
-        self.llm_model_type = self.config.get("traditional", {}).get("llm_model_type", "qwen:32b")
-        self.labeller_prompt = self.config.get("traditional", {}).get("labeller_model_path", "./src/prompter/prompts/labelling_dft.txt")
-        self.summarizer_prompt = self.config.get("traditional", {}).get("summarizer_prompt", "./src/prompter/prompts/summarization_dft.txt")
+        self.do_labeller = bool(self.config.get(
+            "traditional", {}).get("do_labeller", False))
+        self.do_summarizer = bool(self.config.get(
+            "traditional", {}).get("do_summarizer", False))
+        self.llm_model_type = self.config.get(
+            "traditional", {}).get("llm_model_type", "qwen:32b")
+        self.labeller_prompt = self.config.get("traditional", {}).get(
+            "labeller_model_path", "./src/prompter/prompts/labelling_dft.txt")
+        self.summarizer_prompt = self.config.get("traditional", {}).get(
+            "summarizer_prompt", "./src/prompter/prompts/summarization_dft.txt")
         self._config_path = config_path
-    
-    def preprocess(self, data):
-        print("Preprocessing with traditional methods")
-        # TODO: change saving of raw_text / add lemmas
-        
+
+    def set_training_data(self, data: List[Dict]):
+        """
+        Set training data from a normalized list of dicts.
+        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        """
+
+        required_keys = {"id", "raw_text"}
+        for row in data:
+            if not required_keys.issubset(row):
+                raise ValueError(f"Missing required keys in data row: {row}")
+
+        df = pd.DataFrame(data)
+        if self._preprocessor:
+            self._logger.info("Preprocessing training data.")
+            df_processed = self._preprocessor.fit_transform(
+                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings)
+            self.df = df_processed
+            self._logger.info("Training data preprocessing completed.")
+        else:
+            # if already preprocessed, lemmas should be present
+            if "lemmas" not in df.columns:
+                raise ValueError(
+                    "Preprocessing is disabled, but 'lemmas' column is missing in the data.")
+            self.df = df
+        self.train_data = [row["lemmas"] for _, row in df_processed.iterrows()]
+        if "embeddings" in self.df.columns:
+            self.embeddings = np.array(self.df["embeddings"].tolist())
+            self._logger.info(
+                f"Embeddings loaded for {len(self.embeddings)} documents with dimension {self.embeddings.shape}.")
+
+        self._logger.info(
+            f"Training data set with {len(self.train_data)} documents.")
+
+    def prepare_infer_data(self, data: List[Dict]):
+        """
+        Prepare inference data from a normalized list of dicts.
+        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        """
+
+        required_keys = {"id", "raw_text"}
+        for row in data:
+            if not required_keys.issubset(row):
+                raise ValueError(f"Missing required keys in data row: {row}")
+
+        df = pd.DataFrame(data)
+        if self._preprocessor:
+            self._logger.info("Preprocessing inference data.")
+            df_processed = self._preprocessor.fit_transform(
+                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings
+            )
+            infer_data = [row["lemmas"] for _, row in df_processed.iterrows()]
+            df_infer = df_processed
+            self._logger.info("Inference data preprocessing completed.")
+        else:
+            infer_data = [row["raw_text"].split() for row in data]
+            df_infer = df
+        embeddings_infer = None
+        if "embeddings" in df_infer.columns:
+            embeddings_infer = np.array(df_infer["embeddings"].tolist())
+            self._logger.info(
+                f"Embeddings loaded for {len(embeddings_infer)} documents with dimension {embeddings_infer.shape[1]}.")
+
+        self._logger.info(
+            f"Prepared inference set with {len(infer_data)} documents.")
+
+        return infer_data, df_infer, embeddings_infer
+
     def _save_thr_fig(
         self,
         thetas: np.ndarray,
@@ -71,7 +159,7 @@ class TradTMmodel(BaseTMModel, ABC):
                      * np.arange(0, len(all_values))[::step])
         plt.savefig(plot_file)
         plt.close()
-            
+
     def _createTMmodel(self, thetas, betas, vocab):
         """Creates an object of class TMmodel hosting the topic model
         that has been trained and whose output is available at the
@@ -90,7 +178,7 @@ class TradTMmodel(BaseTMModel, ABC):
         """
         # Sparsification of thetas matrix
         # self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
-        
+
         # Set to zeros all thetas below threshold, and renormalize
         thetas[thetas < self.thetas_thr] = 0
         thetas = normalize(thetas, axis=1, norm='l1')
@@ -110,26 +198,25 @@ class TradTMmodel(BaseTMModel, ABC):
             summarizer_prompt=self.summarizer_prompt,
         )
         tm.create(
-            betas=betas, thetas=thetas, alphas=alphas,vocab=vocab)
-        
+            betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
+
         return tm
-                    
+
     def train_model(
-        self, 
+        self,
         data: List[Dict],
         progress_callback: Optional[ProgressCallback] = None,
         cancel: Optional[CancellationToken] = None
-        ):
-        
+    ):
+
         t_start = time.time()
         pr = ProgressReporter(callback=progress_callback, logger=self._logger)
         pr.report(0, "Starting training")
-        
+
         # 1. PREPROCESSING (0-20%)
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.0, 0.2)
         prs.report(0.0, "Preprocessing")
-        # self.preprocess(data) # @TODO
         self.set_training_data(data)
         prs.report(1.0, "Preprocessing completed")
 
@@ -142,7 +229,8 @@ class TradTMmodel(BaseTMModel, ABC):
             prs=prs,
             cancel=cancel
         )
-        prs.report(1.0, "Training core completed in {:.2f} minutes".format(tr_core / 60))
+        prs.report(
+            1.0, "Training core completed in {:.2f} minutes".format(tr_core / 60))
 
         # 3. TM_MODEL CREATION (metrics calculation, etc.)
         # (70-90%)
@@ -162,16 +250,36 @@ class TradTMmodel(BaseTMModel, ABC):
         prs.report(1.0, "Topic model saved")
 
         return time.time() - t_start
-    
-    def infer(self, data: List[Dict]):
-        
+
+    def infer(
+        self,
+        data: List[Dict],
+        progress_callback: Optional[ProgressCallback] = None,
+        cancel: Optional[CancellationToken] = None
+    ):
+        t_start = time.time()
+        pr = ProgressReporter(callback=progress_callback, logger=self._logger)
+        pr.report(0, "Starting inference")
+
+        # 1. PREPROCESSING (0-50%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.0, 0.5)
+        prs.report(0.0, "Preprocessing")
         infer_data, df_infer, embeddings_infer = self.prepare_infer_data(data)
-        
-        return self.infer_core(infer_data, df_infer, embeddings_infer)
-        
+        prs.report(1.0, "Preprocessing completed")
+
+        # 2. INFERENCE (50-100%)
+        check_cancel(cancel, self._logger)
+        prs = pr.report_subrange(0.2, 0.7)
+        prs.report(0.0, "Inference")
+        thetas, _ = self.infer_core(infer_data, df_infer, embeddings_infer)
+        prs.report(1.0, "Inference completed")
+
+        return thetas, time.time() - t_start
+
     @abstractmethod
     def train_core(
-        self, 
+        self,
         prs: Optional[ProgressCallback] = None,
         cancel: Optional[CancellationToken] = None
     ) -> float: pass

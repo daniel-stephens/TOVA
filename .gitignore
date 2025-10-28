@@ -14,3 +14,4 @@ dashboardData.json
 .venv_kumo
 build
 venv
+src/tova.egg-info

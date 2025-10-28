@@ -1,15 +1,15 @@
-from abc import ABC, abstractmethod
 import json
 import logging
 import pathlib
 import shutil
+from abc import ABC, abstractmethod
 from typing import Dict, List
-
-import tomotopy as tp  # type: ignore
 
 import numpy as np
 import pandas as pd  # type: ignore
-
+import tomotopy as tp  # type: ignore
+from contextualized_topic_models.utils.data_preparation import TopicModelDataPreparation  # type: ignore
+from contextualized_topic_models.models.ctm import CombinedTM  # type: ignore
 from tova.utils.common import init_logger, load_yaml_config_file
 
 
@@ -81,60 +81,6 @@ class BaseTMModel(ABC):
         self.not_include = self.config.get(
             "general", {}).get("not_include", [])
 
-    def set_training_data(self, data: List[Dict]):
-        """
-        Set training data from a normalized list of dicts.
-        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
-        """
-
-        required_keys = {"id", "raw_text"}
-        for row in data:
-            if not required_keys.issubset(row):
-                raise ValueError(f"Missing required keys in data row: {row}")
-
-        self.train_data = [row["raw_text"].split() for row in data]
-        # TODO: this should be changed once we to lemmatization
-
-        # create dataframe from the data
-        # this should have "id", "raw_text" and additional "lemmas" column once preprocessed
-        self.df = pd.DataFrame(data)
-
-        if all("embeddings" in row and row["embeddings"] is not None for row in data):
-            self.embeddings = np.array([row["embeddings"] for row in data])
-            self._logger.info(
-                f"Embeddings loaded for {len(self.embeddings)} documents.")
-        else:
-            self.embeddings = None
-            self._logger.info(
-                "No valid embeddings found. Proceeding without embeddings.")
-
-        self._logger.info(
-            f"Training data set with {len(self.train_data)} documents.")
-
-    def prepare_infer_data(self, data: List[Dict]):
-
-        required_keys = {"id", "raw_text"}
-        for row in data:
-            if not required_keys.issubset(row):
-                raise ValueError(f"Missing required keys in data row: {row}")
-
-        infer_data = [row["raw_text"].split() for row in data]
-        df_infer = pd.DataFrame(data)
-
-        if all("embeddings" in row and row["embeddings"] is not None for row in data):
-            embeddings_infer = np.array([row["embeddings"] for row in data])
-            self._logger.info(
-                f"Embeddings loaded for {len(self.embeddings_infer)} documents.")
-        else:
-            embeddings_infer = None
-            self._logger.info(
-                "No valid embeddings found. Proceeding without embeddings.")
-
-        self._logger.info(
-            f"Prepared inference data set with {len(infer_data)} documents.")
-
-        return infer_data, df_infer, embeddings_infer
-
     def to_dict(self) -> dict:
         def safe_value(val):
             if isinstance(val, pathlib.Path):
@@ -147,13 +93,13 @@ class BaseTMModel(ABC):
             k: safe_value(v)
             for k, v in self.__dict__.items()
             if not k.startswith('_') and k not in self.not_include
-            and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel))}
+            and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM))}
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
 
         model_info = {
-            "corpus_id": self.corpus_id, 
+            "corpus_id": self.corpus_id,
             "path": self.model_path.as_posix(),
             "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "location": "temporal",
@@ -163,6 +109,12 @@ class BaseTMModel(ABC):
 
         with json_path.open('w') as f:
             json.dump(model_info, f, indent=2)
+
+    @abstractmethod
+    def set_training_data(self, data: List[Dict]): pass
+
+    @abstractmethod
+    def prepare_infer_data(self, data: List[Dict]): pass
 
     @abstractmethod
     def save_model(self, path: str): pass

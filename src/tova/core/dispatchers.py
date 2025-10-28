@@ -71,7 +71,9 @@ def infer_model_dispatch(
     model_path: str,
     data: List[Dict],
     config_path: Path = Path("./static/config/config.yaml"),
-    logger: Optional[logging.Logger] = None
+    logger: Optional[logging.Logger] = None,
+    progress_callback: Optional[ProgressCallback] = None,
+    cancel: Optional[CancellationToken] = None,
 ) -> float:
     """
     Infer the model using the provided data.
@@ -105,15 +107,16 @@ def infer_model_dispatch(
     logger = logger or init_logger(config_file=config_path)
 
     logger.info(f"Getting model info from {model_path}")
-    with open(f"{model_path}/model_config.json", "r") as f:
+    with open(f"{model_path}/metadata.json", "r") as f:
         config = json.load(f)
-    model_cls = load_class_from_path(config["model_type"])
+    model_cls = load_class_from_path(config["type"])
     logger.info(f"Loading model {model_cls} from {model_path}")
 
     tm_model = model_cls.from_saved_model(model_path)
     logger.info(f"Loading model {tm_model} from {model_path}")
 
-    thetas, duration = tm_model.infer(data)
+    thetas, duration = tm_model.infer(
+        data, progress_callback=progress_callback, cancel=cancel)
     # get ids from the data
     ids = [record["id"] for record in data]
 
@@ -133,12 +136,13 @@ def infer_model_dispatch(
 
     return thetas, duration
 
+
 def get_model_info_dispatch(
     model_path: str,
     config_path: Path = Path("./static/config/config.yaml"),
     logger: Optional[logging.Logger] = None,
 ) -> Dict[str, Any]:
-    
+
     config = load_yaml_config_file(config_path, "topic_modeling", logger)
     n_similar_tpcs = int(config.get("general", {}).get("n_similar_tpcs", 5))
     similar_tpc_thr = float(config.get(

@@ -8,14 +8,19 @@ FROM ${ASSETS_IMAGE} AS static
 FROM python:3.12-slim-bookworm
 WORKDIR /app
 
-# Install runtime deps
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+# Install only runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libffi8 \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# Copy wheel from builder & install TOVA + API deps
-COPY --from=wheel /dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && \
-    rm -rf /tmp/*.whl
+# Copy all wheels from the builder
+COPY --from=wheel /dist /tmp/wheels
+
+# Install all wheels from the local directory.
+RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl && \
+    rm -rf /tmp/wheels
 
 COPY --from=static /static /app/static
 

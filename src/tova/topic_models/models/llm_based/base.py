@@ -1,4 +1,4 @@
-from ..base_model import BaseTMModel
+from tova.topic_models.models.base_model import BaseTMModel
 
 class LLMTModel(BaseTMModel):
     def use_llm_embeddings(self, data):

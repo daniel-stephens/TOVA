@@ -24,9 +24,3 @@ class TrainRequest(BaseModel):
 class TrainResponse(BaseModel):
     job_id: str
     model_id: str
-
-class TrainResult(BaseModel):
-    status: str
-    duration: Optional[float] = None
-    metrics: Optional[Dict] = None
-    message: Optional[str] = None

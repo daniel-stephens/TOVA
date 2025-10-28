@@ -57,25 +57,30 @@ topic_modeling:
     repr_model_diversity: 0.3
     repr_model_topnwords: 15
     word_min_len: 0
+  ctm:
+    num_iters: 100
+    sbert_model: all-MiniLM-L6-v2
+    sbert_context: 384
+    batch_size: 32
 
 ################################
 #       PREPROCESSING          #
 ################################
-nlp:
-  spacy_model: en_core_web_sm
-  spacy_disable: ["ner", "parser"]
-  valid_pos: ["VERB", "NOUN", "ADJ", "PROPN"]
-  extra_stopwords_files: ["./stopwords/custom.txt"]  # one token per line
-vectorization:
-  max_features: 20000
-  min_df: 2
-  max_df: 0.95
-  ngram_range: [1, 2]
-  binary: false
-embeddings:
-  model_name: all-MiniLM-L6-v2
-  normalize: true
-  batch_size: 32
+tm_preprocessor:
+  spacy:
+    spacy_model: en_core_web_sm
+    spacy_disable: ["ner", "parser"]
+    valid_pos: ["VERB", "NOUN", "ADJ", "PROPN"]
+  vectorization:
+    max_features: 100000
+    min_df: 2
+    max_df: 0.95
+    ngram_range: [1, 2]
+    binary: false
+  embeddings:
+    model_name: all-MiniLM-L6-v2
+    normalize: true
+    batch_size: 32
 
 ################################
 #          PROMPTER            #

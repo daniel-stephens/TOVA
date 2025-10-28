@@ -11,7 +11,7 @@ from tqdm import tqdm
 from tova.utils.cancel import CancellationToken, check_cancel
 from tova.utils.progress import ProgressCallback  # type: ignore
 
-from .base import TradTMmodel
+from tova.topic_models.models.traditional.base import TradTMmodel
 
 class TomotopyLDATMmodel(TradTMmodel):
     """
@@ -181,7 +181,7 @@ class TomotopyLDATMmodel(TradTMmodel):
 
         # sparsify thetas
         thetas[thetas < self.thetas_thr] = 0
-        thetas = normalize(thetas, axis=1, norm='l1')
+        thetas = normalize(thetas, axis=1, norm='l1')        
         
         t_end = time.perf_counter() - time_start
         

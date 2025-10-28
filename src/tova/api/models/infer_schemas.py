@@ -15,3 +15,6 @@ class InferRequest(BaseModel):
         json_schema_extra = {
             "example": INFER_REQUEST_EXAMPLE
         }
+
+class InferResponse(BaseModel):
+    job_id: str

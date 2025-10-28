@@ -1,238 +1,235 @@
+import json
 import logging
 import pathlib
-import spacy
-from sentence_transformers import SentenceTransformer  # type: ignore
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer  # type: ignore
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+
+import pandas as pd
 from scipy import sparse
-from typing import Iterable, List, Optional, Sequence, Tuple, Union
-# from spacy_download import load_spacy
-from tova.utils.common import load_yaml_config_file
+from sentence_transformers import SentenceTransformer  # type: ignore
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from spacy_download import load_spacy # type: ignore
+from tova.utils.common import load_yaml_config_file, init_logger  # type: ignore
 
 
-class TMPreprocessor(object):
-    """Topic Modeling Preprocessor
-
-    This class handles:
-    - NLP preprocessing (tokenization, lemmatization, stopword removal)
-    - Document vectorization (BoW, TF-IDF)
-    - Contextualized embeddings calculation
+class TMPreprocessor:
+    """
+    Text preprocessor that returns:
+      - 'text'       : original text
+      - 'lemmas'     : spaCy lemmatization + POS filter + stopwords
+      - 'bow'        : scipy.sparse.csr_matrix row per doc (stored per-row)
+      - 'tfidf'      : scipy.sparse.csr_matrix row per doc (stored per-row)
+      - 'embedding'  : (optional) vector per doc using SentenceTransformers
     """
 
     def __init__(
         self,
+        *,
+        stopword_files: Optional[Sequence[Union[str, Path]]] = None,
+        equivalents_files: Optional[Sequence[Union[str, Path]]] = None,
         logger: logging.Logger = None,
-        config_path: pathlib.Path = pathlib.Path(
-            "./static/config/config.yaml"),
-    ) -> None:
-        """Initialize the TMPreprocessor.
-
-        Parameters
-        ----------.
-        logger : logging.Logger, optional
-            Logger object to log activity.
-        config_path : pathlib.Path, optional
-            Path to the configuration file.
-        """
-
+        config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
+        **kwargs
+    ):  
+        
         self._logger = logger if logger else init_logger(config_path, __name__)
+        self._logger.info("Initializing TMPreprocessor with provided configurations.")
 
-        self.config = load_yaml_config_file(
-            config_path, "topic_modeling", logger)
-        nlp_cfg = self.config.get("nlp", {})
+        config = load_yaml_config_file(config_path, "tm_preprocessor", logger)
+        config = {**config, **kwargs}
 
-        spacy_model = nlp_cfg.get("spacy_model", "en_core_web_sm")
-        disable = nlp_cfg.get("spacy_disable", ["ner", "parser"])
+        spacy_model = config.get("spacy", {}).get("spacy_model")
+        spacy_disable = config.get("spacy", {}).get("spacy_disable")
+        valid_pos = config.get("spacy", {}).get("valid_pos")
+        min_df = config.get("vectorization", {}).get("min_df")
+        max_df = config.get("vectorization", {}).get("max_df")
+        max_features = config.get("vectorization", {}).get("max_features")
+        embeddings_model = config.get("embeddings", {}).get("model_name")
+        
+        self._logger.debug(f"spaCy model: {spacy_model}, Disabled components: {spacy_disable}")
+        self._logger.debug(f"Valid POS tags: {valid_pos}")
+        self._logger.debug(f"Stopword files: {stopword_files}")
+        self._logger.debug(f"Equivalents files: {equivalents_files}")
+        self._logger.debug(f"Min DF: {min_df}, Max DF: {max_df}, Max features: {max_features}")
+        self._logger.debug(f"Embeddings model: {embeddings_model}")
+
+        self._logger.info("Loaded parameters from configuration file.")
+
         try:
-            self._nlp = spacy.load(spacy_model, disable=disable)
-        except OSError:
-            # try download hint
+            self.nlp = load_spacy(spacy_model, disable=list(spacy_disable))
+        except OSError as e:
             raise OSError(
                 f"spaCy model '{spacy_model}' is not installed. "
                 f"Install it with: python -m spacy download {spacy_model}"
-            )
+            ) from e
 
-        # POS + stopwords
-        self._valid_pos = set(nlp_cfg.get(
-            "valid_pos", ["VERB", "NOUN", "ADJ", "PROPN"]))
-        self._stw_list = set()
-        # self._prepare_stopwords(nlp_cfg.get("extra_stopwords_files") or nlp_cfg.get("extra_stopwords") or [])
+        self.valid_pos = set(valid_pos)
 
-        # Placeholders for cached results
-        self._processed_docs: Optional[List[List[str]]] = None
-        self._bow_vectorizer: Optional[CountVectorizer] = None
-        self._tfidf_vectorizer: Optional[TfidfVectorizer] = None
-        self._bow_matrix: Optional[sparse.spmatrix] = None
-        self._tfidf_matrix: Optional[sparse.spmatrix] = None
+        # stopwords
+        self.stopwords = {w.lower() for w in self.nlp.Defaults.stop_words}
+        self.stopwords |= self._load_stopwords(stopword_files or [])
 
-        # SentenceTransformer model placeholder (lazy)
-        self._st_model: Optional[SentenceTransformer] = None
+        # equivalents
+        self.equivalents = self._load_equivalents(equivalents_files or {})
 
-    def _prepare_stopwords(self, stw_files_or_list: Union[Sequence[str], Sequence[pathlib.Path]]) -> None:
-        """Load extra stopwords (one token per line) from files or accept a list of strings."""
-        # Add spaCy's built-in stopwords first
-        try:
-            self._stw_list.update(self._nlp.Defaults.stop_words)
-        except Exception:
-            pass
+        # vectorizers
+        self.min_df = min_df
+        self.max_df = max_df
+        self.max_features = max_features
+        self._cv: Optional[CountVectorizer] = None
+        self._tfidf: Optional[TfidfTransformer] = None
 
-        if not stw_files_or_list:
-            return
+        # embeddings
+        self._st = None
+        if embeddings_model:
+            if SentenceTransformer is None:
+                raise RuntimeError(
+                    "sentence-transformers not installed, but embeddings_model was provided.")
+            self._st = SentenceTransformer(embeddings_model)
 
-        # If user passed a list of tokens directly (not files)
-        if any(isinstance(x, str) and "\n" not in x and not pathlib.Path(x).exists() for x in stw_files_or_list):
-            # treat as tokens
-            for tok in stw_files_or_list:
-                if isinstance(tok, str) and "\n" not in tok and not pathlib.Path(tok).exists():
-                    self._stw_list.add(tok.strip().lower())
-            # also open valid paths if any
-        for entry in stw_files_or_list:
-            try:
-                p = pathlib.Path(entry)
-                if p.exists() and p.is_file():
-                    with open(p, "r", encoding="utf-8") as f:
-                        for line in f:
-                            w = line.strip().lower()
-                            if w:
-                                self._stw_list.add(w)
-            except Exception as e:
-                self._logger.warning(
-                    f"Could not load stopwords from {entry}: {e}")
+        self._logger.info("TMPreprocessor initialized successfully.")
 
-    def preprocess_one(self, rawtext) -> List[str]:
-        """
-        Implements the preprocessing pipeline, by carrying out:
-        - Lemmatization according to POS
-        - Removal of non-alphanumerical tokens
-        - Removal of basic English stopwords and additional ones provided within stw_files
-        - Word tokenization
-        - Lowercase conversion
-
-        Parameters
-        ----------
-        rawtext: str
-            Text to preprocess
-
-        Returns
-        -------
-        final_tokenized: List[str]
-            List of tokens (strings) with the preprocessed text
-        """
-        valid_POS = self._valid_pos
-
-        doc = self._nlp(rawtext)
-        lemmatized = [
-            token.lemma_
-            for token in doc
-            if token.is_alpha
-            and token.pos_ in valid_POS
-            and not token.is_stop
-            and token.lemma_.lower() not in self._stw_list
-        ]
-
-        # Convert to lowercase
-        final_tokenized = [token.lower() for token in lemmatized]
-
-        return final_tokenized
-
-    def preprocess(
-        self,
-        docs: Iterable[str],
-        *,
-        keep_empty: bool = False,
-        cache: bool = True,
-    ) -> List[List[str]]:
-        """
-        Preprocess a collection of documents.
-
-        Parameters
-        ----------
-        docs : Iterable[str]
-            Raw documents.
-        keep_empty : bool, default False
-            If False, empty token lists are replaced by [''] so that downstream vectorizers don't drop rows.
-        cache : bool, default True
-            If True, stores results in self._processed_docs.
-
-        Returns
-        -------
-        List[List[str]]
-            Tokenized and cleaned documents.
-        """
-        processed: List[List[str]] = []
-        for d in docs:
-            toks = self.preprocess_one(d if isinstance(d, str) else str(d))
-            if not toks and not keep_empty:
-                toks = [""]  # preserve row alignment for vectorizers
-            processed.append(toks)
-
-        if cache:
-            self._processed_docs = processed
-        return processed
-
-    def _identity_analyzer(self, doc_tokens: List[str]) -> List[str]:
-        """Analyzer for scikit-learn that passes through already tokenized docs."""
-        return doc_tokens
-
-    def _ensure_st_model(
-        self,
-        model_name: Optional[str] = None,
-    ) -> SentenceTransformer:
-        emb_cfg = self._cfg.get("embeddings", {})
-        chosen = model_name or emb_cfg.get("model_name", "all-MiniLM-L6-v2")
-        if self._st_model is None or getattr(self._st_model, "model_card", None) != chosen:
-            # SentenceTransformer doesn't expose 'model_card' like this; we just reload if name differs
-            # Track chosen name to avoid unnecessary reloads
-            self._st_model = SentenceTransformer(chosen)
-            self._st_model._tm_chosen_name = chosen  # stash
-        elif getattr(self._st_model, "_tm_chosen_name", None) != chosen:
-            self._st_model = SentenceTransformer(chosen)
-            self._st_model._tm_chosen_name = chosen
-        return self._st_model
-
-    def get_contextualized_embeddings(
-        self,
-        docs: Optional[Iterable[str]] = None,
-        *,
-        model_name: Optional[str] = None,
-        batch_size: Optional[int] = None,
-        normalize: Optional[bool] = None,
-        return_numpy: bool = True,
-        use_preprocessed_text: bool = False,
-    ):
-        """
-        @ TODO: Add docc
-        """
-        emb_cfg = self._cfg.get("embeddings", {})
-        batch_size = batch_size if batch_size is not None else int(
-            emb_cfg.get("batch_size", 32))
-        normalize = normalize if normalize is not None else bool(
-            emb_cfg.get("normalize", True))
-        model = self._ensure_st_model(model_name)
-
-        # Determine input texts
-        if docs is None:
-            if use_preprocessed_text:
-                if self._processed_docs is None:
-                    raise ValueError(
-                        "No cached preprocessed docs. Pass `docs` or call preprocess() first.")
-                texts = [
-                    " ".join(toks) if toks else "" for toks in self._processed_docs]
+    @staticmethod
+    def _load_stopwords(files: Sequence[Union[str, Path]]) -> set[str]:
+        out: set[str] = set()
+        for f in files:
+            p = Path(f)
+            if not p.exists():
+                continue
+            if p.suffix.lower() == ".json":
+                with p.open("r", encoding="utf8") as fin:
+                    data = json.load(fin)
+                    out |= {w.strip().lower()
+                            for w in data.get("wordlist", []) if w.strip()}
             else:
-                raise ValueError(
-                    "When docs=None, set use_preprocessed_text=True to encode cached tokens.")
+                with p.open("r", encoding="utf8") as fin:
+                    out |= {line.strip().lower()
+                            for line in fin if line.strip()}
+        return out
+
+    @staticmethod
+    def _load_equivalents(files: Sequence[Union[str, Path]]) -> Dict[str, str]:
+        eq: Dict[str, str] = {}
+
+        def parse(line: str) -> Optional[Tuple[str, str]]:
+            line = line.strip()
+            if ":" not in line:
+                return None
+            a, b = line.split(":", 1)
+            a, b = a.strip(), b.strip()
+            return (a, b) if a and b else None
+
+        for f in files:
+            p = Path(f)
+            if not p.exists():
+                continue
+            if p.suffix.lower() == ".json":
+                with p.open("r", encoding="utf8") as fin:
+                    data = json.load(fin).get("wordlist", [])
+                    pairs = filter(None, (parse(x) for x in data))
+            else:
+                with p.open("r", encoding="utf8") as fin:
+                    pairs = list(filter(None, (parse(x) for x in fin)))
+            for a, b in pairs:
+                eq[a] = b
+        return eq
+
+    def _lemmatize(self, text: str) -> List[str]:
+        self._logger.debug(f"Lemmatizing text: {text}")
+        """
+        - lowercase input
+        - whitespace split for early mapping
+        - apply equivalents
+        - spaCy: keep alpha tokens with POS in valid_pos, remove stopwords
+        - return lemmas (lowercased)
+        """
+        toks = text.lower().split()
+        toks = [self.equivalents.get(t, t) for t in toks]
+
+        doc = self.nlp(" ".join(toks))
+        keep = []
+        sw = self.stopwords
+        vp = self.valid_pos
+        for t in doc:
+            lemma = t.lemma_.lower()
+            if t.is_alpha and t.pos_ in vp and (not t.is_stop) and lemma not in sw:
+                keep.append(lemma)
+        self._logger.debug(f"Lemmatized tokens: {keep}")
+        return keep
+
+    def fit_transform(
+        self,
+        df: pd.DataFrame,
+        text_col: str = "raw_text",
+        id_col: str = "id",
+        *,
+        compute_bow: bool = True,
+        compute_tfidf: bool = True,
+        compute_embeddings: bool = False,
+    ) -> pd.DataFrame:
+        self._logger.info("Starting fit_transform process.")
+        self._logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+        self._logger.debug(f"Text column: {text_col}, ID column: {id_col}")
+        self._logger.debug(f"Compute BoW: {compute_bow}, Compute TF-IDF: {compute_tfidf}, Compute Embeddings: {compute_embeddings}")
+
+        """Returns a DataFrame with columns: id, text, lemmas, bow, tfidf, (embedding)."""
+        out = pd.DataFrame()
+        if id_col in df.columns:
+            out["id"] = df[id_col].values
         else:
-            if use_preprocessed_text:
-                tokenized_docs = self.preprocess(docs, cache=False)
-                texts = [
-                    " ".join(toks) if toks else "" for toks in tokenized_docs]
-            else:
-                texts = [d if isinstance(d, str) else str(d) for d in docs]
+            out["id"] = range(len(df))
+        out["raw_text"] = df[text_col].fillna("").astype(str)
 
-        embeddings = model.encode(
-            texts,
-            batch_size=batch_size,
-            show_progress_bar=False,
-            normalize_embeddings=normalize,
-            convert_to_numpy=return_numpy,
-        )
-        return embeddings
+        out["lemmas"] = [self._lemmatize(t) for t in out["raw_text"].tolist()]
+
+        # BoW
+        if compute_bow:
+            self._cv = CountVectorizer(
+                tokenizer=lambda x: x, preprocessor=lambda x: x, lowercase=False,
+                min_df=self.min_df, max_df=self.max_df, max_features=self.max_features,
+                token_pattern=None
+            )
+            X_bow = self._cv.fit_transform(out["lemmas"].tolist())
+            out["bow"] = [X_bow.getrow(i) for i in range(X_bow.shape[0])]
+
+        # TF-IDF
+        if compute_tfidf:
+            if self._cv is None:
+                raise RuntimeError(
+                    "fit_transform() must compute BoW before TF-IDF.")
+            X_bow = sparse.vstack(out["bow"].to_list())
+            self._tfidf = TfidfTransformer(norm="l2", use_idf=True).fit(X_bow)
+            X_tfidf = self._tfidf.transform(X_bow)
+            out["tfidf"] = [X_tfidf.getrow(i) for i in range(X_tfidf.shape[0])]
+
+        # Embeddings
+        if compute_embeddings:
+            if self._st is None:
+                raise RuntimeError("Embeddings model not initialized.")
+            texts = [" ".join(toks) for toks in out["lemmas"]]
+            embs = self._st.encode(
+                texts, show_progress_bar=False,
+                normalize_embeddings=True, convert_to_numpy=True
+            )
+            out["embeddings"] = list(embs)
+
+        self._logger.info("fit_transform process completed successfully.")
+        return out
+
+    def transform_new(self, texts: Iterable[str], *, return_tfidf: bool = True) -> sparse.csr_matrix:
+        self._logger.info("Starting transform_new process.")
+        self._logger.debug(f"Number of texts to transform: {len(texts)}")
+        if not self._cv:
+            raise RuntimeError(
+                "Vectorizer not fitted. Call fit_transform() first.")
+        lemmas = [self._lemmatize(t if isinstance(
+            t, str) else str(t)) for t in texts]
+        X_bow = self._cv.transform(lemmas)
+        if return_tfidf:
+            if not self._tfidf:
+                self._tfidf = TfidfTransformer(
+                    norm="l2", use_idf=True).fit(X_bow)
+            self._logger.info("transform_new process completed successfully.")
+            return self._tfidf.transform(X_bow)
+        self._logger.info("transform_new process completed successfully.")
+        return X_bow

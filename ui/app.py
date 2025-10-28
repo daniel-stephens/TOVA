@@ -291,7 +291,7 @@ def training_start():
     if not corpus_id or not model or not model_name:
         return jsonify({"error": "Missing corpus_id/model/model_name"}), 400
 
-    # 1) Fetch corpus docs server-side
+    # get corpus
     try:
         up = requests.get(
             f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
@@ -309,7 +309,7 @@ def training_start():
     if not docs:
         return jsonify({"error": "No documents found in corpus"}), 400
 
-    # 2) Build TrainRequest payload (server-side)
+    # tr request
     tm_req = {
         "model": model,
         "corpus_id": corpus_id,
@@ -322,7 +322,7 @@ def training_start():
         "model_name": model_name,
     }
 
-    # 3) Kick off training upstream
+    # training upstream
     try:
         tr = requests.post(f"{API}/train/json",
                            json=tm_req, timeout=(3.05, 120))
@@ -331,7 +331,6 @@ def training_start():
     except requests.RequestException as e:
         return jsonify({"error": f"Upstream error starting training: {e}"}), 502
 
-    # Proxy errors (e.g., 422 from Pydantic validation)
     if tr.status_code >= 400:
         return Response(
             tr.content,
@@ -478,13 +477,6 @@ def get_corpus(corpus_id):
 ##########################################################
 # MODEL-RELATED ROUTES
 ##########################################################
-
-
-@server.route("/model-config")
-def get_model_config():
-    with open("static/config/model_config.json") as f:
-        return jsonify(json.load(f))
-
 
 @server.route("/model-registry")
 def get_model_registry():
