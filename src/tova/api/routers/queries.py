@@ -21,12 +21,12 @@ def get_model_info(req: ModelInfoRequest) -> Dict[str, Any]:
     """
     Returns topic-level metadata for a trained topic model.
     """
-    if not os.path.isdir(req.model_path):
+    if not os.path.isdir(DRAFTS_SAVE.joinpath(req.model_id).as_posix()):
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
         model_info = get_model_info_dispatch(
-            model_path=req.model_path,
+            model_path= DRAFTS_SAVE.joinpath(req.model_id).as_posix(),
             config_path=req.config_path,
             logger=logger
         )
@@ -40,12 +40,12 @@ def get_topic_info(req: TopicInfoRequest) -> Dict[str, Any]:
     """
     Returns topic-level metadata for a specific topic in a trained topic model.
     """
-    if not os.path.isdir(req.model_path):
+    if not os.path.isdir(DRAFTS_SAVE.joinpath(req.model_id).as_posix()):
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
         topic_info = get_topic_info_dispatch(
-            model_path=req.model_path,
+            model_path=DRAFTS_SAVE.joinpath(req.model_id).as_posix(),
             config_path=req.config_path,
             topic_id=req.topic_id,
             logger=logger
@@ -59,12 +59,12 @@ def get_thetas_by_docs_ids(req: ThetasByDocsIdsRequest) -> Dict[str, Any]:
     """
     Returns topic weights for specific documents by their IDs from a trained topic model.
     """
-    if not os.path.isdir(req.model_path):
+    if not os.path.isdir(DRAFTS_SAVE.joinpath(req.model_id).as_posix()):
         raise HTTPException(status_code=400, detail="Model path not found or not a directory.")
 
     try:
         thetas_info = get_thetas_documents_by_id_dispatch(
-            model_path=req.model_path,
+            model_path=DRAFTS_SAVE.joinpath(req.model_id).as_posix(),
             docs_ids=req.docs_ids.split(","),
             config_path=req.config_path,
             logger=logger

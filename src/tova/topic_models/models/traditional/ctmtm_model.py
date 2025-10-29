@@ -37,19 +37,41 @@ class CTMTMmodel(TradTMmodel):
         super().__init__(model_name, corpus_id, id, model_path, logger, config_path, load_model, do_embeddings=True)
 
         ctm_cfg = self.config.get("ctm", {})
-        self.num_iters = int(ctm_cfg.get("num_iters", 250))
+        self.num_epochs = int(ctm_cfg.get("num_epochs", 100))
         self.sbert_model = str(ctm_cfg.get("sbert_model", "all-MiniLM-L6-v2"))
         self.sbert_context = int(ctm_cfg.get("sbert_context", 384))
         self.batch_size = int(ctm_cfg.get("batch_size", 32))
+        self.contextual_size = int(ctm_cfg.get("contextual_size", 384))
+        self.inference_type = str(ctm_cfg.get("inference_type", "combined"))
+        self.n_components = int(ctm_cfg.get("n_components", 10))
+        self.model_type = str(ctm_cfg.get("model_type", "prodLDA"))
+        self.hidden_sizes = ctm_cfg.get("hidden_sizes", [100, 100])
+        self.activation = str(ctm_cfg.get("activation", "softplus"))
+        self.dropout = float(ctm_cfg.get("dropout", 0.2))
+        self.learn_priors = bool(ctm_cfg.get("learn_priors", True))
+        self.lr = float(ctm_cfg.get("lr", 0.002))
+        self.momentum = float(ctm_cfg.get("momentum", 0.99))
+        self.solver = str(ctm_cfg.get("solver", "adam"))
+        self.reduce_on_plateau = bool(ctm_cfg.get("reduce_on_plateau", False))
+        self.num_data_loader_workers = int(ctm_cfg.get("num_data_loader_workers", 4))
+        self.label_size = int(ctm_cfg.get("label_size", 0))
+        self.loss_weights = ctm_cfg.get("loss_weights", None)
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
         self._logger.info(
-            f"{self.__class__.__name__} initialized with "
-            f"num_topics={self.num_topics}, num_iters={self.num_iters}, "
-            f"sbert_model='{self.sbert_model}', sbert_context={self.sbert_context}, "
-            f"batch_size={self.batch_size}."
+            f"{self.__class__.__name__} initialized with configuration:\n"
+            f"  num_topics={self.num_topics}, num_epochs={self.num_epochs}\n"
+            f"  sbert_model='{self.sbert_model}', sbert_context={self.sbert_context}\n"
+            f"  contextual_size={self.contextual_size}, inference_type='{self.inference_type}'\n"
+            f"  n_components={self.n_components}, model_type='{self.model_type}'\n"
+            f"  hidden_sizes={self.hidden_sizes}, activation='{self.activation}'\n"
+            f"  dropout={self.dropout}, learn_priors={self.learn_priors}\n"
+            f"  lr={self.lr}, momentum={self.momentum}, solver='{self.solver}'\n"
+            f"  batch_size={self.batch_size}, reduce_on_plateau={self.reduce_on_plateau}\n"
+            f"  num_data_loader_workers={self.num_data_loader_workers}, label_size={self.label_size}\n"
+            f"  loss_weights={self.loss_weights}"
         )
 
         self.qt: Optional[TopicModelDataPreparation] = None
@@ -93,9 +115,22 @@ class CTMTMmodel(TradTMmodel):
         prss and prss.report(0.0, "Creating CombinedTM model")
         self.model = CombinedTM(
             bow_size=len(self.vocab),
-            contextual_size=self.sbert_context,
+            contextual_size=self.contextual_size,
             n_components=self.num_topics,
-            num_epochs=self.num_iters
+            model_type=self.model_type,
+            hidden_sizes=tuple(self.hidden_sizes),
+            activation=self.activation,
+            dropout=self.dropout,
+            learn_priors=self.learn_priors,
+            batch_size=self.batch_size,
+            lr=self.lr,
+            momentum=self.momentum,
+            solver=self.solver,
+            num_epochs=self.num_epochs,
+            reduce_on_plateau=self.reduce_on_plateau,
+            num_data_loader_workers=self.num_data_loader_workers,
+            label_size=self.label_size,
+            loss_weights=self.loss_weights
         )
         self.model.qt = self.qt
         prss and prss.report(1.0, "CombinedTM model created")

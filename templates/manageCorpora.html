@@ -361,7 +361,7 @@
         function onConfirmDelete() {
           if (!__nameToDelete) return;
           if (dom.confirmDeleteBtn) dom.confirmDeleteBtn.disabled = true;
-
+          console.log("Deleting corpus:", __nameToDelete);
           fetch("/delete-corpus/", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

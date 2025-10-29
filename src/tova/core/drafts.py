@@ -1,11 +1,13 @@
 import json
-import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-import shutil
 import logging
+import os
+import shutil
+from pathlib import Path
+from typing import List, Optional
 
-from tova.api.models.data_schemas import Corpus, Draft, DraftCreatedResponse, DraftType, DataRecord, Model, Dataset, StorageType
+from tova.api.models.data_schemas import (Corpus, DataRecord, Dataset, Draft,
+                                          DraftCreatedResponse, DraftType,
+                                          Model, StorageType)
 from tova.utils.common import get_unique_id, write_json_atomic
 
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))
@@ -100,7 +102,7 @@ def get_draft(draft_id: str, kind: Optional[DraftType] = None) -> Optional[Draft
     )
 
 
-def delete_draft(kind: DraftType, draft_id: str) -> bool:
+def delete_draft(draft_id: str) -> bool:
     """
     Delete a draft by ID. Returns True if deleted, False if not found.
     """
@@ -116,7 +118,7 @@ def save_draft(draft: Draft) -> bool:
     try:
         logger.info("Saving draft: %s", draft.dict())
         draft_dir = DRAFTS_SAVE / draft.id
-        draft_dir.mkdir(parents=True, exist_ok=False)
+        draft_dir.mkdir(parents=True, exist_ok=True)
         write_json_atomic(draft_dir / METADATA_FILENAME, draft.metadata)
         data_serialized = [record.dict() for record in draft.data]
         write_json_atomic(draft_dir / DATA_FILENAME, data_serialized)
@@ -201,10 +203,11 @@ def draft_to_corpus(draft: Draft) -> Corpus:
         created_at=draft.metadata.get("created_at"),
         location=StorageType.temporal,
         metadata=draft.metadata,
+        models=draft.metadata.get("models", []),
         documents=draft_to_data(draft)
     )
 
-def modify_draft_metadata(draft_id: str, kind: DraftType, new_metadata: dict) -> bool:
+def modify_draft_metadata(draft_id: str, kind: DraftType, new_metadata: dict) -> DraftCreatedResponse:
     """
     Modify the metadata of an existing draft.
 
@@ -212,12 +215,25 @@ def modify_draft_metadata(draft_id: str, kind: DraftType, new_metadata: dict) ->
         Dictionary containing the new metadata to update the draft with (it does not include all fields).
     """
     draft = get_draft(draft_id, kind)
+    logger.info("Modifying draft metadata: %s", draft_id)
+    logger.info("New metadata: %s", new_metadata)
+    logger.info("Existing draft metadata: %s", draft.metadata if draft else "Draft not found")
+    
     if not draft:
-        return False
+        return DraftCreatedResponse(
+            draft_id=draft_id,
+            status_code=404  # Not found
+        )
 
     # Update metadata
     draft.metadata.update(new_metadata)
+    logger.info("Updated draft metadata: %s", draft.metadata)
 
     # Save updated draft
-    saved_draft = save_draft(draft)
-    return saved_draft.status_code == 201
+    draft_dir = DRAFTS_SAVE / draft_id
+    write_json_atomic(draft_dir / METADATA_FILENAME, draft.metadata)
+    
+    return DraftCreatedResponse(
+        draft_id=draft.id,
+        status_code=202  # Modified
+    ) 

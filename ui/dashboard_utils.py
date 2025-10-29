@@ -29,7 +29,7 @@ def pydantic_to_dict(model: Any) -> Dict[str, Any]:
 
 def to_dashboard_bundle(
     raw: Dict[str, Any],
-    model_path: Path,
+    model_id: str,
     model_metadata: Optional[Dict[str, Any]] = None,
     model_training_corpus: Optional[Dict[str, Any]] = None,
     doc_thetas: Optional[Dict[str, Dict[str, float]]] = None,
@@ -172,7 +172,7 @@ def to_dashboard_bundle(
     model_name = model_metadata.get("tr_params", {}).get("model_name", "")
     
     return {
-        "model": model_path.name,
+        "model": model_id,
         "color": {"seed": 0, "saturation": [70, 75, 80], "lightness": [55, 60, 65]},
         "themes": {"allIds": [int(i) if i.isdigit() else i for i in all_ids], "byId": by_id},
         "diagnostics": {"byThemeId": diags_by_id},

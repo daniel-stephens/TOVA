@@ -35,35 +35,35 @@ class TestTopicModels(unittest.TestCase):
         module = __import__(module_path, fromlist=[class_name])
         return getattr(module, class_name)
 
-    # def test_train_and_infer(self):
-    #     """Test training and inference for all registered topic models."""
-    #     for model_name, model_path in self.model_registry.items():
-    #         with self.subTest(model=model_name):
-    #             model_cls = self.load_class_from_path(model_path)
+    def test_train_and_infer(self):
+        """Test training and inference for all registered topic models."""
+        for model_name, model_path in self.model_registry.items():
+            with self.subTest(model=model_name):
+                model_cls = self.load_class_from_path(model_path)
 
-    #             model = model_cls(
-    #                 model_name=f"test_{model_name}",
-    #                 corpus_id="test_corpus",
-    #                 id="test_id",
-    #                 model_path=pathlib.Path(f"./test_{model_name}"),
-    #                 logger=logging.getLogger(f"test_logger_{model_name}"),
-    #                 config_path=pathlib.Path("./static/config/config.yaml"),
-    #                 load_model=False,
-    #                 preprocess_text=True,
-    #             )
+                model = model_cls(
+                    model_name=f"test_{model_name}",
+                    corpus_id="test_corpus",
+                    id="test_id",
+                    model_path=pathlib.Path(f"./test_{model_name}"),
+                    logger=logging.getLogger(f"test_logger_{model_name}"),
+                    config_path=pathlib.Path("./static/config/config.yaml"),
+                    load_model=False,
+                    preprocess_text=True,
+                )
 
-    #             # Train the model
-    #             model.train_model(self.train_data)
+                # Train the model
+                model.train_model(self.train_data)
                 
-    #             self.model_path = model_path
+                self.model_path = model_path
 
-    #             # Perform inference
-    #             infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
-    #             infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
-    #             thetas, time_taken = model.infer(infer_data)
+                # Perform inference
+                infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
+                infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
+                thetas, time_taken = model.infer(infer_data)
 
-    #             self.assertIsInstance(thetas, np.ndarray)
-    #             print(f"Inference completed in {time_taken} seconds for model {model_name}")
+                self.assertIsInstance(thetas, np.ndarray)
+                print(f"Inference completed in {time_taken} seconds for model {model_name}")
 
     def test_load_and_infer(self):
         # Load the model

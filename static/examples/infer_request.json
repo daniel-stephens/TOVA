@@ -3,18 +3,18 @@
     "data": [
         {
             "id": "114-HR-3348",
-            "raw_text": "providing rewards outstanding tips protect act bill requires attorney general establish publicize special reward program individuals providing information leading apprehension conviction persons committing certain computer fraud cybercrime offenses"
+            "text": "providing rewards outstanding tips protect act bill requires attorney general establish publicize special reward program individuals providing information leading apprehension conviction persons committing certain computer fraud cybercrime offenses"
         },
         {
             "id": "112-S-2480",
-            "raw_text": "amends harmonized_tariff schedule united_states temporarily suspend duty vinylbenzenesulfonic acid lithium salt"
+            "text": "amends harmonized_tariff schedule united_states temporarily suspend duty vinylbenzenesulfonic acid lithium salt"
         },
         {
             "id": "112-HR-4973",
-            "raw_text": "amends harmonized_tariff schedule united_states temporarily suspend duty certain sleeping bag carry cases"
+            "text": "amends harmonized_tariff schedule united_states temporarily suspend duty certain sleeping bag carry cases"
         }
     ],
     "id_col": "id",
-    "text_col": "raw_text",
+    "text_col": "text",
     "config_path": "static/config/config.yaml"
 }

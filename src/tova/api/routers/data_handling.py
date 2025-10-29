@@ -19,6 +19,7 @@ router = APIRouter(tags=["Data Handling"])
 # the user trains a model. Once the training is done, we ask the user whether he wants to save the model. If yes, we create a new model entry in the database.
 # in the meanwhile, he can inspect the model because it is stored temporarily.
 # once the model has been indexed succesfully, the model folder is deleted and all the information about such a model is removed from the temporary store.
+# TODO: All the functions here need to be adaptated in order to consider the BBDD cases too (not only drafts)
 
 
 def _infer_draft_type(draft_id: str) -> DraftType:
@@ -252,8 +253,57 @@ def delete_corpus(corpus_id: str):
 @router.get("/corpora/{corpus_id}/models", response_model=List[Model])
 def list_corpus_models(corpus_id: str):
     """List all models for a corpus."""
-    return models.list_models(corpus_id)
+    return corpora.list_corpus_models(corpus_id)
 
+@router.post("/corpora/{corpus_id}/add_model", status_code=201)
+def add_model_to_corpus(corpus_id: str, model_id: str) -> DraftCreatedResponse:
+    """
+    Add a new model to a corpus. 
+    """
+
+    # load corpus
+    corpus = corpora.get_corpus(corpus_id)
+    if corpus is None:
+        raise HTTPException(404, "Corpus not found")
+    current_models = corpus.models or []
+    if model_id in current_models:
+        raise HTTPException(400, "Model already associated with corpus")
+    current_models.append(model_id)
+
+    sc = drafts.modify_draft_metadata(corpus_id, DraftType.corpus, {"models": current_models})
+    # @TODO: update to also control BBDD cases
+    
+    if sc.status_code != 202:
+        if sc.status_code == 404:
+            raise HTTPException(404, "Corpus not found")
+        else:
+            raise HTTPException(500, "Failed to update corpus metadata")
+
+    return DraftCreatedResponse(draft_id=corpus.id, status_code=201)
+
+@router.post("/corpora/{corpus_id}/delete_model", status_code=201)
+def delete_model_from_corpus(corpus_id: str, model_id: str) -> DraftCreatedResponse:
+    """
+    Remove a model from a corpus. 
+    """
+
+    # load corpus
+    corpus = corpora.get_corpus(corpus_id)
+    if corpus is None:
+        raise HTTPException(404, "Corpus not found")
+    current_models = corpus.models or []
+    if model_id not in current_models:
+        raise HTTPException(400, "Model not associated with corpus")
+    current_models.remove(model_id)
+
+    sc = drafts.modify_draft_metadata(corpus_id, DraftType.corpus, {"models": current_models})
+    if sc.status_code != 202:
+        if sc.status_code == 404:
+            raise HTTPException(404, "Corpus not found")
+        else:
+            raise HTTPException(500, "Failed to update corpus metadata")
+
+    return DraftCreatedResponse(draft_id=corpus.id, status_code=201)
 
 @router.get("/models/{model_id}", response_model=Model)
 def get_model(model_id: str):
@@ -271,3 +321,4 @@ def delete_model(model_id: str):
     if not ok:
         raise HTTPException(404, "Model not found")
     return
+    

@@ -5,7 +5,8 @@ from tova.api.docs.examples import MODEL_INFO_REQUEST_EXAMPLE, THETAS_BY_DOCS_ID
 from tova.api.models.data_schemas import Corpus
 
 class ModelInfoRequest(BaseModel):
-    model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    #model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    model_id: str = Field(..., description="ID of the model to query", example="m_cbf054a0b4f44581b6c2e56c71836458")
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to the YAML configuration file", example="static/config/config.yaml")
     model_metadata: Optional[dict] = Field(None, description="Optional model metadata to include in the response")
     model_training_corpus:  Optional[Corpus] = None
@@ -16,7 +17,8 @@ class ModelInfoRequest(BaseModel):
 
 class TopicInfoRequest(BaseModel):
     topic_id: int = Field(..., description="ID of the topic to query", example=0)
-    model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    #model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    model_id: str = Field(..., description="ID of the model to query", example="m_cbf054a0b4f44581b6c2e56c71836458")
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to the YAML configuration file", example="static/config/config.yaml")
 
     class Config:
@@ -25,7 +27,8 @@ class TopicInfoRequest(BaseModel):
         }
         
 class ThetasByDocsIdsRequest(BaseModel):
-    model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    #model_path: str = Field(..., description="Path to the trained model directory", example="data/models/tomotopy_run1")
+    model_id: str = Field(..., description="ID of the model to query", example="m_cbf054a0b4f44581b6c2e56c71836458")
     docs_ids: str = Field(..., description="Comma-separated list of document IDs to query", example="doc1,doc2,doc3")
     config_path: Optional[str] = Field("static/config/config.yaml", description="Path to the YAML configuration file", example="static/config/config.yaml")
 

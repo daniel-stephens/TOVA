@@ -39,11 +39,8 @@ class TopicGPTTMmodel(LLMTModel):
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
-        # Load TopicGPT parameters from config
         tg_cfg = self.config.get("topicgpt", {})
-        # sampling
         self.sample = tg_cfg.get("sample", 0.001)
-        # model names + decoding params
         self.deployment_name1 = tg_cfg.get("deployment_name1", "gpt-4")
         self.deployment_name2 = tg_cfg.get("deployment_name2", "gpt-3.5-turbo")
         self.temperature = float(tg_cfg.get("temperature", 0.0))
@@ -357,9 +354,6 @@ class TopicGPTTMmodel(LLMTModel):
 
         return obj
 
-    # ---------------------------------------------------------------------
-    # Utilities
-    # ---------------------------------------------------------------------
     def _run_cmd(self, cmd: str, banner: str):
         """
         Run a shell command with logging; raise on failure.

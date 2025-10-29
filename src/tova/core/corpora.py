@@ -7,8 +7,9 @@ from typing import List, Optional
 
 from tova.api.models.data_schemas import (Corpus, DataRecord, Draft,
                                           DraftCreatedResponse, DraftType,
-                                          StorageType)
+                                          StorageType, Model)
 from tova.core import drafts as drafts
+from tova.core import models
 from tova.utils.common import get_unique_id
 
 # Import constants from drafts module
@@ -31,6 +32,24 @@ def list_corpora() -> List[Corpus]:
 
     # TODO: Implement actual database query and merge with drafts
     return corpora_lst
+
+def list_corpus_models(corpus_id: str) -> List[Model]:
+    """
+    List all model objects associated with a given corpus, including both the "temporary" and the ones indexed in the database, if any.
+    """
+    
+    corpus = get_corpus(corpus_id)
+    if not corpus:
+        return []
+    
+    models_lst = []
+    if corpus.models:  # Check if corpus.models exists and is not None
+        for model_id in corpus.models:
+            model = models.get_model(model_id)
+            if model:  # Only add if model exists
+                models_lst.append(model)
+    
+    return models_lst
 
 
 def create_corpus(corpus: Corpus) -> DraftCreatedResponse:

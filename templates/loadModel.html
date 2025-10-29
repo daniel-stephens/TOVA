@@ -229,7 +229,6 @@
                   required
                 />
 
-                <!-- ✅ Added Preprocess Text Option -->
                 <div class="form-check mt-2">
                   <input
                     class="form-check-input"
@@ -566,7 +565,7 @@
             training_params.num_topics = Number.isFinite(n) && n > 0 ? n : 10;
           }
 
-          // ✅ Include preprocess_text
+          // Include preprocess_text
           training_params.preprocess_text = !!dom.preprocessCheckbox?.checked;
 
           const payload = {
@@ -605,12 +604,13 @@
               throw new Error(errText || "Failed to start training");
             }
 
-            const { job_id, status_url, corpus_id } = await startResp.json();
+            const { job_id, status_url, corpus_id, model_id} = await startResp.json();
 
             // Redirect with tiny info in URL (no session needed)
             const u = new URL("/training/", location.origin);
             u.searchParams.set("corpus_id", corpus_id);
-            if (job_id) u.searchParams.set("job_id", job_id);
+            u.searchParams.set("model_id", model_id);
+            u.searchParams.set("job_id", job_id);
             window.location.href = u.toString();
           } catch (err) {
             console.error("Training request failed:", err);

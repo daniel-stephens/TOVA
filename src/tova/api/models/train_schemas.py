@@ -9,7 +9,6 @@ class TrainRequest(BaseModel):
     data: List[DataRecord] = Field(..., description="List of input records to train the model")
     id_col: Optional[str] = Field("id", description="Name of the ID column", example="id")
     text_col: str = Field("raw_text", description="Column containing the text", example="raw_text")
-    do_preprocess: bool = Field(False, description="Whether to apply preprocessing", example=False)
     training_params: Optional[Dict[str, Any]] = Field(
         None, description="Custom model hyperparameters", example={"num_topics": 50, "alpha": 0.1}
     )

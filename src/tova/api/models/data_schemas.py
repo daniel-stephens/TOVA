@@ -68,6 +68,7 @@ class Corpus(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)  
     datasets: Optional[List[Dataset]] = None
     documents: Optional[List[DataRecord]] = None
+    models: Optional[List[str]] = None  # list of model IDs associated
 
 class Model(BaseModel):
     id: str  # system-assigned, unique

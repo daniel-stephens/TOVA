@@ -548,7 +548,8 @@
       try {
         const params = new URLSearchParams(location.search);
         const corpusId = params.get("corpus_id");
-        const jobId    = params.get("job_id"); // should be present
+        const jobId    = params.get("job_id"); 
+        const modelId = params.get("model_id");
 
         if (!corpusId) {
           alert("Missing corpus_id.");
@@ -683,7 +684,7 @@
           stopPolling();
           if (isFinished && !COMPLETION_SHOWN) {
             COMPLETION_SHOWN = true;
-            showTrainingCompleteModal();
+            await handleTrainingCompletion();
           }
           return;
         }
@@ -1180,6 +1181,47 @@
     /* ==============================
        Completion Modal
     ============================== */
+    async function handleTrainingCompletion() {
+      try {
+        // Get corpus_id and model_id from URL parameters
+        const params = new URLSearchParams(location.search);
+        const corpusId = params.get("corpus_id");
+        const modelId = params.get("model_id");
+
+        
+        if (corpusId && modelId) {
+          // Call the add_model endpoint
+          const addModelUrl = `/data/corpus/add_model`;
+          console.log("[training] Calling add_model endpoint:", addModelUrl);
+          
+          const response = await fetch(addModelUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              corpus_id: corpusId,
+              model_id: modelId
+            }),
+            cache: 'no-store'
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log("[training] Successfully added model to corpus:", result);
+          } else {
+            console.warn("[training] Failed to add model to corpus:", response.status, response.statusText);
+          }
+        } else {
+          console.warn("[training] Missing corpus_id or model_id, skipping add_model call", { corpusId, modelId });
+        }
+      } catch (error) {
+        console.error("[training] Error calling add_model endpoint:", error);
+      } finally {
+        showTrainingCompleteModal();
+      }
+    }
+
     function showTrainingCompleteModal() {
       const modalEl = document.getElementById("trainingCompleteModal");
       if (!modalEl) return; // no modal in DOM

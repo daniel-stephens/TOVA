@@ -180,7 +180,7 @@ footer {
             <a href="#"
                class="nav-link"
                role="button"
-               onclick="event.preventDefault(); showModelDetails('{{ model_name|e }}')">
+               onclick="event.preventDefault(); showModelDetails('{{ model_id|e }}')">
               Model Info
             </a>
           </li>
@@ -224,7 +224,6 @@ footer {
     </div>
   </nav>
   
-  <div hidden id="modelName">{{model_name}}</div>
   <div hidden id="model_id">{{model_id}}</div>
   
   <!-- Full Workspace -->
@@ -678,7 +677,6 @@ footer {
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
   const modelId   = document.getElementById("model_id")?.textContent?.trim() || ""; 
 
   // ---------------------------
@@ -1454,14 +1452,12 @@ document.addEventListener("DOMContentLoaded", () => {
   async function showInferenceModal(doc) {
     const docId = doc.id;
     const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
-    const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
 
     const response = await fetch("/text-info", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model_id: modelId,
-        model_path: modelPath,
         document_id: String(doc.id)
       })
     });
@@ -1632,14 +1628,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  async function fetchDashboard(modelPath) {
-    console.log("this is the model path:", modelPath);
+  async function fetchDashboard(modelId) {
     console.log("this is the model id:", modelId);
 
     const res = await fetch("/get-dashboard-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_path: modelPath, model_id: modelId })
+      body: JSON.stringify({model_id: modelId})
     });
     if (!res.ok) throw new Error(`Dashboard fetch failed: ${res.status}`);
     return res.json();
@@ -1647,10 +1642,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   (async () => {
     try {
-      //dashboardV2 = await fetchDashboard(modelName);
-      const modelPath = document.getElementById("modelName")?.textContent?.trim() || "";
-      const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
-      dashboardV2 = await fetchDashboard(modelPath, modelId);
+      const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      dashboardV2 = await fetchDashboard(modelId);
 
       const themeArray = themesForChart();
       themeArray.forEach((t, i) => { themeColorMap[t.id] = t.color || computeColor(i, dashboardV2.color); });
@@ -1913,10 +1906,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const saveModel  = document.getElementById("saveModel")?.checked || false;
         const saveCorpus = document.getElementById("saveCorpus")?.checked || false;
 
-        const modelId =
-          (window.dashboardV2?.model) ||
-          (document.getElementById("modelName")?.textContent || "").trim();
-
+        const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
         const modelInfo =
           window.dashboardV2?.modelInfo ||
           (window.dashboardV2?.modelInfos && window.dashboardV2.modelInfos[modelId]) ||

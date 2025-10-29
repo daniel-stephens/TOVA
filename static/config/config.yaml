@@ -27,6 +27,9 @@ topic_modeling:
     llm_model_type: "qwen:32b"
     labeller_prompt: "src/prompter/prompts/labelling_dft.txt"
     summarizer_prompt: "src/prompter/prompts/summarization_dft.txt"
+  llm-based:
+    llm: "qwen:32b"
+    llm_server: "http://kumo01.tsc.uc3m.es:11434"
   mallet:
     alpha: 5.0
     optimize_interval: 10
@@ -58,10 +61,39 @@ topic_modeling:
     repr_model_topnwords: 15
     word_min_len: 0
   ctm:
-    num_iters: 100
+    num_epochs: 100
     sbert_model: all-MiniLM-L6-v2
     sbert_context: 384
     batch_size: 32
+    contextual_size: 384
+    inference_type: "combined"
+    n_components: 10
+    model_type: "prodLDA"
+    hidden_sizes: [100, 100]
+    activation: "softplus"
+    dropout: 0.2
+    learn_priors: true
+    lr: 0.002
+    momentum: 0.99
+    solver: "adam"
+    reduce_on_plateau: false
+    num_data_loader_workers: 4
+    label_size: 0
+    loss_weights: null
+  
+  topicgpt:
+    sample: 0.001
+    deployment_name1: "qwen:32b"
+    deployment_name2: "qwen:32b"
+    temperature: 0.0
+    top_p: 0.0
+    max_tokens_gen1: 300
+    max_tokens_gen2: 500
+    max_tokens_assign: 300
+    refined_again: false
+    remove: false
+    do_second_level: false
+    verbose: true 
 
 ################################
 #       PREPROCESSING          #

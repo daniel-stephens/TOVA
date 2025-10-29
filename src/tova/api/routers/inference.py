@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import os
+from pathlib import Path
 from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status  # type: ignore
@@ -16,13 +18,16 @@ from tova.utils.tm_utils import normalize_json_data
 
 router = APIRouter(tags=["Inference"])
 
+# paths to temporary storage
+DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))
+
 # -----------------------
 # Job runner
 # -----------------------
 async def _run_inference_job(
     *,
     job_id: str,
-    model_path: str,
+    model_id: str,
     data: List[Dict],
     config_path: str,
     logger: logging.Logger,
@@ -49,7 +54,7 @@ async def _run_inference_job(
         thetas, duration = await loop.run_in_executor(
             None,
             lambda: infer_model_dispatch(
-                model_path=model_path,
+                model_path=DRAFTS_SAVE.joinpath(model_id).as_posix(),
                 data=data,
                 config_path=config_path,
                 logger=logger,
@@ -77,7 +82,7 @@ async def _run_inference_job(
 # -----------------------
 async def _enqueue_inference_job(
     *,
-    model_path: str,
+    model_id: str,
     data: List[Dict],
     config_path: str,
     bg: BackgroundTasks,
@@ -94,7 +99,7 @@ async def _enqueue_inference_job(
         _run_inference_job,
         job_id=job.id,
         cancel=token,
-        model_path=model_path,
+        model_id=model_id,
         data=data,
         config_path=config_path,
         logger=logger,
@@ -119,7 +124,7 @@ async def infer_from_json(req: InferRequest, bg: BackgroundTasks, response: Resp
         )
 
         infer_response: InferResponse = await _enqueue_inference_job(
-            model_path=req.model_path,
+            model_id=req.model_id,
             data=normalized_data,
             config_path=req.config_path,
             bg=bg,
