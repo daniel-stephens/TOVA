@@ -6,6 +6,13 @@ Everything happens through the Makefile that encapsulates all the docker-compose
 
 ### Quick Start
 
+Create environment (.env) file with:
+
+```bash
+VERSION=0.1.0
+ASSETS_DATE=20240601
+```
+
 ```bash
 make up      # Build and start all services
 make down    # Stop all services

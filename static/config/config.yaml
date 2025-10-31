@@ -80,7 +80,6 @@ topic_modeling:
     num_data_loader_workers: 4
     label_size: 0
     loss_weights: null
-  
   topicgpt:
     sample: 0.001
     deployment_name1: "qwen:32b"
@@ -105,8 +104,8 @@ tm_preprocessor:
     valid_pos: ["VERB", "NOUN", "ADJ", "PROPN"]
   vectorization:
     max_features: 100000
-    min_df: 2
-    max_df: 0.95
+    min_df: 1
+    max_df: 1
     ngram_range: [1, 2]
     binary: false
   embeddings:
