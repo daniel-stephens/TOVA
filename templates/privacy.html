@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}TOVA – Privacy Policy{% endblock %}
+
+{% block content %}
+<main class="content-wrap py-4">
+  <div class="container">
+    <div class="content-card bg-white p-4 p-md-5 rounded-4 shadow-sm mx-auto" style="max-width: 900px;">
+      <h1 class="h3 mb-3">Privacy Policy</h1>
+      <p class="text-muted small mb-4">
+        Last updated: {{ "2025-01-01" }}
+      </p>
+
+      <p class="mb-3">
+        This Privacy Policy explains how TOVA (“TOVA”, “we”, “us”, or “our”) collects,
+        uses, and protects information when you use our services, including any web
+        interfaces and desktop applications that organize, visualize, and analyze text data.
+      </p>
+
+      <h2 class="h5 mt-4">1. Information We Collect</h2>
+
+      <h3 class="h6 mt-3">1.1 Account Information</h3>
+      <p>
+        When you create an account, we may collect:
+      </p>
+      <ul>
+        <li>Name</li>
+        <li>Email address</li>
+        <li>Authentication information (such as password hashes for local login)</li>
+        <li>Identifiers from third-party identity providers (e.g., Okta user IDs) when you sign in using SSO</li>
+      </ul>
+
+      <h3 class="h6 mt-3">1.2 User Content</h3>
+      <p>
+        TOVA enables you to upload or input text, documents, and related data (“User Content”)
+        for organization, visualization, and analysis. Depending on how you use TOVA, this
+        content may include information that is confidential or sensitive.
+      </p>
+
+      <h3 class="h6 mt-3">1.3 LLM-Related Information</h3>
+      <p>
+        If you choose to connect TOVA to Large Language Models (“LLMs”), we may collect:
+      </p>
+      <ul>
+        <li>Configuration details about your LLM provider (e.g., provider name, model name).</li>
+        <li>API keys or organization IDs that you provide for third-party providers (e.g., OpenAI),
+          where we store them to send requests on your behalf.</li>
+      </ul>
+      <p>
+        When you use LLM-powered features, portions of your User Content, prompts, and generated
+        output may be sent to the configured provider for processing.
+      </p>
+
+      <h3 class="h6 mt-3">1.4 Usage and Log Data</h3>
+      <p>
+        We may collect basic usage information, such as:
+      </p>
+      <ul>
+        <li>Dates and times of access.</li>
+        <li>Pages or features used.</li>
+        <li>Technical information about your device or browser (e.g., IP address, OS, browser type), when applicable.</li>
+      </ul>
+
+      <h2 class="h5 mt-4">2. How We Use Information</h2>
+      <p>We use the information we collect to:</p>
+      <ul>
+        <li>Provide, maintain, and improve TOVA’s features and functionality.</li>
+        <li>Authenticate users and secure access to accounts.</li>
+        <li>Organize, visualize, and analyze your User Content as requested by you.</li>
+        <li>Enable optional integrations with LLM providers and local models.</li>
+        <li>Monitor usage patterns and diagnose technical issues.</li>
+        <li>Communicate with you about updates, changes, and support for TOVA.</li>
+      </ul>
+
+      <h2 class="h5 mt-4">3. How We Handle User Content and LLM Data</h2>
+      <p>
+        Your User Content is processed solely to provide the features you choose to use in TOVA.
+        When you enable LLM integrations:
+      </p>
+      <ul>
+        <li>
+          TOVA may send portions of your User Content, prompts, and context to third-party
+          providers such as OpenAI to generate summaries, suggestions, or other responses.
+        </li>
+        <li>
+          The handling of data by those providers is governed by their own terms and privacy policies.
+          You are responsible for reviewing and complying with those terms.
+        </li>
+      </ul>
+      <p>
+        When you use local models (e.g., via Ollama), processing may occur on your own machine
+        or infrastructure. TOVA does not control your local runtime and does not transmit that
+        processing to our servers unless explicitly configured to do so.
+      </p>
+
+      <h2 class="h5 mt-4">4. Data Storage and Security</h2>
+      <p>
+        We take reasonable technical and organizational measures to protect information
+        against unauthorized access, loss, misuse, or alteration. However, no system can
+        be completely secure, and we cannot guarantee absolute security.
+      </p>
+      <p>
+        Where API keys or tokens are stored, we aim to protect them using appropriate safeguards.
+        You should:
+      </p>
+      <ul>
+        <li>Use strong, unique API keys and rotate them periodically.</li>
+        <li>Revoke keys from your provider if you believe they may be compromised.</li>
+      </ul>
+
+      <h2 class="h5 mt-4">5. Data Retention</h2>
+      <p>
+        We retain information for as long as necessary to provide TOVA and fulfill the purposes
+        described in this Policy, unless a longer retention period is required or permitted by law.
+      </p>
+      <p>
+        You may request deletion of your account and associated data, subject to applicable legal
+        obligations and technical limitations.
+      </p>
+
+      <h2 class="h5 mt-4">6. Sharing of Information</h2>
+      <p>We do not sell your personal information.</p>
+      <p>We may share information in the following circumstances:</p>
+      <ul>
+        <li>
+          <strong>Service Providers:</strong> With trusted service providers who assist in hosting,
+          logging, monitoring, or other operational tasks, under appropriate contractual safeguards.
+        </li>
+        <li>
+          <strong>LLM Providers:</strong> With third-party LLM providers you explicitly enable
+          (e.g., OpenAI), for the purpose of processing your prompts and content.
+        </li>
+        <li>
+          <strong>Legal Requirements:</strong> When required by law, regulation, subpoena, or
+          legal process, or to protect the rights, property, or safety of TOVA, our users, or others.
+        </li>
+        <li>
+          <strong>Business Transfers:</strong> In connection with a merger, acquisition, or other
+          transfer of assets, subject to appropriate confidentiality protections.
+        </li>
+      </ul>
+
+      <h2 class="h5 mt-4">7. Cookies and Similar Technologies</h2>
+      <p>
+        If TOVA is accessed via a web interface, we may use cookies or similar technologies
+        to maintain sessions, remember preferences, and analyze usage. You can control cookies
+        through your browser settings, but disabling certain cookies may affect some functionality.
+      </p>
+
+      <h2 class="h5 mt-4">8. International Data Transfers</h2>
+      <p>
+        Depending on where you are located, your information may be stored or processed in countries
+        that may have different data protection laws than your jurisdiction. Where required by law,
+        we will take steps to ensure appropriate protections are in place.
+      </p>
+
+      <h2 class="h5 mt-4">9. Your Rights and Choices</h2>
+      <p>
+        Depending on your location, you may have certain rights regarding your personal information,
+        such as the right to:
+      </p>
+      <ul>
+        <li>Access the personal information we hold about you.</li>
+        <li>Request correction of inaccurate or incomplete information.</li>
+        <li>Request deletion of your personal information, subject to legal obligations.</li>
+        <li>Object to or restrict certain types of processing.</li>
+      </ul>
+      <p>
+        To exercise these rights, you can contact us at
+        <a href="mailto:support@example.com">support@example.com</a>. We may need to verify
+        your identity before responding to certain requests.
+      </p>
+
+      <h2 class="h5 mt-4">10. Third-Party Services and Links</h2>
+      <p>
+        TOVA may link to or integrate with third-party services, such as LLM providers,
+        identity providers (e.g., Okta), or external websites. This Policy does not apply
+        to those services. Their own policies govern how they handle your information.
+      </p>
+
+      <h2 class="h5 mt-4">11. Children’s Privacy</h2>
+      <p>
+        TOVA is not intended for use by children under 18 years of age. We do not knowingly
+        collect personal information from children. If you believe we have unintentionally
+        collected information from a child, please contact us so we can take appropriate action.
+      </p>
+
+      <h2 class="h5 mt-4">12. Changes to This Privacy Policy</h2>
+      <p>
+        We may update this Privacy Policy from time to time. If we make material changes,
+        we will provide notice, for example by updating the “Last updated” date or via
+        in-app notification. Your continued use of TOVA after the updated Policy takes
+        effect constitutes your acceptance of the changes.
+      </p>
+
+      <h2 class="h5 mt-4">13. Contact Us</h2>
+      <p>
+        If you have any questions or concerns about this Privacy Policy or our data practices,
+        you can contact us at:
+        <a href="mailto:support@example.com">support@example.com</a>.
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}

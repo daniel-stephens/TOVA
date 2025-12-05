@@ -29,66 +29,137 @@ class TMPreprocessor:
         equivalents_files: Optional[Sequence[Union[str, Path]]] = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
-        **kwargs
-    ):  
-        
-        self._logger = logger if logger else init_logger(config_path, __name__)
-        self._logger.info("Initializing TMPreprocessor with provided configurations.")
+        **kwargs,
+    ):
+        # Normalise to Path
+        config_path = pathlib.Path(config_path)
 
-        config = load_yaml_config_file(config_path, "tm_preprocessor", logger)
+        # ---------- LOGGER ----------
+        self._logger = logger if logger else init_logger(config_path, __name__)
+        self._logger.info("Initializing TMPreprocessor")
+
+        # Log the config path and its existence
+        self._logger.info(
+            "TMPreprocessor config_path passed: %s (abs: %s, exists: %s)",
+            config_path,
+            config_path.resolve(),
+            config_path.exists(),
+        )
+
+        # ---------- LOAD CONFIG ----------
+        try:
+            config = load_yaml_config_file(config_path, "tm_preprocessor", self._logger)
+        except Exception as e:
+            self._logger.exception(
+                "Failed to load 'tm_preprocessor' section from %s: %s",
+                config_path,
+                e,
+            )
+            raise
+
+        # Merge with kwargs (so overrides are visible)
         config = {**config, **kwargs}
 
-        spacy_model = config.get("spacy", {}).get("spacy_model")
-        spacy_disable = config.get("spacy", {}).get("spacy_disable")
-        valid_pos = config.get("spacy", {}).get("valid_pos")
-        min_df = config.get("vectorization", {}).get("min_df")
-        max_df = config.get("vectorization", {}).get("max_df")
-        max_features = config.get("vectorization", {}).get("max_features")
-        embeddings_model = config.get("embeddings", {}).get("model_name")
-        
-        self._logger.debug(f"spaCy model: {spacy_model}, Disabled components: {spacy_disable}")
-        self._logger.debug(f"Valid POS tags: {valid_pos}")
-        self._logger.debug(f"Stopword files: {stopword_files}")
-        self._logger.debug(f"Equivalents files: {equivalents_files}")
-        self._logger.debug(f"Min DF: {min_df}, Max DF: {max_df}, Max features: {max_features}")
-        self._logger.debug(f"Embeddings model: {embeddings_model}")
+        # Log the top-level keys under tm_preprocessor
+        self._logger.info(
+            "Loaded tm_preprocessor config. Top-level keys: %s",
+            list(config.keys()),
+        )
 
-        self._logger.info("Loaded parameters from configuration file.")
+        spacy_cfg = (config.get("spacy") or {})
+        vec_cfg = (config.get("vectorization") or {})
+        emb_cfg = (config.get("embeddings") or {})
 
+        # ---------- EXTRACT VALUES SAFELY ----------
+        spacy_model = spacy_cfg.get("spacy_model")
+        spacy_disable_raw = spacy_cfg.get("spacy_disable")
+        valid_pos = spacy_cfg.get("valid_pos") or ["NOUN", "VERB", "ADJ", "PROPN"]
+
+        # Normalize disable into a list
+        if spacy_disable_raw is None:
+            spacy_disable = []
+        elif isinstance(spacy_disable_raw, (list, tuple)):
+            spacy_disable = list(spacy_disable_raw)
+        else:
+            spacy_disable = [str(spacy_disable_raw)]
+
+        min_df = vec_cfg.get("min_df")
+        max_df = vec_cfg.get("max_df")
+        max_features = vec_cfg.get("max_features")
+        embeddings_model = emb_cfg.get("model_name")
+
+        # Log everything we pulled out
+        self._logger.info(
+            "spaCy config: model=%r, disable=%r, valid_pos=%r",
+            spacy_model,
+            spacy_disable,
+            valid_pos,
+        )
+        self._logger.info(
+            "Vectorization config: min_df=%r, max_df=%r, max_features=%r",
+            min_df,
+            max_df,
+            max_features,
+        )
+        self._logger.info("Embeddings config: model_name=%r", embeddings_model)
+        self._logger.info("Stopword files: %r", stopword_files)
+        self._logger.info("Equivalents files: %r", equivalents_files)
+
+        # ---------- HARD FAIL IF spacy_model IS MISSING ----------
+        if spacy_model is None:
+            self._logger.error(
+                "tm_preprocessor.spacy.spacy_model is missing or null in %s",
+                config_path.resolve(),
+            )
+            raise ValueError(
+                f"tm_preprocessor.spacy.spacy_model is missing in config file: {config_path.resolve()}"
+            )
+
+        # ---------- LOAD SPACY VIA spacy_download ----------
         try:
-            self.nlp = load_spacy(spacy_model, disable=list(spacy_disable))
+            self._logger.info(
+                "Loading spaCy model %r with disable=%r via spacy_download.load_spacy",
+                spacy_model,
+                spacy_disable,
+            )
+            self.nlp = load_spacy(spacy_model, disable=spacy_disable)
         except OSError as e:
+            self._logger.exception(
+                "Could not load spaCy model %r via spacy_download", spacy_model
+            )
             raise OSError(
-                f"spaCy model '{spacy_model}' is not installed. "
-                f"Install it with: python -m spacy download {spacy_model}"
+                f"spaCy model '{spacy_model}' is not installed or could not be "
+                f"loaded. Install it or ensure spacy_download can fetch it. "
+                f"Config: {config_path.resolve()}"
             ) from e
 
         self.valid_pos = set(valid_pos)
 
-        # stopwords
+        # ---------- STOPWORDS ----------
         self.stopwords = {w.lower() for w in self.nlp.Defaults.stop_words}
         self.stopwords |= self._load_stopwords(stopword_files or [])
 
-        # equivalents
+        # ---------- EQUIVALENTS ----------
         self.equivalents = self._load_equivalents(equivalents_files or {})
 
-        # vectorizers
+        # ---------- VECTORIZERS ----------
         self.min_df = min_df
         self.max_df = max_df
         self.max_features = max_features
         self._cv: Optional[CountVectorizer] = None
         self._tfidf: Optional[TfidfTransformer] = None
 
-        # embeddings
+        # ---------- EMBEDDINGS ----------
         self._st = None
         if embeddings_model:
             if SentenceTransformer is None:
                 raise RuntimeError(
-                    "sentence-transformers not installed, but embeddings_model was provided.")
+                    "sentence-transformers not installed, but embeddings_model was provided."
+                )
+            self._logger.info("Initializing SentenceTransformer(%r)", embeddings_model)
             self._st = SentenceTransformer(embeddings_model)
 
         self._logger.info("TMPreprocessor initialized successfully.")
-
     @staticmethod
     def _load_stopwords(files: Sequence[Union[str, Path]]) -> set[str]:
         out: set[str] = set()

@@ -19,7 +19,7 @@ tqdm==4.67.1
 typer==0.16.0
 uvicorn>=0.30
 python-multipart>=0.0.20
-spacy_download==1.1.0   
+spacy-download   
 spacy
 sentence-transformers
 contextualized_topic_models

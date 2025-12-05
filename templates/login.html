@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TOVA – Sign In</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(to right, #f8f9fa, #e9ecef);
+    }
+
+    .auth-section {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 15px;
+    }
+
+    .auth-card {
+      max-width: 420px;
+      width: 100%;
+      border-radius: 1.25rem;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      background-color: #ffffff;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background-color: #f1f3f5;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #495057;
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #0d6efd;
+    }
+
+    footer {
+      margin-top: auto;
+    }
+
+    @media (max-width: 576px) {
+      .auth-card {
+        border-radius: 1rem;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar (same pattern as other pages) -->
+  <nav class="navbar navbar-light bg-light shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">TOVA</a>
+      <div class="d-flex gap-2">
+        {% if user %}
+          <span class="navbar-text small text-muted d-none d-md-inline">
+            Hi, {{ user.name }}
+          </span>
+          <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
+            Logout
+          </a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">
+            Log in
+          </a>
+          <a href="{{ url_for('signup') }}" class="btn btn-primary btn-sm">
+            Sign up
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <section class="auth-section">
+    <div class="auth-card p-4 p-md-5">
+
+      <div class="mb-3 text-center text-md-start">
+        <span class="brand-badge">
+          <span class="brand-dot"></span>
+          TOVA
+        </span>
+      </div>
+
+      <h1 class="h3 fw-bold mb-2 text-center text-md-start">Sign in</h1>
+      <p class="text-muted mb-4 small text-center text-md-start">
+        Access your TOVA workspace to organize, visualize, and analyze your text.
+      </p>
+
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-3">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} py-2 mb-2" role="alert">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- Local email/password login -->
+      <form method="POST" action="{{ url_for('login') }}" id="loginForm" novalidate>
+        <div class="mb-3">
+          <label for="loginEmail" class="form-label">Email address</label>
+          <input
+            type="email"
+            class="form-control"
+            id="loginEmail"
+            name="email"
+            autocomplete="email"
+            required
+            placeholder="you@example.com"
+          >
+          <div class="invalid-feedback">
+            Please enter a valid email address.
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <label for="loginPassword" class="form-label d-flex justify-content-between align-items-center">
+            <span>Password</span>
+            <a href="/forgot-password" class="small text-decoration-none">Forgot password?</a>
+          </label>
+          <input
+            type="password"
+            class="form-control"
+            id="loginPassword"
+            name="password"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
+          >
+          <div class="invalid-feedback">
+            Please enter your password.
+          </div>
+        </div>
+
+        <!-- Optional: remember me (your backend doesn’t use it yet, so it’s purely UI) -->
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="rememberMe" name="remember">
+          <label class="form-check-label" for="rememberMe">Keep me signed in on this device</label>
+        </div>
+
+        <div class="d-grid mb-3">
+          <button type="submit" class="btn btn-primary btn-lg">
+            Sign In
+          </button>
+        </div>
+      </form>
+
+      <!-- Divider -->
+      <div class="text-center text-muted small my-3">
+        or
+      </div>
+
+      <!-- Okta SSO button -->
+      <div class="d-grid mb-3">
+        <a href="{{ url_for('login_okta') }}" class="btn btn-outline-dark">
+          Log in with Okta
+        </a>
+      </div>
+
+      <!-- Signup link -->
+      <p class="text-center small text-muted mb-0">
+        Don’t have an account?
+        <a href="{{ url_for('signup') }}" class="text-decoration-none">Create one</a>
+      </p>
+    </div>
+  </section>
+
+  <footer class="bg-dark text-white text-center py-2">
+    <p class="mb-0">&copy; 2025 TOVA. All Rights Reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (function () {
+      const form = document.getElementById('loginForm');
+      form.addEventListener('submit', function (event) {
+        if (!form.checkValidity()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+      }, false);
+    })();
+  </script>
+</body>
+</html>

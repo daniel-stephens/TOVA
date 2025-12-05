@@ -193,9 +193,9 @@ def analyze_corpus_draft_endpoint(
             DRAFTS_SAVE, corpus_id, n_clusters=n_clusters, documents=payload.get("documents", []))
 
         # Save training payload for reproducibility
-        #corpus_dir = DRAFTS_SAVE / corpus_id
-        #_save_training_payload(corpus_dir, payload or {
-        #                       "n_clusters": n_clusters})
+        corpus_dir = DRAFTS_SAVE / corpus_id
+        _save_training_payload(corpus_dir, payload or {
+                              "n_clusters": n_clusters})
 
         logger.info("Completed analysis for corpus %s", corpus_id)
         return result

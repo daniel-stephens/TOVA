@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}TOVA - Topic Visualization{% endblock %}</title>
+
+  <!-- CSRF token (optional; only if provided by backend) -->
+  {% if csrf_token is defined %}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% endif %}
+
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .hero {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: left;
+      padding: 30px;
+    }
+    .hero img {
+      max-width: 40%;
+      height: auto;
+      border-radius: 10px;
+    }
+    .hero-content {
+      max-width: 50%;
+      padding-left: 30px;
+    }
+    footer {
+      margin-top: auto;
+    }
+    @media (max-width: 576px) {
+      .hero h1 {
+        font-size: 1.75rem;
+      }
+      .hero p {
+        font-size: 1rem;
+      }
+    }
+
+    .navbar-nav .nav-link.active {
+      font-weight: 600;
+    }
+    .navbar-nav .nav-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">TOVA</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon" aria-hidden="true"></span>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
+        <!-- Left nav links -->
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'home' %}active{% endif %}"
+               href="{{ url_for('home') }}">
+              Upload Data
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'loadModel' %}active{% endif %}"
+               href="{{ url_for('loadModel') }}">
+              Initiate Training
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'trained_models' %}active{% endif %}"
+               href="{{ url_for('trained_models') }}">
+              Model Repository
+            </a>
+          </li>
+        </ul>
+
+        <!-- Right-side auth / actions -->
+        <div class="d-flex align-items-center gap-2">
+          {% if user %}
+            <span class="navbar-text small text-muted d-none d-md-inline">
+              Hi, {{ user.name }}
+            </span>
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#llmModal">
+              LLM Settings
+            </button>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
+              Logout
+            </a>
+          {% else %}
+            <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">
+              Login
+            </a>
+            <a href="{{ url_for('register') }}" class="btn btn-success btn-sm">
+              Sign up
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Optional global flash messages -->
+  <div class="container mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} py-2 mb-2" role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Main content -->
+  <main class="flex-grow-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- LLM Settings Modal: only for logged-in users -->
+  {% if user %}
+  <div class="modal fade" id="llmModal" tabindex="-1" aria-labelledby="llmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" id="llmForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="llmModalLabel">LLM Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Provider -->
+          <div class="mb-3">
+            <label for="llmProvider" class="form-label">Provider</label>
+            <select class="form-select" id="llmProvider" name="provider" required>
+              <!-- Filled dynamically from /llm/ui-config -->
+            </select>
+            <div class="form-text">
+              Choose where TOVA should send your text for analysis.
+            </div>
+          </div>
+
+          <!-- Model (optional per provider) -->
+          <div class="mb-3" id="modelGroup">
+            <label for="llmModel" class="form-label">Model</label>
+            <select class="form-select" id="llmModel" name="model">
+              <!-- Filled dynamically based on provider -->
+            </select>
+            <div id="modelHelp" class="form-text">
+              Select a model that fits your needs.
+            </div>
+          </div>
+
+          <!-- API Key (for providers that need it, e.g. GPT) -->
+          <div class="mb-3" id="apiKeyGroup" style="display:none;">
+            <label for="llmApiKey" class="form-label" id="apiKeyLabel">API key</label>
+            <input
+              type="password"
+              class="form-control"
+              id="llmApiKey"
+              name="api_key"
+              placeholder="sk-..."
+              autocomplete="off"
+            >
+            <div id="apiKeyHelp" class="form-text">
+              Your key is only used to call the provider on your behalf.
+            </div>
+          </div>
+
+          <!-- Host URL (for local providers like Ollama / llama.cpp) -->
+          <div class="mb-3" id="hostGroup" style="display:none;">
+            <label for="llmHost" class="form-label">Host URL</label>
+            <input
+              type="text"
+              class="form-control"
+              id="llmHost"
+              name="host"
+              placeholder="http://localhost:11434"
+            >
+            <div id="hostHelp" class="form-text">
+              URL of your local LLM server.
+            </div>
+          </div>
+
+          <div id="llm-feedback" class="small" style="display:none;" aria-live="polite"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Save LLM settings</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <footer class="bg-dark text-white text-center py-2">
+    <p class="mb-0">&copy; 2025 TOVA. Internal Research Tool.</p>
+  </footer>
+
+  <!-- JS: Bootstrap + Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  
+
+  {% if user %}
+  <script>
+    let providerConfig = {};  // filled from backend: /llm/ui-config
+
+    function renderProviderUI(provider, existing) {
+      const cfg = providerConfig[provider];
+      if (!cfg) return;
+
+      const modelGroup = document.getElementById("modelGroup");
+      const modelSelect = document.getElementById("llmModel");
+      const modelHelp = document.getElementById("modelHelp");
+
+      const apiKeyGroup = document.getElementById("apiKeyGroup");
+      const apiKeyLabel = document.getElementById("apiKeyLabel");
+      const apiKeyInput = document.getElementById("llmApiKey");
+      const apiKeyHelp = document.getElementById("apiKeyHelp");
+
+      const hostGroup = document.getElementById("hostGroup");
+      const hostInput = document.getElementById("llmHost");
+      const hostHelp = document.getElementById("hostHelp");
+
+      // --- Models (may be empty) ---
+      if (cfg.models && cfg.models.length) {
+        modelGroup.style.display = "";
+        modelSelect.innerHTML = "";
+
+        cfg.models.forEach(m => {
+          const value = typeof m === "string" ? m : m.id;
+          const label = typeof m === "string" ? m : (m.label || m.id);
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = label;
+          modelSelect.appendChild(opt);
+        });
+
+        const existingModel =
+          existing && existing.provider === provider ? existing.model : null;
+
+        if (existingModel) {
+          [...modelSelect.options].forEach(opt => {
+            if (opt.value === existingModel) opt.selected = true;
+          });
+        } else {
+          modelSelect.selectedIndex = 0;
+        }
+
+        if (provider === "gpt") {
+          modelHelp.textContent = "Choose an OpenAI GPT model.";
+        } else if (provider === "ollama") {
+          modelHelp.textContent = "Choose an Ollama model running locally.";
+        } else {
+          modelHelp.textContent = "Select a model if required.";
+        }
+      } else {
+        modelGroup.style.display = "none";
+        modelSelect.innerHTML = "";
+      }
+
+      // --- API key section ---
+      if (cfg.show_api_key) {
+        apiKeyGroup.style.display = "";
+        apiKeyLabel.textContent   = cfg.api_key_label || "API key";
+        apiKeyInput.placeholder   = cfg.api_key_placeholder || "sk-...";
+        apiKeyHelp.textContent    = cfg.api_key_help || "Your key is only used to call the provider on your behalf.";
+        apiKeyInput.value = "";  // never prefill secrets in UI
+      } else {
+        apiKeyGroup.style.display = "none";
+        apiKeyInput.value = "";
+      }
+
+      // --- Host URL section ---
+      if (cfg.show_host) {
+        hostGroup.style.display = "";
+        const existingHost =
+          existing && existing.provider === provider ? (existing.host || "") : "";
+        hostInput.value = existingHost || cfg.default_host || "";
+        hostHelp.textContent = cfg.host_help || "URL of your local LLM server.";
+      } else {
+        hostGroup.style.display = "none";
+        hostInput.value = "";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", async function () {
+      const providerSelect = document.getElementById("llmProvider");
+      const llmForm        = document.getElementById("llmForm");
+      const feedback       = document.getElementById("llm-feedback");
+      const modelSelect    = document.getElementById("llmModel");
+      const apiKeyInput    = document.getElementById("llmApiKey");
+      const hostInput      = document.getElementById("llmHost");
+
+      if (!providerSelect || !llmForm) return;
+
+      let existingConfig = null;
+
+      // 1) Load UI config (from YAML via backend)
+      try {
+        const res = await fetch("/llm/ui-config", { cache: "no-store" });
+        if (res.ok) {
+          providerConfig = await res.json();
+        } else {
+          console.warn("Could not load /llm/ui-config:", res.status);
+          providerConfig = {};
+        }
+      } catch (err) {
+        console.error("Error fetching LLM UI config:", err);
+        providerConfig = {};
+      }
+
+      // Populate provider select from providerConfig
+      providerSelect.innerHTML = "";
+      Object.entries(providerConfig).forEach(([key, cfg]) => {
+        const opt = document.createElement("option");
+        opt.value = key;                 // e.g. "gpt", "ollama", "llama_cpp"
+        opt.textContent = cfg.label || key;
+        providerSelect.appendChild(opt);
+      });
+
+      if (!Object.keys(providerConfig).length) {
+        // If config failed to load, disable the form gracefully
+        providerSelect.disabled = true;
+        llmForm.querySelectorAll("input, button, select").forEach(el => {
+          if (el.id !== "llmProvider") el.disabled = true;
+        });
+        if (feedback) {
+          feedback.textContent = "LLM configuration is not available. Please contact the administrator.";
+          feedback.classList.add("text-danger");
+          feedback.style.display = "block";
+        }
+        return;
+      }
+
+      // 2) Load existing per-user config if present
+      try {
+        const res = await fetch("/get-llm-config", { cache: "no-store" });
+        if (res.ok) {
+          existingConfig = await res.json();
+        }
+      } catch (err) {
+        console.warn("Could not load existing LLM config:", err);
+      }
+
+      // Initial provider: from existing config, or first in list
+      const initialProvider =
+        existingConfig?.provider && providerConfig[existingConfig.provider]
+          ? existingConfig.provider
+          : Object.keys(providerConfig)[0] || "";
+
+      if (initialProvider) {
+        providerSelect.value = initialProvider;
+        renderProviderUI(initialProvider, existingConfig);
+      }
+
+      providerSelect.addEventListener("change", () => {
+        renderProviderUI(providerSelect.value, existingConfig);
+      });
+
+      // 3) Save handler
+      llmForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        if (feedback) feedback.style.display = "none";
+
+        const provider = providerSelect.value;
+        const model    = modelSelect.value || "";
+        const api_key  = apiKeyInput.value || "";
+        const host     = hostInput.value || "";
+
+        // Optional CSRF header if available
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute("content") : "";
+
+        try {
+          const response = await fetch("/save-llm-config", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(csrfToken ? { "X-CSRFToken": csrfToken } : {})
+            },
+            body: JSON.stringify({ provider, model, api_key, host })
+          });
+
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || "Failed to save settings.");
+          }
+
+          if (feedback) {
+            feedback.textContent = "LLM settings saved successfully.";
+            feedback.classList.remove("text-danger");
+            feedback.classList.add("text-success");
+            feedback.style.display = "block";
+          }
+        } catch (err) {
+          console.error(err);
+          if (feedback) {
+            feedback.textContent = err.message || "An error occurred while saving settings.";
+            feedback.classList.remove("text-success");
+            feedback.classList.add("text-danger");
+            feedback.style.display = "block";
+          }
+        }
+      });
+    });
+  </script>
+  {% endif %}
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

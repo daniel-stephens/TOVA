@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}TOVA – Terms of Use{% endblock %}
+
+{% block content %}
+<main class="content-wrap py-4">
+  <div class="container">
+    <div class="content-card bg-white p-4 p-md-5 rounded-4 shadow-sm mx-auto" style="max-width: 900px;">
+      <h1 class="h3 mb-3">Terms of Use</h1>
+      <p class="text-muted small mb-4">
+        Last updated: {{ "2025-01-01" }}
+      </p>
+
+      <p class="mb-3">
+        These Terms of Use (“Terms”) govern your access to and use of TOVA
+        (“TOVA”, “we”, “us”, or “our”), including any related web interfaces,
+        desktop applications, and services that organize, visualize, and analyze text.
+        By creating an account, logging in, or using TOVA, you agree to these Terms.
+        If you do not agree, you must not use TOVA.
+      </p>
+
+      <h2 class="h5 mt-4">1. Eligibility and Accounts</h2>
+      <p>
+        You must be at least 18 years old, or the age of legal majority in your jurisdiction,
+        to use TOVA. You are responsible for:
+      </p>
+      <ul>
+        <li>Providing accurate and complete registration information.</li>
+        <li>Maintaining the confidentiality of your login credentials.</li>
+        <li>All activities that occur under your account.</li>
+      </ul>
+      <p>
+        You must notify us promptly if you suspect any unauthorized access to your account.
+      </p>
+
+      <h2 class="h5 mt-4">2. Use of TOVA</h2>
+      <p>
+        TOVA is designed to help you organize, visualize, and analyze text data.
+        You may upload or input documents, notes, or other content (“User Content”) and,
+        optionally, enable integrations with Large Language Models (“LLMs”) such as
+        OpenAI or local models (e.g., Ollama).
+      </p>
+      <p>You agree that you will not:</p>
+      <ul>
+        <li>Use TOVA for any unlawful, harmful, or abusive purpose.</li>
+        <li>Attempt to gain unauthorized access to any accounts, systems, or networks.</li>
+        <li>Interfere with or disrupt the operation of TOVA.</li>
+        <li>Reverse engineer, decompile, or attempt to extract source code from TOVA, except where permitted by law.</li>
+      </ul>
+
+      <h2 class="h5 mt-4">3. User Content</h2>
+      <p>
+        You retain ownership of the User Content you submit to TOVA. You are solely responsible
+        for ensuring that you have all necessary rights to upload and process that content.
+      </p>
+      <p>
+        By using TOVA, you grant us a limited, non-exclusive, worldwide license to process
+        your User Content solely for the purpose of providing and improving TOVA’s features,
+        including text organization, visualization, analysis, and related functionality.
+      </p>
+      <p>
+        You are responsible for ensuring that your User Content does not violate any applicable
+        law or third-party rights (including privacy, confidentiality, and intellectual property rights).
+      </p>
+
+      <h2 class="h5 mt-4">4. LLM Integrations and API Keys</h2>
+      <p>
+        TOVA may allow you to connect to third-party LLM providers such as OpenAI or local
+        runtimes such as Ollama. You may need to provide your own API keys or organization IDs
+        (“LLM Credentials”) to enable these features.
+      </p>
+      <ul>
+        <li>You are responsible for any costs or usage charges from third-party LLM providers.</li>
+        <li>You are responsible for complying with the terms and policies of each provider.</li>
+        <li>
+          Where configured, your User Content and prompts may be sent to those providers
+          for processing in order to provide summaries, suggestions, or other LLM-powered features.
+        </li>
+      </ul>
+      <p>
+        TOVA is not responsible for how third-party providers handle your data. Please review
+        their terms and privacy policies before enabling any integration.
+      </p>
+
+      <h2 class="h5 mt-4">5. Local Models (e.g., Ollama)</h2>
+      <p>
+        When using local models such as Ollama, processing may occur on your own device or infrastructure.
+        You are responsible for maintaining the security and configuration of your local environment.
+      </p>
+      <p>
+        TOVA does not control local runtimes and is not responsible for issues arising from their installation,
+        configuration, or operation.
+      </p>
+
+      <h2 class="h5 mt-4">6. Availability and Changes</h2>
+      <p>
+        We may add, remove, or modify features of TOVA at any time. We may also suspend or terminate
+        access if we reasonably believe you have violated these Terms or pose a risk to TOVA or other users.
+      </p>
+
+      <h2 class="h5 mt-4">7. No Professional Advice</h2>
+      <p>
+        Output generated or displayed in TOVA, including any LLM-based summaries or recommendations,
+        is provided for informational purposes only. It does not constitute legal, financial, medical,
+        or other professional advice. You should not rely on such output as a substitute for professional judgment.
+      </p>
+
+      <h2 class="h5 mt-4">8. Disclaimer of Warranties</h2>
+      <p>
+        TOVA is provided “as is” and “as available”. To the maximum extent permitted by law, we disclaim
+        all warranties, whether express, implied, or statutory, including any warranties of accuracy,
+        reliability, non-infringement, merchantability, and fitness for a particular purpose.
+      </p>
+      <p>
+        We do not guarantee that TOVA will be uninterrupted, error-free, secure, or free of harmful components.
+      </p>
+
+      <h2 class="h5 mt-4">9. Limitation of Liability</h2>
+      <p>
+        To the maximum extent permitted by law, in no event will TOVA, its developers, or contributors be liable
+        for any indirect, incidental, special, consequential, or punitive damages, or any loss of data, profits,
+        or revenue, arising out of or in connection with your use of TOVA.
+      </p>
+      <p>
+        Our total liability for any claim arising out of or related to these Terms or your use of TOVA will not
+        exceed the amount you paid (if any) for access to TOVA in the twelve (12) months preceding the event
+        giving rise to the claim.
+      </p>
+
+      <h2 class="h5 mt-4">10. Indemnification</h2>
+      <p>
+        You agree to indemnify and hold harmless TOVA, its developers, and contributors from and against
+        any claims, liabilities, damages, losses, and expenses (including reasonable attorneys’ fees)
+        arising out of or in connection with:
+      </p>
+      <ul>
+        <li>Your use of TOVA.</li>
+        <li>Your User Content.</li>
+        <li>Your violation of these Terms or any applicable law.</li>
+      </ul>
+
+      <h2 class="h5 mt-4">11. Termination</h2>
+      <p>
+        You may stop using TOVA at any time. We may suspend or terminate your access to TOVA at any time
+        if we reasonably believe you have violated these Terms or if we decide to discontinue the service.
+      </p>
+
+      <h2 class="h5 mt-4">12. Changes to These Terms</h2>
+      <p>
+        We may update these Terms from time to time. If we make material changes, we will provide notice,
+        for example by updating the “Last updated” date or via in-app notification. Your continued use of TOVA
+        after the changes take effect constitutes your acceptance of the revised Terms.
+      </p>
+
+      <h2 class="h5 mt-4">13. Contact</h2>
+      <p>
+        If you have any questions about these Terms, you can contact us at:
+        <a href="mailto:support@example.com">support@example.com</a>.
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -1,814 +1,785 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Train a Topic Model - TOVA</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <style>
-      /* Larger, clearer form controls (applies to radios too) */
-      .form-check-input {
-        width: 1.2em;
-        height: 1.2em;
-        border: 2px solid #6c757d;
-        background-color: #f8f9fa;
-        transition: all 0.2s ease-in-out;
-      }
-      .form-check-input:hover {
-        border-color: #0d6efd;
-        background-color: #e9ecef;
-        cursor: pointer;
-      }
-      .form-check-input:checked {
-        background-color: #076bce;
-        border-color: #215dc5;
-      }
-      .form-check-input:focus {
-        box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
-      }
-    </style>
-  </head>
+{% extends "base.html" %}
 
-  <body class="bg-light">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-      <div class="container">
-        <a class="navbar-brand fw-bold" href="/">TOVA</a>
+{% block title %}Train a Topic Model – TOVA{% endblock %}
 
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarContent"
-          aria-controls="navbarContent"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
+{% block extra_head %}
+<style>
+  /* Larger, clearer form controls (applies to radios too) */
+  .form-check-input {
+    width: 1.2em;
+    height: 1.2em;
+    border: 2px solid #6c757d;
+    background-color: #f8f9fa;
+    transition: all 0.2s ease-in-out;
+  }
+  .form-check-input:hover {
+    border-color: #0d6efd;
+    background-color: #e9ecef;
+    cursor: pointer;
+  }
+  .form-check-input:checked {
+    background-color: #076bce;
+    border-color: #215dc5;
+  }
+  .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+  }
+</style>
+{% endblock %}
 
-        <div
-          class="collapse navbar-collapse justify-content-between"
-          id="navbarContent"
-        >
-          <ul class="navbar-nav">
-            <li class="nav-item">
-              <a
-                class="nav-link{% if request.path == '/' %} active{% endif %}"
-                href="/"
-                >Home</a
-              >
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link{% if 'load' in request.path %} active{% endif %}"
-                href="/model"
-                >Train Models</a
-              >
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link{% if 'train' in request.path %} active{% endif %}"
-                href="/trained-models"
-                >View Models</a
-              >
-            </li>
-          </ul>
-
-          <li class="nav-item">
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-10 col-lg-9">
+      <div class="card shadow">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h2 class="card-title mb-1">Train a Topic Model</h2>
+              <p class="text-muted mb-0">
+                Pick a corpus, choose an algorithm, then configure and start training.
+              </p>
+            </div>
             <button
-              class="btn btn-sm btn-outline-secondary ms-3"
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
               onclick="history.back()"
             >
               Back
             </button>
-          </li>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Main -->
-    <div class="container py-5">
-      <div class="row justify-content-center">
-        <div class="col-md-10 col-lg-9">
-          <div class="card shadow">
-            <div class="card-body">
-              <h2 class="card-title text-center mb-2">Train a Topic Model</h2>
-              <p class="text-muted text-center mb-4">
-                Pick a corpus, choose an algorithm, then configure and start training.
-              </p>
-
-              <form id="modelSelectionForm">
-                <ol class="list-unstyled mb-0">
-                  <!-- Step 1 -->
-                  <li class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <h6 class="fw-bold mb-0">1) Choose Training Data</h6>
-                      <a href="/load-corpus-page" class="btn btn-sm btn-outline-secondary">
-                        Manage corpora
-                      </a>
-                    </div>
-
-                    <div class="table-responsive mt-2">
-                      <table class="table table-bordered table-hover table-sm mb-0">
-                        <thead class="table-light">
-                          <tr>
-                            <th scope="col" style="width: 80px">Select</th>
-                            <th scope="col">Corpus Name</th>
-                          </tr>
-                        </thead>
-                        <tbody id="corpusCheckboxTable">
-                          <tr>
-                            <td colspan="2"><em>Loading...</em></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div id="selectionSummary" class="small text-muted mt-2" style="min-height:1.5rem;"></div>
-                  </li>
-
-                  <!-- Step 2 -->
-                  <li class="mb-4">
-                    <h6 class="fw-bold mb-2">2) Choose Algorithm</h6>
-                    <small class="text-muted d-block mb-2"
-                      >Pick the topic modeling algorithm to use.</small
-                    >
-                    <select class="form-select" id="model_type" name="model_type">
-                      <option selected disabled>Loading models...</option>
-                    </select>
-                  </li>
-
-                  <!-- Step 3 -->
-                  <li class="mb-0">
-                    <h6 class="fw-bold mb-2">3) Configure &amp; Train</h6>
-                    <small class="text-muted d-block mb-2"
-                      >Click "Train Model" to review settings (name, number of topics, preprocessing, and advanced parameters) before starting training.</small
-                    >
-                    <div class="d-flex justify-content-center gap-2">
-                      <button
-                        id="trainBtn"
-                        type="submit"
-                        disabled
-                        class="btn btn-primary"
-                      >
-                        Train Model
-                      </button>
-                    </div>
-                  </li>
-                </ol>
-              </form>
-            </div>
-            <!-- card-body -->
           </div>
+
+          <hr class="my-3" />
+
+          <form id="modelSelectionForm">
+            <ol class="list-unstyled mb-0">
+              <!-- Step 1 -->
+              <li class="mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="fw-bold mb-0">1) Choose Training Data</h6>
+                  <a href="{{ url_for('load_corpus_page') }}"
+                     class="btn btn-sm btn-outline-secondary">
+                    Manage corpora
+                  </a>
+                </div>
+
+                <div class="table-responsive mt-2">
+                  <table class="table table-bordered table-hover table-sm mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col" style="width: 80px">Select</th>
+                        <th scope="col">Corpus Name</th>
+                      </tr>
+                    </thead>
+                    <tbody id="corpusCheckboxTable">
+                      <tr>
+                        <td colspan="2"><em>Loading...</em></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div id="selectionSummary"
+                     class="small text-muted mt-2"
+                     style="min-height:1.5rem;"></div>
+              </li>
+
+              <!-- Step 2 -->
+              <li class="mb-4">
+                <h6 class="fw-bold mb-2">2) Choose Algorithm</h6>
+                <small class="text-muted d-block mb-2">
+                  Pick the topic modeling algorithm to use.
+                </small>
+                <select class="form-select" id="model_type" name="model_type">
+                  <option selected disabled>Loading models...</option>
+                </select>
+              </li>
+
+              <!-- Step 3 -->
+              <li class="mb-0">
+                <h6 class="fw-bold mb-2">3) Configure &amp; Train</h6>
+                <small class="text-muted d-block mb-2">
+                  Click <strong>“Train Model”</strong> to review settings
+                  (name, number of topics, preprocessing, and advanced parameters)
+                  before starting training.
+                </small>
+                <div class="d-flex justify-content-center gap-2">
+                  <button
+                    id="trainBtn"
+                    type="submit"
+                    disabled
+                    class="btn btn-primary"
+                  >
+                    Train Model
+                  </button>
+                </div>
+              </li>
+            </ol>
+          </form>
         </div>
+        <!-- card-body -->
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Configure & Train Modal -->
-    <div
-      class="modal fade"
-      id="modelNameModal"
-      tabindex="-1"
-      aria-labelledby="modelNameModalLabel"
-      aria-hidden="true"
-    >
-      <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content shadow-lg border-0">
-          <div class="modal-header">
-            <h5 class="modal-title" id="modelNameModalLabel">
-              Configure &amp; Train Model
-            </h5>
-            <button
-              type="button"
-              class="btn-close btn-close-white"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
-          </div>
+<!-- Configure & Train Modal -->
+<div
+  class="modal fade"
+  id="modelNameModal"
+  tabindex="-1"
+  aria-labelledby="modelNameModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content shadow-lg border-0">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modelNameModalLabel">
+          Configure &amp; Train Model
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
 
-          <div class="modal-body">
-            <!-- Basic Settings -->
-            <h6 class="fw-bold mb-3">Basic Settings</h6>
+      <div class="modal-body">
+        <!-- Basic Settings -->
+        <h6 class="fw-bold mb-3">Basic Settings</h6>
 
-            <div class="row g-3">
-              <div class="col-md-6 mb-3">
-                <label for="modelNameInput" class="form-label"
-                  >Model Name</label
-                >
-                <input
-                  type="text"
-                  id="modelNameInput"
-                  class="form-control"
-                  placeholder="Enter model name..."
-                  required
-                />
-                <div
-                  id="nameWarning"
-                  class="form-text text-danger"
-                  style="display: none"
-                >
-                  This model name already exists. Please choose a different
-                  name.
-                </div>
-              </div>
-
-              <!-- Topics + Preprocess toggle -->
-              <div class="col-md-6 mb-3" id="topicCountGroup">
-                <label for="numTopics" class="form-label">Number of Topics</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="numTopics"
-                  name="num_topics"
-                  value="10"
-                  min="2"
-                  max="100"
-                  required
-                />
-
-                <div class="form-check mt-2">
-                  <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="preprocessText"
-                    name="preprocess_text"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="right"
-                    title="If the data of your corpus have not been preprocessed, select this so lemmatization is done."
-                  />
-                  <label class="form-check-label" for="preprocessText">
-                    Preprocess text
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Advanced Settings Toggle -->
-            <div class="mb-3 text-center">
-              <button
-                class="btn btn-outline-primary btn-sm"
-                type="button"
-                id="toggleAdvanced"
-              >
-                Show Advanced Settings
-              </button>
-            </div>
-
-            <!-- Advanced Settings Section -->
-            <div id="advancedSettings" style="display: none">
-              <div class="border rounded p-3 bg-light">
-                <h6 class="fw-bold mb-3">Advanced Settings</h6>
-                <div id="modelParamsArea" class="row g-3"></div>
-              </div>
-            </div>
-          </div>
-          <!-- modal-body -->
-
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
+        <div class="row g-3">
+          <div class="col-md-6 mb-3">
+            <label for="modelNameInput" class="form-label">Model Name</label>
+            <input
+              type="text"
+              id="modelNameInput"
+              class="form-control"
+              placeholder="Enter model name..."
+              required
+            />
+            <div
+              id="nameWarning"
+              class="form-text text-danger"
+              style="display: none"
             >
-              Cancel
-            </button>
-            <button type="button" class="btn btn-success" id="confirmModelName">
-              Continue
-            </button>
+              This model name already exists. Please choose a different name.
+            </div>
+          </div>
+
+          <!-- Topics + Preprocess toggle -->
+          <div class="col-md-6 mb-3" id="topicCountGroup">
+            <label for="numTopics" class="form-label">Number of Topics</label>
+            <input
+              type="number"
+              class="form-control"
+              id="numTopics"
+              name="num_topics"
+              value="10"
+              min="2"
+              max="100"
+              required
+            />
+
+            <div class="form-check mt-2">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="preprocessText"
+                name="preprocess_text"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                title="If the data of your corpus have not been preprocessed, select this so lemmatization is done."
+              />
+              <label class="form-check-label" for="preprocessText">
+                Preprocess text
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Settings Toggle -->
+        <div class="mb-3 text-center">
+          <button
+            class="btn btn-outline-primary btn-sm"
+            type="button"
+            id="toggleAdvanced"
+          >
+            Show Advanced Settings
+          </button>
+        </div>
+
+        <!-- Advanced Settings Section -->
+        <div id="advancedSettings" style="display: none">
+          <div class="border rounded p-3 bg-light">
+            <h6 class="fw-bold mb-3">Advanced Settings</h6>
+            <div id="modelParamsArea" class="row g-3"></div>
           </div>
         </div>
       </div>
-    </div>
+      <!-- modal-body -->
 
-    <!-- Fullscreen Loader -->
-    <div
-      id="fullscreenLoader"
-      style="
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(255, 255, 255, 0.7);
-        z-index: 9999;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <div
-        class="spinner-border text-primary"
-        style="width: 3rem; height: 3rem"
-        role="status"
-      >
-        <span class="visually-hidden">Loading...</span>
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-bs-dismiss="modal"
+        >
+          Cancel
+        </button>
+        <button type="button" class="btn btn-success" id="confirmModelName">
+          Continue
+        </button>
       </div>
     </div>
+  </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<!-- Fullscreen Loader (if you want to hook it up later) -->
+<div
+  id="fullscreenLoader"
+  style="
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.7);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  "
+>
+  <div
+    class="spinner-border text-primary"
+    style="width: 3rem; height: 3rem"
+    role="status"
+  >
+    <span class="visually-hidden">Loading...</span>
+  </div>
+</div>
+{% endblock %}
 
-    <script>
-      "use strict";
+{% block extra_scripts %}
+{# js-yaml is only used on this page #}
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
 
-      (() => {
-        const state = {
-          modelConfig: {},
-          selectedDataset: null,
-          existingModelNames: [],
-          namesLoadedAt: 0,
-        };
+<script>
+"use strict";
 
-        const dom = {};
-        const $ = (s, r = document) => r.querySelector(s);
-        const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+(() => {
+  // Use url_for so the correct route is always used
+  const TRAINING_START_URL = "{{ url_for('training_start') }}";
 
-        const escapeHtml = (str) =>
-          String(str ?? "").replace(
-            /[&<>\"']/g,
-            (m) =>
-              ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;",
-              }[m])
-          );
-        const safeJson = async (res) => {
-          const ct = res.headers.get("content-type") || "";
-          return ct.includes("application/json")
-            ? res.json().catch(() => null)
-            : null;
-        };
-        const fetchJSON = async (url, opts = {}) => {
-          const res = await fetch(url, opts);
-          const body = await safeJson(res);
-          if (!res.ok) {
-            const msg =
-              (body && (body.error || body.detail || body.message)) ||
-              `${res.status} ${res.statusText}`;
-            throw new Error(msg);
-          }
-          return body;
-        };
+  const state = {
+    modelConfig: {},
+    selectedDataset: null,
+    existingModelNames: [],
+    namesLoadedAt: 0,
+  };
 
-        const ensureModelConfigLoaded = async () => {
-          if (Object.keys(state.modelConfig || {}).length) return;
-          await loadModelConfig();
-        };
+  const dom = {};
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
-        // --- Flask endpoint normalizer for /get-models-names ---
-        function normalizeNames(payload) {
-          if (!payload) return [];
-          const raw = Array.isArray(payload)
-            ? payload
-            : payload.models ||
-              payload.items ||
-              payload.data ||
-              payload.results ||
-              [];
-          const out = new Set();
-          raw.forEach((item) => {
-            let v = item;
-            if (v && typeof v === "object") {
-              v =
-                v.name ??
-                v.model_name ??
-                v.save_name ??
-                v.title ??
-                v.label ??
-                v.id;
-            }
-            if (typeof v === "string") {
-              const s = v.trim();
-              if (s) out.add(s);
-            }
-          });
-          return Array.from(out);
+  const escapeHtml = (str) =>
+    String(str ?? "").replace(
+      /[&<>\"']/g,
+      (m) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        }[m])
+    );
+
+  const safeJson = async (res) => {
+    const ct = res.headers.get("content-type") || "";
+    return ct.includes("application/json")
+      ? res.json().catch(() => null)
+      : null;
+  };
+
+  const fetchJSON = async (url, opts = {}) => {
+    const res = await fetch(url, opts);
+    const body = await safeJson(res);
+    if (!res.ok) {
+      const msg =
+        (body && (body.error || body.detail || body.message)) ||
+        `${res.status} ${res.statusText}`;
+      throw new Error(msg);
+    }
+    return body;
+  };
+
+  const ensureModelConfigLoaded = async () => {
+    if (Object.keys(state.modelConfig || {}).length) return;
+    await loadModelConfig();
+  };
+
+  // --- /get-models-names normalization ---
+  function normalizeNames(payload) {
+    if (!payload) return [];
+    const raw = Array.isArray(payload)
+      ? payload
+      : payload.models ||
+        payload.items ||
+        payload.data ||
+        payload.results ||
+        [];
+    const out = new Set();
+    raw.forEach((item) => {
+      let v = item;
+      if (v && typeof v === "object") {
+        v =
+          v.name ??
+          v.model_name ??
+          v.save_name ??
+          v.title ??
+          v.label ??
+          v.id;
+      }
+      if (typeof v === "string") {
+        const s = v.trim();
+        if (s) out.add(s);
+      }
+    });
+    return Array.from(out);
+  }
+
+  async function refreshNames() {
+    try {
+      const data = await fetchJSON("{{ url_for('get_model_names') }}", {
+        cache: "no-store",
+      });
+      state.existingModelNames = normalizeNames(data);
+    } catch (e) {
+      console.error("Failed to load existing models:", e);
+      state.existingModelNames = [];
+    } finally {
+      state.namesLoadedAt = Date.now();
+    }
+  }
+
+  function isDuplicateName(name) {
+    const key = String(name || "").trim().toLowerCase();
+    return (
+      !!key &&
+      state.existingModelNames.some(
+        (n) => String(n).toLowerCase() === key
+      )
+    );
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    Object.assign(dom, {
+      modelSelect: $("#model_type"),
+      topicGroup: $("#topicCountGroup"),
+      formEl: $("#modelSelectionForm"),
+      modalEl: $("#modelNameModal"),
+      confirmBtn: $("#confirmModelName"),
+      trainBtn: $("#trainBtn"),
+      paramsArea: $("#modelParamsArea"),
+      corpusTableBody: $("#corpusCheckboxTable"),
+      toggleAdvancedBtn: $("#toggleAdvanced"),
+      advancedSection: $("#advancedSettings"),
+      modelNameInput: $("#modelNameInput"),
+      nameWarning: $("#nameWarning"),
+      numTopicsInput: $("#numTopics"),
+      preprocessCheckbox: $("#preprocessText"),
+      selectionSummary: $("#selectionSummary"),
+    });
+
+    // Tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].forEach((el) => new bootstrap.Tooltip(el));
+
+    await loadModelOptions();
+    await loadCorpusRadioTable();
+    await refreshNames();
+    loadModelConfig().catch(() => {});
+    initAdvancedToggle();
+
+    const syncTopicsVisibility = () => {
+      const isExternal = dom.modelSelect?.value === "External";
+      dom.topicGroup?.classList.toggle("d-none", !!isExternal);
+    };
+    dom.modelSelect?.addEventListener("change", syncTopicsVisibility);
+    syncTopicsVisibility();
+
+    const modal = dom.modalEl ? new bootstrap.Modal(dom.modalEl) : null;
+
+    // Form submit -> open modal
+    dom.formEl?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const chosen = $$(".corpus-radio:checked");
+      if (chosen.length !== 1) {
+        dom.trainBtn?.classList.add("disabled");
+        setTimeout(() => dom.trainBtn?.classList.remove("disabled"), 400);
+        return;
+      }
+      await ensureModelConfigLoaded();
+      renderParamsIntoModal(dom.modelSelect?.value || "");
+
+      const rb = chosen[0];
+      state.selectedDataset = {
+        id: rb.dataset.id,
+        name: rb.dataset.name,
+        isDraft: rb.dataset.draft === "1",
+      };
+
+      modal?.show();
+    });
+
+    dom.modalEl?.addEventListener("shown.bs.modal", () => {
+      resetNameValidation();
+      dom.modelNameInput?.focus();
+    });
+
+    dom.confirmBtn?.addEventListener("click", onConfirmCreate);
+
+    // Radio selection -> enable Train button + summary
+    document.addEventListener("change", (e) => {
+      if (!(e.target instanceof HTMLInputElement)) return;
+      if (!e.target.classList.contains("corpus-radio")) return;
+      updateTrainEnabled();
+      updateSelectionSummary();
+    });
+    updateTrainEnabled();
+    updateSelectionSummary();
+
+    wireNameValidation();
+  });
+
+  // ===== Name validation helpers =====
+  function resetNameValidation() {
+    if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn) return;
+    dom.nameWarning.style.display = "none";
+    dom.modelNameInput.classList.remove("is-invalid");
+    dom.confirmBtn.disabled = true;
+  }
+
+  function setValidity(ok) {
+    if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn) return;
+    const hasValue = !!dom.modelNameInput.value.trim();
+    dom.nameWarning.style.display = !ok && hasValue ? "block" : "none";
+    dom.modelNameInput.classList.toggle("is-invalid", !ok && hasValue);
+    dom.confirmBtn.disabled = !ok;
+  }
+
+  function wireNameValidation() {
+    if (!dom.modelNameInput) return;
+    let t = null;
+    dom.modelNameInput.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const value = dom.modelNameInput.value.trim();
+        if (!value) {
+          resetNameValidation();
+          return;
         }
-        async function refreshNames() {
-          try {
-            const data = await fetchJSON("/get-models-names", {
-              cache: "no-store",
-            });
-            state.existingModelNames = normalizeNames(data);
-          } catch (e) {
-            console.error("Failed to load existing models:", e);
-            state.existingModelNames = [];
-          } finally {
-            state.namesLoadedAt = Date.now();
-          }
-        }
-        function isDuplicateName(name) {
-          const key = String(name || "")
-            .trim()
-            .toLowerCase();
-          return (
-            !!key &&
-            state.existingModelNames.some(
-              (n) => String(n).toLowerCase() === key
-            )
-          );
-        }
+        setValidity(!isDuplicateName(value));
+      }, 120);
+    });
+  }
 
-        document.addEventListener("DOMContentLoaded", async () => {
-          Object.assign(dom, {
-            modelSelect: $("#model_type"),
-            topicGroup: $("#topicCountGroup"),
-            formEl: $("#modelSelectionForm"),
-            modalEl: $("#modelNameModal"),
-            confirmBtn: $("#confirmModelName"),
-            trainBtn: $("#trainBtn"),
-            paramsArea: $("#modelParamsArea"),
-            corpusTableBody: $("#corpusCheckboxTable"),
-            toggleAdvancedBtn: $("#toggleAdvanced"),
-            advancedSection: $("#advancedSettings"),
-            modelNameInput: $("#modelNameInput"),
-            nameWarning: $("#nameWarning"),
-            numTopicsInput: $("#numTopics"),
-            preprocessCheckbox: $("#preprocessText"),
-            selectionSummary: $("#selectionSummary"),
-          });
+  // ===== Confirm handler (includes /training/start) =====
+  async function onConfirmCreate() {
+    const model     = dom.modelSelect?.value || "";
+    const modelName = dom.modelNameInput?.value?.trim();
+    const isExternal = model === "External";
 
-          // Initialize tooltips (for preprocess toggle)
-          const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-          [...tooltipTriggerList].forEach((el) => new bootstrap.Tooltip(el));
+    if (!modelName) {
+      alert("Please provide a model name.");
+      return;
+    }
 
-          await loadModelOptions();
-          await loadCorpusRadioTable();
-          await refreshNames(); // load names early
-          loadModelConfig().catch(() => {});
-          initAdvancedToggle();
+    // Refresh names if older than 60s
+    if (Date.now() - state.namesLoadedAt > 60_000) {
+      await refreshNames();
+    }
+    if (isDuplicateName(modelName)) {
+      setValidity(false);
+      alert("This model name already exists. Please choose a different name.");
+      return;
+    }
+    if (!state.selectedDataset) {
+      alert("Please select a dataset.");
+      return;
+    }
 
-          const syncTopicsVisibility = () => {
-            const isExternal = dom.modelSelect?.value === "External";
-            dom.topicGroup?.classList.toggle("d-none", !!isExternal);
-          };
-          dom.modelSelect?.addEventListener("change", syncTopicsVisibility);
-          syncTopicsVisibility();
+    const training_params = {};
+    $$("#modelParamsArea input").forEach((input) => {
+      const key = input.id;
+      const val = input.value;
+      training_params[key] = input.type === "number" ? Number(val) : val;
+    });
+    if (!isExternal) {
+      const n = Number(dom.numTopicsInput?.value || 10);
+      training_params.num_topics = Number.isFinite(n) && n > 0 ? n : 10;
+    }
+    training_params.preprocess_text = !!dom.preprocessCheckbox?.checked;
 
-          const modal = dom.modalEl ? new bootstrap.Modal(dom.modalEl) : null;
+    const payload = {
+      model,
+      model_name: modelName,
+      training_params,
+      datasets: state.selectedDataset ? [state.selectedDataset] : [],
+    };
 
-          // Submit -> open modal if exactly one corpus is selected
-          dom.formEl?.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const chosen = $$(".corpus-radio:checked");
-            if (chosen.length !== 1) {
-              dom.trainBtn?.classList.add("disabled");
-              setTimeout(() => dom.trainBtn?.classList.remove("disabled"), 400);
-              return;
-            }
-            await ensureModelConfigLoaded();
-            renderParamsIntoModal(dom.modelSelect?.value || "");
+    const corpusId = state.selectedDataset.id;
 
-            const rb = chosen[0];
-            state.selectedDataset = {
-              id: rb.dataset.id,
-              name: rb.dataset.name,
-              isDraft: rb.dataset.draft === "1",
-            };
+    try {
+      if (dom.confirmBtn) dom.confirmBtn.disabled = true;
 
-            modal?.show();
-          });
+      const nClusters = Number(payload.training_params?.num_topics);
 
-          dom.modalEl?.addEventListener("shown.bs.modal", () => {
-            resetNameValidation(); // no warning on open/empty
-            dom.modelNameInput?.focus();
-          });
+      // 1. TF-IDF clustering for visualization
+      console.log("[training] Requesting TF-IDF for corpus:", corpusId);
+      await requestTfidfForCorpusID({
+        corpusId,
+        nClusters:
+          Number.isFinite(nClusters) && nClusters > 0 ? nClusters : 15,
+      });
 
-          dom.confirmBtn?.addEventListener("click", onConfirmCreate);
+      // 2. Start training
+      console.log("[training] Calling", TRAINING_START_URL, "with payload:", {
+        corpus_id: corpusId,
+        model: payload.model,
+        model_name: payload.model_name,
+        training_params: payload.training_params,
+      });
 
-          // Radio selection -> enable button + summary
-          document.addEventListener("change", (e) => {
-            if (!(e.target instanceof HTMLInputElement)) return;
-            if (!e.target.classList.contains("corpus-radio")) return;
-            updateTrainEnabled();
-            updateSelectionSummary();
-          });
-          updateTrainEnabled();
-          updateSelectionSummary();
+      const startResp = await fetch(TRAINING_START_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          corpus_id: corpusId,
+          model: payload.model,
+          model_name: payload.model_name,
+          training_params: payload.training_params,
+        }),
+      });
 
-          wireNameValidation();
-        });
+      if (!startResp.ok) {
+        const errText = await startResp.text().catch(() => "");
+        console.error("[training] /training/start error response:", errText);
+        throw new Error(errText || "Failed to start training");
+      }
 
-        // ===== Name validation helpers =====
-        function resetNameValidation() {
-          if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn)
-            return;
-          dom.nameWarning.style.display = "none";
-          dom.modelNameInput.classList.remove("is-invalid");
-          dom.confirmBtn.disabled = true;
-        }
-        function setValidity(ok) {
-          if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn)
-            return;
-          const hasValue = !!dom.modelNameInput.value.trim();
-          dom.nameWarning.style.display = !ok && hasValue ? "block" : "none";
-          dom.modelNameInput.classList.toggle("is-invalid", !ok && hasValue);
-          dom.confirmBtn.disabled = !ok;
-        }
-        function wireNameValidation() {
-          if (!dom.modelNameInput) return;
-          let t = null;
-          dom.modelNameInput.addEventListener("input", () => {
-            clearTimeout(t);
-            t = setTimeout(() => {
-              const value = dom.modelNameInput.value.trim();
-              if (!value) {
-                resetNameValidation();
-                return;
-              }
-              setValidity(!isDuplicateName(value));
-            }, 120);
-          });
-        }
+      const { job_id, status_url, corpus_id, model_id } =
+        await startResp.json();
 
-        // ===== Confirm handler (with freshness check) =====
-        async function onConfirmCreate() {
-          const model = dom.modelSelect?.value || "";
-          const modelName = dom.modelNameInput?.value?.trim();
-          const isExternal = model === "External";
+      console.log("[training] Training started:", {
+        job_id,
+        status_url,
+        corpus_id,
+        model_id,
+      });
 
-          if (!modelName) {
-            alert("Please provide a model name.");
-            return;
-          }
+      const u = new URL("{{ url_for('training_page_get') }}", location.origin);
+      u.searchParams.set("corpus_id", corpus_id);
+      u.searchParams.set("model_id", model_id);
+      u.searchParams.set("job_id", job_id);
+      window.location.href = u.toString();
+    } catch (err) {
+      console.error("Training request failed:", err);
+      alert(err?.message || "Failed to start training.");
+    } finally {
+      if (dom.confirmBtn) dom.confirmBtn.disabled = false;
+    }
+  }
 
-          // Refresh names if older than 60s to avoid stale dup list
-          if (Date.now() - state.namesLoadedAt > 60_000) {
-            await refreshNames();
-          }
-          if (isDuplicateName(modelName)) {
-            setValidity(false);
-            alert(
-              "This model name already exists. Please choose a different name."
-            );
-            return;
-          }
-          if (!state.selectedDataset) {
-            alert("Please select a dataset.");
-            return;
-          }
+  // ===== UI helpers =====
+  function updateTrainEnabled() {
+    const anyChecked = $$(".corpus-radio:checked").length === 1;
+    if (dom.trainBtn) dom.trainBtn.disabled = !anyChecked;
+  }
 
-          const training_params = {};
-          $$("#modelParamsArea input").forEach((input) => {
-            const key = input.id;
-            const val = input.value;
-            training_params[key] = input.type === "number" ? Number(val) : val;
-          });
-          if (!isExternal) {
-            const n = Number(dom.numTopicsInput?.value || 10);
-            training_params.num_topics = Number.isFinite(n) && n > 0 ? n : 10;
-          }
+  function updateSelectionSummary() {
+    const rb = document.querySelector(".corpus-radio:checked");
+    if (!dom.selectionSummary) return;
+    if (!rb) {
+      dom.selectionSummary.textContent = "";
+      return;
+    }
+    const name   = rb?.dataset.name || "Unknown corpus";
+    const isDraft = rb?.dataset.draft === "1";
+    dom.selectionSummary.innerHTML =
+      `Selected: <strong>${name}</strong>` +
+      (isDraft
+        ? ' <span class="badge rounded-pill text-bg-warning ms-1">Draft</span>'
+        : "");
+  }
 
-          // Include preprocess_text
-          training_params.preprocess_text = !!dom.preprocessCheckbox?.checked;
+  // ===== Data loaders =====
+  async function loadModelOptions() {
+    const select = dom.modelSelect;
+    if (!select) return;
+    try {
+      const models = await fetchJSON("{{ url_for('get_model_registry') }}");
+      select.innerHTML = "";
+      for (const [key] of Object.entries(models || {})) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = key;
+        select.appendChild(opt);
+      }
+      if (!select.options.length) {
+        select.innerHTML = "<option disabled>No models available</option>";
+      }
+    } catch (err) {
+      console.error("Error loading model options:", err);
+      select.innerHTML = "<option disabled>Error loading models</option>";
+    }
+  }
 
-          const payload = {
-            model,
-            model_name: modelName,
-            training_params,
-            datasets: state.selectedDataset ? [state.selectedDataset] : [],
-          };
+  async function fetchAllCorpora() {
+    const res = await fetch("{{ url_for('getAllCorpora') }}", {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`Failed to load corpora: ${res.status}`);
+    const items = await res.json();
+    return Array.isArray(items) ? items : [];
+  }
 
-          const corpusId = state.selectedDataset.id;
+  async function loadCorpusRadioTable() {
+    const tbody = dom.corpusTableBody;
+    const trainBtn = dom.trainBtn;
+    if (!tbody) return;
 
-          try {
-            if (dom.confirmBtn) dom.confirmBtn.disabled = true;
+    tbody.innerHTML =
+      '<tr><td colspan="2"><em>Loading...</em></td></tr>';
 
-            const nClusters = Number(payload.training_params?.num_topics);
-            await requestTfidfForCorpusID({
-              corpusId,
-              nClusters:
-                Number.isFinite(nClusters) && nClusters > 0 ? nClusters : 15,
-            });
+    try {
+      const items = await fetchAllCorpora();
+      if (!items.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="2"><em>No corpora found.</em></td></tr>';
+        if (trainBtn) trainBtn.disabled = true;
+        return;
+      }
 
-            // start training
-            const startResp = await fetch("/training/start", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                corpus_id: corpusId,
-                model: payload.model,
-                model_name: payload.model_name,
-                training_params: payload.training_params,
-              }),
-            });
+      const rows = items.map((it, idx) => {
+        const safeName = escapeHtml(it.name || "");
+        const badge = it.is_draft
+          ? '<span class="badge rounded-pill text-bg-warning ms-2">Draft</span>'
+          : "";
+        const id = `corpus_${idx}`;
+        const isDraft = !!it.is_draft;
 
-            if (!startResp.ok) {
-              const errText = await startResp.text().catch(() => "");
-              throw new Error(errText || "Failed to start training");
-            }
+        return `
+          <tr>
+            <td class="text-center">
+              <input
+                type="radio"
+                class="form-check-input corpus-radio"
+                id="${id}"
+                name="corpusRadio"
+                data-id="${escapeHtml(it.id || "")}"
+                data-name="${safeName}"
+                data-draft="${isDraft ? "1" : "0"}"
+              >
+            </td>
+            <td>
+              <label class="ms-1 mb-0" for="${id}">${safeName}${badge}</label>
+            </td>
+          </tr>`;
+      });
 
-            const { job_id, status_url, corpus_id, model_id} = await startResp.json();
+      tbody.innerHTML = rows.join("");
+      updateTrainEnabled();
+      updateSelectionSummary();
+    } catch (e) {
+      console.error("Error loading corpora:", e);
+      tbody.innerHTML =
+        '<tr><td colspan="2" class="text-danger"><em>Failed to load corpora.</em></td></tr>';
+      if (trainBtn) trainBtn.disabled = true;
+    }
+  }
 
-            // Redirect with tiny info in URL (no session needed)
-            const u = new URL("/training/", location.origin);
-            u.searchParams.set("corpus_id", corpus_id);
-            u.searchParams.set("model_id", model_id);
-            u.searchParams.set("job_id", job_id);
-            window.location.href = u.toString();
-          } catch (err) {
-            console.error("Training request failed:", err);
-            alert(err?.message || "Failed to create corpus.");
-          } finally {
-            if (dom.confirmBtn) dom.confirmBtn.disabled = false;
-          }
-        }
+  async function loadModelConfig() {
+    try {
+      const res = await fetch("{{ url_for('static', filename='config/config.yaml') }}", {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`config load failed: ${res.status}`);
+      const yamlText = await res.text();
+      state.modelConfig =
+        (window.jsyaml ? window.jsyaml.load(yamlText) : {}) || {};
+    } catch (error) {
+      console.error("Error loading model config:", error);
+      state.modelConfig = {};
+    }
+  }
 
-        // ===== UI helpers =====
-        function updateTrainEnabled() {
-          const anyChecked = $$(".corpus-radio:checked").length === 1;
-          if (dom.trainBtn) dom.trainBtn.disabled = !anyChecked;
-        }
-        function updateSelectionSummary() {
-          const rb = document.querySelector(".corpus-radio:checked");
-          if (!dom.selectionSummary) return;
-          if (!rb) {
-            dom.selectionSummary.textContent = "";
-            return;
-          }
-          const name = rb?.dataset.name || "Unknown corpus";
-          const isDraft = rb?.dataset.draft === "1";
-          dom.selectionSummary.innerHTML = `Selected: <strong>${name}</strong>${
-            isDraft
-              ? ' <span class="badge rounded-pill text-bg-warning ms-1">Draft</span>'
-              : ""
-          }`;
-        }
+  function initAdvancedToggle() {
+    const btn = dom.toggleAdvancedBtn;
+    const section = dom.advancedSection;
+    if (!btn || !section) return;
+    btn.addEventListener("click", () => {
+      const visible = section.style.display === "block";
+      section.style.display = visible ? "none" : "block";
+      btn.textContent = visible
+        ? "Show Advanced Settings"
+        : "Hide Advanced Settings";
+    });
+  }
 
-        // ===== Data loaders & actions =====
-        async function loadModelOptions() {
-          const select = dom.modelSelect;
-          if (!select) return;
-          try {
-            const models = await fetchJSON("/model-registry");
-            select.innerHTML = "";
-            for (const [key] of Object.entries(models || {})) {
-              const opt = document.createElement("option");
-              opt.value = key;
-              opt.textContent = key;
-              select.appendChild(opt);
-            }
-            if (!select.options.length) {
-              select.innerHTML =
-                "<option disabled>No models available</option>";
-            }
-          } catch (err) {
-            console.error("Error loading model options:", err);
-            select.innerHTML = "<option disabled>Error loading models</option>";
-          }
-        }
+  function renderParamsIntoModal(model) {
+    const container = dom.paramsArea;
+    if (!container) return;
+    container.innerHTML = "";
+    const paramsRoot =
+      (state.modelConfig && state.modelConfig.topic_modeling) || {};
+    const params = paramsRoot?.[model];
+    if (!params) return;
+    for (const key of Object.keys(params)) {
+      const value = params[key];
+      const col = document.createElement("div");
+      col.className = "col-md-6";
+      const label = document.createElement("label");
+      label.textContent = key.replace(/_/g, " ");
+      label.setAttribute("for", key);
+      label.classList.add("form-label");
+      const input = document.createElement("input");
+      input.type = typeof value === "number" ? "number" : "text";
+      input.className = "form-control";
+      input.id = key;
+      input.name = key;
+      input.value = value ?? "";
+      col.appendChild(label);
+      col.appendChild(input);
+      container.appendChild(col);
+    }
+  }
 
-        async function fetchAllCorpora() {
-          const res = await fetch("/getAllCorpora", {
-            headers: { Accept: "application/json" },
-          });
-          if (!res.ok) throw new Error(`Failed to load corpora: ${res.status}`);
-          const items = await res.json();
-          return Array.isArray(items) ? items : [];
-        }
-
-        async function loadCorpusRadioTable() {
-          const tbody = dom.corpusTableBody;
-          const trainBtn = dom.trainBtn;
-          if (!tbody) return;
-
-          tbody.innerHTML = '<tr><td colspan="2"><em>Loading...</em></td></tr>';
-
-          try {
-            const items = await fetchAllCorpora();
-            if (!items.length) {
-              tbody.innerHTML =
-                '<tr><td colspan="2"><em>No corpora found.</em></td></tr>';
-              if (trainBtn) trainBtn.disabled = true;
-              return;
-            }
-
-            const rows = items.map((it, idx) => {
-              const safeName = escapeHtml(it.name || "");
-              const badge = it.is_draft
-                ? '<span class="badge rounded-pill text-bg-warning ms-2">Draft</span>'
-                : "";
-              const id = `corpus_${idx}`;
-              const isDraft = !!it.is_draft;
-
-              return `
-                <tr>
-                  <td class="text-center">
-                    <input
-                      type="radio"
-                      class="form-check-input corpus-radio"
-                      id="${id}"
-                      name="corpusRadio"
-                      data-id="${escapeHtml(it.id || "")}"
-                      data-name="${safeName}"
-                      data-draft="${isDraft ? "1" : "0"}"
-                    >
-                  </td>
-                  <td>
-                    <label class="ms-1 mb-0" for="${id}">${safeName}${badge}</label>
-                  </td>
-                </tr>`;
-            });
-
-            tbody.innerHTML = rows.join("");
-            updateTrainEnabled();
-            updateSelectionSummary();
-          } catch (e) {
-            console.error("Error loading corpora:", e);
-            tbody.innerHTML =
-              '<tr><td colspan="2" class="text-danger"><em>Failed to load corpora.</em></td></tr>';
-            if (trainBtn) trainBtn.disabled = true;
-          }
-        }
-
-        async function loadModelConfig() {
-          try {
-            const res = await fetch("/static/config/config.yaml", {
-              cache: "no-store",
-            });
-            if (!res.ok) throw new Error(`config load failed: ${res.status}`);
-            const yamlText = await res.text();
-            state.modelConfig =
-              (window.jsyaml ? window.jsyaml.load(yamlText) : {}) || {};
-          } catch (error) {
-            console.error("Error loading model config:", error);
-            state.modelConfig = {};
-          }
-        }
-
-        function initAdvancedToggle() {
-          const btn = dom.toggleAdvancedBtn;
-          const section = dom.advancedSection;
-          if (!btn || !section) return;
-          btn.addEventListener("click", () => {
-            const visible = section.style.display === "block";
-            section.style.display = visible ? "none" : "block";
-            btn.textContent = visible
-              ? "Show Advanced Settings"
-              : "Hide Advanced Settings";
-          });
-        }
-
-        function renderParamsIntoModal(model) {
-          const container = dom.paramsArea;
-          if (!container) return;
-          container.innerHTML = "";
-          const paramsRoot =
-            (state.modelConfig && state.modelConfig.topic_modeling) || {};
-          const params = paramsRoot?.[model];
-          if (!params) return;
-          for (const key of Object.keys(params)) {
-            const value = params[key];
-            const col = document.createElement("div");
-            col.className = "col-md-6";
-            const label = document.createElement("label");
-            label.textContent = key.replace(/_/g, " ");
-            label.setAttribute("for", key);
-            label.classList.add("form-label");
-            const input = document.createElement("input");
-            input.type = typeof value === "number" ? "number" : "text";
-            input.className = "form-control";
-            input.id = key;
-            input.name = key;
-            input.value = value ?? "";
-            col.appendChild(label);
-            col.appendChild(input);
-            container.appendChild(col);
-          }
-        }
-
-        async function requestTfidfForCorpusID({
-          corpusId,
-          nClusters,
-          fallbackClusters = 15,
-        }) {
-          const payload = {
-            n_clusters:
-              Number.isFinite(nClusters) && nClusters > 0
-                ? nClusters
-                : fallbackClusters,
-          };
-          const res = await fetch(
-            `/train/corpus/${encodeURIComponent(corpusId)}/tfidf/`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            }
-          );
-          if (!res.ok) {
-            const txt = await res.text().catch(() => "");
-            throw new Error(`TF-IDF request failed: ${res.status} ${txt}`);
-          }
-          return res.json();
-        }
-      })();
-    </script>
-  </body>
-</html>
+  async function requestTfidfForCorpusID({
+    corpusId,
+    nClusters,
+    fallbackClusters = 15,
+  }) {
+    const payload = {
+      n_clusters:
+        Number.isFinite(nClusters) && nClusters > 0
+          ? nClusters
+          : fallbackClusters,
+    };
+    const url = `/train/corpus/${encodeURIComponent(corpusId)}/tfidf/`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`TF-IDF request failed: ${res.status} ${txt}`);
+    }
+    return res.json();
+  }
+})();
+</script>
+{% endblock %}
