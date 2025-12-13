@@ -32,9 +32,13 @@ class LLMTModel(BaseTMModel, ABC):
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
-        self.llm = self.config.get("llm-based", {}).get("llm")
+        self.llm_provider = self.config.get("llm-based", {}).get("llm_provider")
+        self.llm_model_type = self.config.get("llm-based", {}).get("llm_model_type")
         self.llm_server = self.config.get("llm-based", {}).get("llm_server")
-
+        self.do_labeller = False  # LLM-based models do not use traditional labelling
+        self.do_summarizer = False  # LLM-based models do not use traditional summarization
+        self.labeller_prompt = ""
+        self.summarizer_prompt = ""
         self._config_path = config_path
 
     def set_training_data(self, data):

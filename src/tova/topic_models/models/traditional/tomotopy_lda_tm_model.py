@@ -151,6 +151,7 @@ class TomotopyLDATMmodel(TradTMmodel):
                 print(f"Topic {k}: {words}")
 
         return keys
+    
 
     def infer_core(self, infer_data, df_infer, embeddings_infer) -> np.ndarray:
         """

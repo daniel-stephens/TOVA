@@ -196,6 +196,8 @@ class TMmodel(object):
                 self._logger.warning(
                     f"Error in summarizer: {e}")
                 self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
+        else:
+            self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
             
         # get most representative documents and topic clusters
         self.get_most_representative_per_tpc(self._thetas)    

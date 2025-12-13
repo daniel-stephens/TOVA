@@ -8,8 +8,12 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd  # type: ignore
 import tomotopy as tp  # type: ignore
-from contextualized_topic_models.utils.data_preparation import TopicModelDataPreparation  # type: ignore
 from contextualized_topic_models.models.ctm import CombinedTM  # type: ignore
+from contextualized_topic_models.utils.data_preparation import TopicModelDataPreparation  # type: ignore
+from scipy import sparse
+from sklearn.preprocessing import normalize
+
+from tova.topic_models.tm_model import TMmodel
 from tova.utils.common import init_logger, load_yaml_config_file
 
 
@@ -109,6 +113,48 @@ class BaseTMModel(ABC):
 
         with json_path.open('w') as f:
             json.dump(model_info, f, indent=2)
+            
+    def _createTMmodel(self, thetas, betas, vocab):
+        """Creates an object of class TMmodel hosting the topic model
+        that has been trained and whose output is available at the
+        provided folder
+
+        Parameters
+        ----------
+        modelFolder: Path
+            the folder with the mallet output files
+
+        Returns
+        -------
+        tm: TMmodel
+            The topic model as an object of class TMmodel
+
+        """
+        # Sparsification of thetas matrix
+        # self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
+
+        # Set to zeros all thetas below threshold, and renormalize
+        thetas[thetas < self.thetas_thr] = 0
+        thetas = normalize(thetas, axis=1, norm='l1')
+        thetas = sparse.csr_matrix(thetas, copy=True)
+
+        # Recalculate topic weights to avoid errors due to sparsification
+        alphas = np.asarray(np.mean(thetas, axis=0)).ravel()
+
+        tm = TMmodel(
+            TMfolder=self.model_path.joinpath('TMmodel'),
+            config_path=self._config_path,
+            df_corpus_train=self.df,
+            do_labeller=self.do_labeller,
+            do_summarizer=self.do_summarizer,
+            llm_model_type=self.llm_model_type,
+            labeller_prompt=self.labeller_prompt,
+            summarizer_prompt=self.summarizer_prompt,
+        )
+        tm.create(
+            betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
+
+        return tm
 
     @abstractmethod
     def set_training_data(self, data: List[Dict]): pass
