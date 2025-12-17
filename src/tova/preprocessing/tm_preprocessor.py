@@ -277,7 +277,7 @@ class TMPreprocessor:
         if compute_embeddings:
             if self._st is None:
                 raise RuntimeError("Embeddings model not initialized.")
-            texts = [" ".join(toks) for toks in out["lemmas"]]
+            texts = [" ".join(toks) for toks in out["raw_text"]]
             embs = self._st.encode(
                 texts, show_progress_bar=False,
                 normalize_embeddings=True, convert_to_numpy=True
