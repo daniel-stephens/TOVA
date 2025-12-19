@@ -52,7 +52,8 @@ CACHE_TTL = 600
 # ------------------------------------------------------------------------------
 BASE_DIR = Path(server.root_path)
 CONFIG_PATH = BASE_DIR / "static" / "config" / "config.yaml"
-
+JOB_STATUS_TIMEOUT_SECONDS = 10
+JOB_STATUS_POLLING_INTERVAL_SECONDS = 1
 try:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         RAW_CONFIG = yaml.safe_load(f) or {}
@@ -1537,12 +1538,110 @@ def text_info():
         }
     )
 
+@server.post("/infer-text")
+def infer_text():
+    """
+    Handles the initial inference request from the frontend.
+    1. Sends the request body to the external API's inference endpoint.
+    2. Receives a job_id.
+    3. Polls the API's status endpoint using the job_id until results are available or a timeout occurs.
+    4. Returns the final inference results to the frontend.
+    """
+    try:
+        # 1. Get the JSON payload from the frontend request
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({"error": "Invalid or missing JSON payload"}), 400
+
+        # 2. Send the exact payload to the external API's inference endpoint
+        inference_url = f"{API_BASE_URL}/infer/json"
+        
+        # Note: The 'text' in your example is a single string. 
+        # Ensure your external API expects this format.
+        
+        response = requests.post(
+            inference_url,
+            json=request_data,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
+
+        # Assuming the response body contains a job_id (e.g., {"job_id": "..."})
+        job_info = response.json()
+        job_id = job_info.get("job_id")
+
+        if not job_id:
+            return jsonify({"error": "Inference API did not return a job_id"}), 500
+
+        print(f"Inference job submitted. Job ID: {job_id}")
+
+        # 3. Poll the API's status endpoint for the results
+        status_url = f"{API_BASE_URL}/status/jobs/{job_id}"
+        
+        import time
+        start_time = time.time()
+        
+        while (time.time() - start_time) < JOB_STATUS_TIMEOUT_SECONDS:
+            status_response = requests.get(status_url)
+            status_response.raise_for_status()
+            
+            job_status = status_response.json()
+            status = job_status.get("status")
+
+            if status == "COMPLETED":
+                # Assuming the results are directly in the response body when COMPLETED
+                # The structure might be {"status": "COMPLETED", "results": [...]}
+                # Adjust 'results' key as necessary
+                return jsonify(job_status.get("results", job_status))
+            
+            elif status in ["FAILED", "ERROR"]:
+                print(f"Job {job_id} failed.")
+                return jsonify({"error": "Inference job failed", "details": job_status}), 500
+            
+            # If status is "PENDING" or "RUNNING", wait and poll again
+            print(f"Job {job_id} status: {status}. Waiting...")
+            time.sleep(JOB_STATUS_POLLING_INTERVAL_SECONDS)
+        
+        # 4. Handle Timeout
+        return jsonify({"error": "Inference job timeout"}), 504
+
+    except requests.exceptions.HTTPError as e:
+        # Handle exceptions from the external API calls
+        return jsonify({"error": f"External API HTTP Error: {e.response.text}", "status_code": e.response.status_code}), e.response.status_code
+    except requests.exceptions.RequestException as e:
+        # Handle network-level errors (e.g., connection refused)
+        return jsonify({"error": f"Error communicating with external API: {e}"}), 503
+    except Exception as e:
+        # Catch any other unexpected errors
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
 
 @server.post("/save-settings")
 def save_settings():
     payload = request.get_json(silent=True) or {}
     server.logger.info("Dummy /save-settings received: %s", payload)
     return jsonify({"ok": True, "echo": payload}), 200
+
+import yaml
+import os
+
+# Function to read the YAML config file
+def load_config(filepath=CONFIG_PATH):
+    """Reads and parses the YAML configuration file."""
+    if not os.path.exists(filepath):
+        # Handle the case where the file doesn't exist
+        print(f"Error: Config file not found at {filepath}")
+        return {}
+    try:
+        with open(filepath, 'r') as f:
+            # Use safe_load to avoid potential security issues
+            return yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        print(f"Error reading YAML file: {exc}")
+        return {}
+    except Exception as exc:
+        print(f"An unexpected error occurred: {exc}")
+        return {}
 
 
 # ------------------------------------------------------------------------------
