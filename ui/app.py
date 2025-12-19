@@ -24,6 +24,7 @@ from flask import (
     redirect,
     g,
 )
+from models import db, User
 
 # ------------------------------------------------------------------------------
 # App setup
@@ -35,8 +36,11 @@ server.logger.setLevel(logging.INFO)
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me")
 server.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-# In-memory user store (replace with DB later)
-users: dict[str, dict] = {}
+# Database config
+server.config.from_object("config")
+db.init_app(server)
+with server.app_context():
+    db.create_all()
 
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))  # TODO: remove if unused
 API = os.getenv("API_BASE_URL", "http://api:8000")
@@ -198,23 +202,11 @@ def _cache_set(cache: dict, key, data):
 # ------------------------------------------------------------------------------
 # Auth helpers
 # ------------------------------------------------------------------------------
-def _ensure_user_id(user: dict) -> str:
-    """
-    Guarantee a stable user id on the in-memory user record.
-    Creates and stores a uuid4 if missing.
-    """
-    user_id = user.get("id")
-    if not user_id:
-        user_id = str(uuid4())
-        user["id"] = user_id
-    return user_id
-
-
 def login_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
         # check the same key you actually set in login/signup/Okta
-        if "user_email" not in session:
+        if "user_id" not in session:
             next_url = request.path  # or request.full_path
             return redirect(url_for("login", next=next_url))
         return view_func(*args, **kwargs)
@@ -225,17 +217,23 @@ def login_required(view_func):
 @server.before_request
 def load_logged_in_user():
     """Attach the current user to g before every request, based on session."""
-    email = session.get("user_email")
-    name = session.get("user_name")
     user_id = session.get("user_id")
-    if email:
+    if not user_id:
+        g.user = None
+        return
+
+    user = User.query.filter_by(id=user_id).first()
+    if user:
         g.user = {
-            "id": user_id,
-            "email": email,
-            "name": name or email,
+            "id": user.id,
+            "email": user.email,
+            "name": user.name or user.email,
         }
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
     else:
         g.user = None
+        session.clear()
 
 
 @server.context_processor
@@ -266,25 +264,26 @@ def signup():
             flash("Passwords do not match.", "danger")
             return redirect(url_for("signup"))
 
-        if email in users:
+        existing = User.query.filter_by(email=email).first()
+        if existing:
             flash("An account with that email already exists. Please sign in.", "warning")
             return redirect(url_for("login"))
 
         # Create user
-        user_id = str(uuid4())
-        password_hash = generate_password_hash(password)
-        users[email] = {
-            "id": user_id,
-            "name": name,
-            "email": email,
-            "password_hash": password_hash,
-        }
+        user = User(
+            id=str(uuid4()),
+            name=name or email,
+            email=email,
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
 
         # Log them in
         session.clear()
-        session["user_email"] = email
-        session["user_name"] = name
-        session["user_id"] = user_id
+        session["user_id"] = user.id
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
         session.permanent = True
 
         flash("Account created! Welcome to TOVA.", "success")
@@ -301,19 +300,18 @@ def login():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
-        user = users.get(email)
-        user_id = _ensure_user_id(user) if user else None
-        if not user or not user.get("password_hash") or not check_password_hash(
-            user["password_hash"], password
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.password_hash or not check_password_hash(
+            user.password_hash, password
         ):
             flash("Invalid email or password.", "danger")
             return redirect(url_for("login"))
 
         # Credentials OK
         session.clear()
-        session["user_email"] = email
-        session["user_name"] = user.get("name") or email
-        session["user_id"] = user_id
+        session["user_id"] = user.id
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
         session.permanent = True
 
         flash("Signed in successfully.", "success")
@@ -362,30 +360,28 @@ def auth_okta_callback():
         flash("Okta did not provide an email address.", "danger")
         return redirect(url_for("login"))
 
-    # Find or create user in your in-memory users dict
-    user = users.get(email)
+    # Find or create user in the database
+    user = User.query.filter_by(email=email).first()
     if not user:
-        user = {
-            "id": str(uuid4()),
-            "name": name,
-            "email": email,
-            "password_hash": None,  # They may not have a local password
-            "okta_sub": okta_sub,
-            "auth_source": "okta",
-        }
-        users[email] = user
+        user = User(
+            id=str(uuid4()),
+            name=name or email,
+            email=email,
+            password_hash=None,  # They may not have a local password
+            auth_source="okta",
+        )
+        db.session.add(user)
     else:
         # Link the Okta account to an existing user
-        user["okta_sub"] = okta_sub
-        user["auth_source"] = "okta"
+        user.auth_source = "okta"
 
-    user_id = _ensure_user_id(user)
+    db.session.commit()
 
     # Log them in
     session.clear()
-    session["user_email"] = email
-    session["user_name"] = user.get("name") or name or email
-    session["user_id"] = user_id
+    session["user_id"] = user.id
+    session["user_email"] = user.email
+    session["user_name"] = user.name or name or email
     session.permanent = True
 
     flash("Signed in with Okta.", "success")
