@@ -5,6 +5,7 @@ from pathlib import Path
 from time import time
 from datetime import timedelta
 from functools import wraps
+from uuid import uuid4
 
 import requests
 import yaml
@@ -197,6 +198,18 @@ def _cache_set(cache: dict, key, data):
 # ------------------------------------------------------------------------------
 # Auth helpers
 # ------------------------------------------------------------------------------
+def _ensure_user_id(user: dict) -> str:
+    """
+    Guarantee a stable user id on the in-memory user record.
+    Creates and stores a uuid4 if missing.
+    """
+    user_id = user.get("id")
+    if not user_id:
+        user_id = str(uuid4())
+        user["id"] = user_id
+    return user_id
+
+
 def login_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -214,8 +227,10 @@ def load_logged_in_user():
     """Attach the current user to g before every request, based on session."""
     email = session.get("user_email")
     name = session.get("user_name")
+    user_id = session.get("user_id")
     if email:
         g.user = {
+            "id": user_id,
             "email": email,
             "name": name or email,
         }
@@ -256,8 +271,10 @@ def signup():
             return redirect(url_for("login"))
 
         # Create user
+        user_id = str(uuid4())
         password_hash = generate_password_hash(password)
         users[email] = {
+            "id": user_id,
             "name": name,
             "email": email,
             "password_hash": password_hash,
@@ -267,6 +284,7 @@ def signup():
         session.clear()
         session["user_email"] = email
         session["user_name"] = name
+        session["user_id"] = user_id
         session.permanent = True
 
         flash("Account created! Welcome to TOVA.", "success")
@@ -284,6 +302,7 @@ def login():
         password = request.form.get("password", "")
 
         user = users.get(email)
+        user_id = _ensure_user_id(user) if user else None
         if not user or not user.get("password_hash") or not check_password_hash(
             user["password_hash"], password
         ):
@@ -294,6 +313,7 @@ def login():
         session.clear()
         session["user_email"] = email
         session["user_name"] = user.get("name") or email
+        session["user_id"] = user_id
         session.permanent = True
 
         flash("Signed in successfully.", "success")
@@ -346,6 +366,7 @@ def auth_okta_callback():
     user = users.get(email)
     if not user:
         user = {
+            "id": str(uuid4()),
             "name": name,
             "email": email,
             "password_hash": None,  # They may not have a local password
@@ -358,10 +379,13 @@ def auth_okta_callback():
         user["okta_sub"] = okta_sub
         user["auth_source"] = "okta"
 
+    user_id = _ensure_user_id(user)
+
     # Log them in
     session.clear()
     session["user_email"] = email
     session["user_name"] = user.get("name") or name or email
+    session["user_id"] = user_id
     session.permanent = True
 
     flash("Signed in with Okta.", "success")
@@ -676,7 +700,7 @@ def create_dataset():
     metadata = payload.get("metadata", {})
     data = payload.get("data", {})
     documents = data.get("documents", [])
-    owner_id = payload.get("owner_id")
+    owner_id = payload.get("owner_id") or session.get("user_id")
 
     dataset_payload = {
         "name": metadata.get("name", ""),
