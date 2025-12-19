@@ -27,6 +27,7 @@ topic_modeling:
     llm_model_type: "qwen:32b"
     labeller_prompt: "src/tova/prompter/prompts/labelling_dft.txt"
     summarizer_prompt: "src/tova/prompter/prompts/summarization_dft.txt"
+    llm_server: "http://kumo01.tsc.uc3m.es:11434"
   llm-based:
     llm_provider: "ollama"
     llm_model_type: "gemma3:4b"
