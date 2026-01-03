@@ -11,6 +11,12 @@ services:
       - "5432:5432" # Expose for easy local access (optional)
     volumes:
       - postgres_data:/var/lib/postgresql/data # Mount persistent volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-mydb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   api:
     build:
@@ -39,8 +45,11 @@ services:
       - DRAFTS_SAVE=/data/drafts
       # 3. ADD DATABASE CONNECTION STRING
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
+      # OpenAI API Key for labeling and summarization
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       - ./data:/data
+      - ./static/config:/app/static/config
 
   web:
     build:
@@ -56,6 +65,10 @@ services:
     environment:
       - FLASK_DEBUG="1"
       - API_BASE_URL=http://api:8000
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-mydb}
       
     volumes:
     - ./data:/data

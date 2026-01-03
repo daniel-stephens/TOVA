@@ -24,8 +24,8 @@ topic_modeling:
     topn: 15
     do_labeller: True
     do_summarizer: True
-    llm_model_type: "qwen:32b"
-    labeller_prompt: "src/prompter/prompts/labelling_dft.txt"
+    llm_model_type: "gpt-4o"
+    labeller_model_path: "src/prompter/prompts/labelling_dft.txt"
     summarizer_prompt: "src/prompter/prompts/summarization_dft.txt"
     llm_server: "http://kumo01.tsc.uc3m.es:11434"
 

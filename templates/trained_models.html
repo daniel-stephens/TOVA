@@ -1,3 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Trained Models - TOVA{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { background: radial-gradient(circle at 10% 20%, rgba(13,110,253,0.06), transparent 25%), #f7f9fb; }
+  .kv-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 0.35rem 0.75rem;
+    font-size: 0.875rem;
+    margin-bottom: 0.15rem;
+  }
+  .kv-row .k { color: #6c757d; }
+  .kv-row .v { color: #212529; word-break: break-word; }
+  .model-card {
+    border: 1px solid #e7ebf0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .model-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+    border-color: #d0d7e2;
+  }
+  .model-card .badge { font-weight: 600; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.85rem;
+    border: 1px solid #e2e8f0;
+  }
+  .summary-card {
+    border: 1px solid #e7ebf0;
+    background: linear-gradient(135deg, #ffffff, #f6f9fc);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-sm py-4">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
+    <div>
+      <h3 class="mb-1">Trained Models</h3>
+      <p class="text-muted small mb-0">Models you’ve trained, grouped by corpus.</p>
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        <span class="pill"><i class="bi bi-diagram-3"></i> <span id="corpusCount">0</span> corpora</span>
+        <span class="pill"><i class="bi bi-cpu"></i> <span id="modelCount">0</span> models</span>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" onclick="history.back()">
+        <i class="bi bi-arrow-left"></i> Back
+      </button>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('loadModel') }}">
+        <i class="bi bi-plus-lg"></i> Train new model
+      </a>
+    </div>
+  </div>
+
+  <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
+    <div class="row g-3 align-items-center mb-3">
+      <div class="col-sm-6 col-lg-4">
+        <label for="modelSearch" class="form-label small text-muted mb-1">Search</label>
+        <input id="modelSearch" type="search" class="form-control form-control-sm" placeholder="Filter by name, corpus, owner">
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <label for="corpusFilter" class="form-label small text-muted mb-1">Corpus</label>
+        <select id="corpusFilter" class="form-select form-select-sm">
+          <option value="">All corpora</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="modelsSpinner" class="d-flex justify-content-center py-4">
+      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>
+
+    <div id="modelsGrid" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 d-none"></div>
+
+    <div id="noModels" class="alert alert-warning text-center mt-5 d-none">
+      No trained models found.
+      <div class="mt-2">
+        <a class="btn btn-sm btn-primary" href="{{ url_for('loadModel') }}">Train a model</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const grid         = document.getElementById("modelsGrid");
+  const spinner      = document.getElementById("modelsSpinner");
+  const noModels     = document.getElementById("noModels");
+  const searchInput  = document.getElementById("modelSearch");
+  const corpusFilter = document.getElementById("corpusFilter");
+
+  let allModels = [];
+
+  const escapeHtml = (str) =>
+    String(str ?? "").replace(/[&<>\"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+
+  function prettyModelType(typeStr) {
+    const last = String(typeStr || "").split(".").pop() || "";
+    return last.replace(/TMmodel$/i,"").replace(/Model$/i,"") || "—";
+  }
+  function fmtDate(isoStr) {
+    if (!isoStr) return "—";
+    const d = new Date(isoStr);
+    return isNaN(d) ? escapeHtml(isoStr) : d.toLocaleString();
+  }
+
+  function normalizeCorporaToModels(corpora) {
+    const out = [];
+    (corpora || []).forEach((c) => {
+      const corpusId   = c?.id || c?.metadata?.id || "";
+      const corpusName = c?.name || c?.metadata?.name || "";
+      const corpusLoc  = c?.location || c?.metadata?.location || "";
+      const corpusCreated = c?.created_at || c?.metadata?.created_at || "";
+
+      (c?.models || []).forEach((m) => {
+        const md = m?.metadata || {};
+        const tr = md?.tr_params || {};
+        out.push({
+          id: m?.id || tr?.id || "",
+          name: m?.name || md?.name || tr?.model_name || "",
+          owner_id: m?.owner_id ?? md?.owner_id ?? null,
+          location: m?.location || md?.location || "",
+          created_at: m?.created_at || md?.created_at || "",
+          metadata: m?.metadata || {},
+          __corpus: {
+            id: corpusId,
+            name: corpusName,
+            location: corpusLoc,
+            created_at: corpusCreated
+          },
+        });
+      });
+    });
+    return out;
+  }
+
+  function renderCard(m) {
+    const corpus = m.__corpus || {};
+    const meta = m.metadata || {};
+    const tr = meta.tr_params || {};
+    const dataset = meta.dataset || {};
+    const provider = tr.llm_provider || meta.llm_provider || "—";
+    const modelType = prettyModelType(tr.model || tr.training_model || meta.model || m.name);
+    const host = tr.llm_host || meta.llm_host || "—";
+
+    const datasetInfo = dataset.name || dataset.id;
+
+    const paramsHtml = `
+      <div class="kv-row"><div class="k">Num topics</div><div class="v">${escapeHtml(tr.num_topics ?? "—")}</div></div>
+      <div class="kv-row"><div class="k">Top N</div><div class="v">${escapeHtml(tr.topn ?? "—")}</div></div>
+      <div class="kv-row"><div class="k">Theta thr</div><div class="v">${escapeHtml(tr.thetas_thr ?? "—")}</div></div>
+    `;
+
+    const metricsHtml = meta.metrics
+      ? `<div class="kv-row"><div class="k">Metrics</div><div class="v"><pre class="mb-0 small">${escapeHtml(JSON.stringify(meta.metrics, null, 2))}</pre></div></div>`
+      : "";
+
+    return `
+      <div class="col">
+        <div class="card h-100 shadow-sm border-0 border-top rounded-3 model-card" data-model-id="${escapeHtml(m.id)}" data-model-name="${escapeHtml(m.name || "(unnamed)")}">
+          <div class="card-body d-flex flex-column justify-content-between">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h5 class="card-title mb-1 text-break">${escapeHtml(m.name || "(unnamed)")}</h5>
+                <p class="text-muted small mb-2">${escapeHtml(modelType)}</p>
+              </div>
+              <span class="badge text-bg-light">${escapeHtml(corpus.name || "Corpus")}</span>
+            </div>
+            <div class="kv-row"><div class="k">Model ID</div><div class="v">${escapeHtml(m.id)}</div></div>
+            <div class="kv-row"><div class="k">Owner</div><div class="v">${escapeHtml(m.owner_id || "—")}</div></div>
+            <div class="kv-row"><div class="k">LLM</div><div class="v">${escapeHtml(provider)}</div></div>
+            <div class="kv-row"><div class="k">Host</div><div class="v">${escapeHtml(host)}</div></div>
+            <div class="kv-row"><div class="k">Created</div><div class="v">${escapeHtml(fmtDate(m.created_at))}</div></div>
+            ${datasetInfo ? `<div class="kv-row"><div class="k">Dataset</div><div class="v">${escapeHtml(datasetInfo)}</div></div>` : ""}
+            ${paramsHtml}
+            ${metricsHtml}
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <button class="btn btn-primary btn-sm use-model-btn" data-model-id="${escapeHtml(m.id)}">
+                Open Dashboard
+              </button>
+              <button class="btn btn-outline-danger btn-sm delete-model" data-model-id="${escapeHtml(m.id)}" data-model-name="${escapeHtml(m.name || "")}">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function applyFilters() {
+    const term = (searchInput?.value || "").toLowerCase();
+    const corpusId = corpusFilter?.value || "";
+    const filtered = allModels.filter((m) => {
+      const corpusName = (m.__corpus?.name || "").toLowerCase();
+      const matchTerm =
+        !term ||
+        (m.name || "").toLowerCase().includes(term) ||
+        (m.owner_id || "").toLowerCase().includes(term) ||
+        corpusName.includes(term);
+      const matchCorpus = !corpusId || m.__corpus?.id === corpusId;
+      return matchTerm && matchCorpus;
+    });
+
+    if (!filtered.length) {
+      grid.classList.add("d-none");
+      noModels.classList.remove("d-none");
+      grid.innerHTML = ""; // Clear grid when no models
+      return;
+    }
+    noModels.classList.add("d-none");
+    grid.classList.remove("d-none");
+    grid.innerHTML = filtered.map(renderCard).join("");
+    wireActions();
+  }
+
+  async function loadModels() {
+    try {
+      const res = await fetch("/get-trained-models", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+      const corpora = await res.json();
+      allModels = normalizeCorporaToModels(Array.isArray(corpora) ? corpora : []);
+
+      spinner.classList.add("d-none");
+      if (!allModels.length) {
+        noModels.classList.remove("d-none");
+        return;
+      }
+
+      const corpusOptions = Array.from(
+        new Set(allModels.map((m) => m.__corpus?.id).filter(Boolean))
+      ).map((id) => {
+        const name = allModels.find((m) => m.__corpus?.id === id)?.__corpus?.name || id;
+        return { id, name };
+      });
+
+      if (corpusFilter) {
+        corpusFilter.innerHTML = `<option value="">All corpora</option>` +
+          corpusOptions.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("");
+      }
+
+      applyFilters();
+    } catch (err) {
+      console.error(err);
+      spinner.classList.add("d-none");
+      noModels.textContent = "Failed to load models.";
+      noModels.classList.remove("d-none");
+    }
+  }
+
+  // Use event delegation - attach once to grid, works for all buttons
+  let actionsWired = false;
+  function wireActions() {
+    if (actionsWired) return; // Only wire once using event delegation
+    actionsWired = true;
+    
+    grid.addEventListener("click", (e) => {
+      const useBtn = e.target.closest(".use-model-btn");
+      if (useBtn) {
+        e.preventDefault();
+        const modelId = useBtn.dataset.modelId;
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/dashboard";
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "model_id";
+        input.value = modelId;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+      
+      const deleteBtn = e.target.closest(".delete-model");
+      if (deleteBtn) {
+        e.preventDefault();
+        const modelId = deleteBtn.dataset.modelId;
+        const modelName = deleteBtn.dataset.modelName || modelId;
+        if (!confirm(`Delete model "${modelName}"?`)) return;
+        
+        (async () => {
+          // Immediately fade out the model card for instant feedback
+          const card = deleteBtn.closest(".model-card");
+          const cardParent = card?.parentElement;
+          if (card) {
+            card.style.transition = "opacity 0.3s";
+            card.style.opacity = "0.3";
+            card.style.pointerEvents = "none";
+          }
+          
+          try {
+            const res = await fetch("/delete-model", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model_id: modelId, model_name: modelName }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.message || `Delete failed (${res.status})`);
+            
+            // Remove card immediately from DOM
+            if (cardParent) {
+              cardParent.remove();
+            }
+            
+            // Refresh the full list
+            spinner.classList.remove("d-none");
+            grid.classList.add("d-none");
+            await loadModels();
+          } catch (err) {
+            console.error(err);
+            alert("Failed to delete model.");
+            // Restore card on error
+            if (card) {
+              card.style.opacity = "1";
+              card.style.pointerEvents = "auto";
+            }
+            spinner.classList.add("d-none");
+          }
+        })();
+        return;
+      }
+    });
+  }
+
+  searchInput?.addEventListener("input", applyFilters);
+  corpusFilter?.addEventListener("change", applyFilters);
+  loadModels();
+})();
+</script>
+{% endblock %}
 <!DOCTYPE html>
 <html lang="en">
   <head>

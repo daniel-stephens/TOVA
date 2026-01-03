@@ -13,3 +13,5 @@ scikit_learn==1.7.1
 scipy==1.16.1
 langchain-community==0.3.27
 authlib
+flask_sqlalchemy
+psycopg2-binary==2.9.9
