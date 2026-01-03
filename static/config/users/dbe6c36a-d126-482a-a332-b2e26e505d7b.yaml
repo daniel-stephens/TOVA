@@ -1,0 +1,148 @@
+logger:
+  dir_logger: data/logs
+  console_log: true
+  file_log: true
+  log_level: INFO
+  logger_name: tova
+  N_log_keep: 5
+topic_modeling:
+  general:
+    not_include: train_data, df, embeddings, ids_corpus, _logger, _embedding_model,
+      _umap_model, _hdbscan_model, _vectorizer_model, _ctfidf_model, _representation_model,
+      _model
+    n_similar_tpcs: 5
+    similar_tpcs_thr: 1e-3
+    n_top_docs_per_topic: 25
+  traditional:
+    num_topics: 10
+    thetas_thr: 3e-3
+    topn: 20
+    do_labeller: true
+    do_summarizer: true
+    llm_model_type: gpt-4o
+    labeller_model_path: src/prompter/prompts/labelling_dft.txt
+    summarizer_prompt: src/prompter/prompts/summarization_dft.txt
+    llm_server: http://kumo01.tsc.uc3m.es:11434
+    labeller_prompt: src/prompter/prompts/labelling_dft.txt
+  llm-based:
+    llm: qwen:32b
+    llm_server: http://kumo01.tsc.uc3m.es:11434
+  mallet:
+    alpha: 5.0
+    optimize_interval: 10
+    num_threads: 4
+    num_iters: 1000
+    doc_topic_thr: 0.0
+    token_regexp: '[\p{L}\p{N}][\p{L}\p{N}\p{P}]*\p{L}'
+    mallet_path: src/train/Mallet-202108/bin/mallet
+  tomotopyLDA:
+    num_iters: 2000
+    alpha: 5.0
+    eta: 0.01
+    iter_interval: 10
+  bertopic:
+    no_below: 1
+    no_above: 1.0
+    stopwords: None
+    sbert_model: all-MiniLM-L6-v2
+    umap_n_components: 5
+    umap_n_neighbors: 15
+    umap_min_dist: '0'
+    umap_metric: cosine
+    hdbscan_min_cluster_size: 10
+    hdbscan_metric: euclidean
+    hdbscan_cluster_selection_method: eom
+    hbdsan_prediction_data: true
+    language: english
+    repr_model_diversity: 0.3
+    repr_model_topnwords: 15
+    word_min_len: 0
+  ctm:
+    num_epochs: 100
+    sbert_model: all-MiniLM-L6-v2
+    sbert_context: 384
+    batch_size: 32
+    contextual_size: 384
+    inference_type: combined
+    n_components: 10
+    model_type: prodLDA
+    hidden_sizes:
+    - 100
+    - 100
+    activation: softplus
+    dropout: 0.2
+    learn_priors: true
+    lr: 0.002
+    momentum: 0.99
+    solver: adam
+    reduce_on_plateau: false
+    num_data_loader_workers: 4
+    label_size: 0
+    loss_weights: null
+  topicgpt:
+    sample: 0.001
+    deployment_name1: qwen:32b
+    deployment_name2: qwen:32b
+    temperature: 0.0
+    top_p: 0.0
+    max_tokens_gen1: 300
+    max_tokens_gen2: 500
+    max_tokens_assign: 300
+    refined_again: false
+    remove: false
+    do_second_level: false
+    verbose: true
+tm_preprocessor:
+  spacy:
+    spacy_model: en_core_web_sm
+    spacy_disable: ner, parser
+    valid_pos: VERB, NOUN, ADJ, PROPN
+  vectorization:
+    max_features: 100000
+    min_df: '1'
+    max_df: '1'
+    ngram_range: 1, 2
+    binary: false
+  embeddings:
+    model_name: all-MiniLM-L6-v2
+    normalize: true
+    batch_size: 32
+llm:
+  parameters:
+    temperature: 0
+    top_p: 0.1
+    frequency_penalty: 0
+    random_seed: 1234
+    seed: 1234
+  gpt:
+    available_models:
+      gpt-4o-2024-08-06: null
+      gpt-4o-mini-2024-07-18: null
+      chatgpt-4o-latest: null
+      gpt-4-turbo: null
+      gpt-4-turbo-2024-04-09: null
+      gpt-4: null
+      gpt-3.5-turbo: null
+      gpt-4o-mini: null
+      gpt-4o: null
+      gpt-4-32k: null
+      gpt-4-0125-preview: null
+      gpt-4-1106-preview: null
+      gpt-4-vision-preview: null
+      gpt-3.5-turbo-0125: null
+      gpt-3.5-turbo-instruct: null
+      gpt-3.5-turbo-1106: null
+      gpt-3.5-turbo-0613: null
+      gpt-3.5-turbo-16k-0613: null
+      gpt-3.5-turbo-0301: null
+    path_api_key: .env
+  ollama:
+    available_models:
+      llama3.2: null
+      llama3.1:8b-instruct-q8_0: null
+      qwen:32b: null
+      llama3.3:70b: null
+      qwen2.5:32b: null
+    host: http://kumo01.tsc.uc3m.es:11434
+  llama_cpp:
+    host: http://kumo01:11435/v1/chat/completions

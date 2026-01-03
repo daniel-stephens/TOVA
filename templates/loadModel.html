@@ -196,6 +196,14 @@
         </div>
 
         <div class="border rounded">
+          <div class="d-flex justify-content-between align-items-center px-2 pt-2">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="includeAdvanced" checked>
+              <label class="form-check-label small text-muted" for="includeAdvanced">
+                Include advanced parameters
+              </label>
+            </div>
+          </div>
           <button class="btn btn-light w-100 d-flex justify-content-between align-items-center p-2 rounded-top"
                   type="button" id="toggleAdvanced" style="font-size: 0.9rem;">
             <span class="fw-bold text-secondary">
@@ -458,6 +466,8 @@
       advancedSettings: $("#advancedSettings"),
       advancedIcon: $("#advancedIcon"),
       toggleAdvancedBtn: $("#toggleAdvanced"),
+      includeAdvanced: $("#includeAdvanced"),
+      includeLlm: $("#include_llm"),
     });
 
     // Safe modal init
@@ -832,10 +842,10 @@ const renderBasicGroupParams = (modelName) => {
   }
 
   const providerOptions = `
-    <option value="">Auto (from config)</option>
-    <option value="openai" ${initialProvider === "openai" ? "selected" : ""}>OpenAI</option>
-    <option value="ollama" ${initialProvider === "ollama" ? "selected" : ""}>Ollama</option>
-    <option value="llama_cpp" ${initialProvider === "llama_cpp" ? "selected" : ""}>llama.cpp</option>
+    <option value="" selected>Choose a provider</option>
+    <option value="openai">OpenAI</option>
+    <option value="ollama">Ollama</option>
+    <option value="llama_cpp">llama.cpp</option>
   `;
 
   const openaiModelOptions = [
@@ -875,6 +885,14 @@ const renderBasicGroupParams = (modelName) => {
       <div class="border rounded p-2 bg-light-subtle">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <span class="small fw-bold text-secondary">
+            <i class="bi bi-toggle-on me-1"></i> Include LLM provider &amp; model
+          </span>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" id="include_llm" checked>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-secondary">
             <i class="bi bi-cpu me-1"></i> LLM provider &amp; model
           </span>
         </div>
@@ -885,7 +903,7 @@ const renderBasicGroupParams = (modelName) => {
               Provider
             </label>
             <select id="llm_provider"
-                    class="form-select form-select-sm">
+                    class="form-select form-select-sm llm-field">
               ${providerOptions}
             </select>
           </div>
@@ -896,7 +914,7 @@ const renderBasicGroupParams = (modelName) => {
               <label class="form-label-compact" for="llm_openai_model">
                 Model
               </label>
-              <select id="llm_openai_model" class="form-select form-select-sm">
+              <select id="llm_openai_model" class="form-select form-select-sm llm-field">
                 ${openaiModelOptions}
               </select>
             </div>
@@ -944,7 +962,7 @@ const renderBasicGroupParams = (modelName) => {
                 Host
               </label>
               <input type="text"
-                     class="form-control form-control-sm"
+                     class="form-control form-control-sm llm-field"
                      id="llm_ollama_host"
                      value="${escapeHtml(initialOllamaHost || "")}">
               <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
@@ -958,7 +976,7 @@ const renderBasicGroupParams = (modelName) => {
                 Host
               </label>
               <input type="text"
-                     class="form-control form-control-sm"
+                     class="form-control form-control-sm llm-field"
                      id="llm_llamacpp_host"
                      value="${escapeHtml(initialLlamaCppHost || "")}">
               <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
@@ -1045,6 +1063,13 @@ const renderBasicGroupParams = (modelName) => {
         const labelText = key.replace(/_/g, " ");
         const labelSafe = escapeHtml(labelText);
 
+        // helper for include toggle
+        const includeSwitch = (k) => `
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input include-adv" type="checkbox" data-for="${k}" checked>
+          </div>
+        `;
+
         if (key === "not_include") {
           const items = Array.isArray(val)
             ? val
@@ -1055,13 +1080,17 @@ const renderBasicGroupParams = (modelName) => {
           const text = escapeHtml(items.join("\n"));
           return `
             <div class="col-12 mt-2">
-              <label class="form-label-compact" for="${key}" title="${labelSafe}">
-                ${labelSafe}
-              </label>
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <label class="form-label-compact mb-0" for="${key}" title="${labelSafe}">
+                  ${labelSafe}
+                </label>
+                ${includeSwitch(key)}
+              </div>
               <textarea id="${key}"
                         class="form-control form-control-sm"
                         rows="2"
                         placeholder="Item 1&#10;Item 2&#10;...">${text}</textarea>
+              <small class="text-muted">Comma or newline separated</small>
             </div>
           `;
         }
@@ -1070,6 +1099,9 @@ const renderBasicGroupParams = (modelName) => {
           return `
             <div class="col-md-4 col-sm-6 d-flex align-items-center mt-2">
               <div class="form-check form-switch mb-0">
+                <input class="form-check-input include-adv" type="checkbox" data-for="${key}" checked>
+              </div>
+              <div class="form-check form-switch mb-0 ms-2">
                 <input type="checkbox"
                        class="form-check-input"
                        id="${key}"
@@ -1092,9 +1124,12 @@ const renderBasicGroupParams = (modelName) => {
 
         return `
           <div class="col-md-4 col-sm-6">
-            <label class="form-label-compact" for="${key}" title="${labelSafe}">
-              ${labelSafe}
-            </label>
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label-compact mb-0" for="${key}" title="${labelSafe}">
+                ${labelSafe}
+              </label>
+              ${includeSwitch(key)}
+            </div>
             <input type="${type}"
                    class="form-control form-control-sm"
                    id="${key}"
@@ -1186,12 +1221,26 @@ const renderBasicGroupParams = (modelName) => {
 
     if (dom.toggleAdvancedBtn && dom.advancedSettings && dom.advancedIcon) {
       dom.toggleAdvancedBtn.addEventListener("click", () => {
-        const isHidden =
+      if (dom.includeAdvanced && !dom.includeAdvanced.checked) return;
+      const isHidden =
           dom.advancedSettings.style.display === "none" ||
           !dom.advancedSettings.style.display;
         dom.advancedSettings.style.display = isHidden ? "block" : "none";
         dom.advancedIcon.classList.toggle("bi-chevron-down", !isHidden);
         dom.advancedIcon.classList.toggle("bi-chevron-up", isHidden);
+      });
+    }
+
+    // Wire include_llm toggle to disable/enable llm fields
+    if (dom.includeLlm) {
+      const toggleLlmFields = (enabled) => {
+        document.querySelectorAll(".llm-field").forEach((el) => {
+          el.disabled = !enabled;
+        });
+      };
+      toggleLlmFields(dom.includeLlm.checked);
+      dom.includeLlm.addEventListener("change", (e) => {
+        toggleLlmFields(e.target.checked);
       });
     }
 
@@ -1259,6 +1308,21 @@ const renderBasicGroupParams = (modelName) => {
       const key = el.id;
       if (!key) return;
 
+      const includeToggle = container.querySelector(`.include-adv[data-for="${key}"]`);
+      if (includeToggle && !includeToggle.checked) return;
+
+      // Skip provider-specific fields that are hidden
+      const llmSection = el.closest(".llm-provider-section");
+      if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
+
+      // If this element is gated by an include toggle and it's off, disable edits
+      if (includeToggle && !includeToggle.checked) {
+        if ("disabled" in el) el.disabled = true;
+        return;
+      } else if (includeToggle && includeToggle.checked && "disabled" in el) {
+        el.disabled = false;
+      }
+
       if (key === "not_include") {
         const items = String(el.value || "")
           .split(/[\n,]/)
@@ -1321,16 +1385,7 @@ const renderBasicGroupParams = (modelName) => {
     const kindCfg =
       kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
 
-    if (!provider) {
-      // Auto from config; just make sure defaults are there if not overridden
-      if (targetModelField && kindCfg.model && training_params[targetModelField] == null) {
-        training_params[targetModelField] = kindCfg.model;
-      }
-      if (kindCfg.server && training_params.llm_server == null) {
-        training_params.llm_server = kindCfg.server;
-      }
-      return;
-    }
+    if (!provider) return; // optional: no provider chosen, keep only what user set elsewhere
 
     training_params.llm_provider = provider;
 
@@ -1394,9 +1449,10 @@ const renderBasicGroupParams = (modelName) => {
     const corpusId = state.selectedDataset.id;
 
     const basicParams = collectBasicGroupParams();
-    const advancedParams = collectAdvancedParams();
+    const includeAdvanced = dom.includeAdvanced ? dom.includeAdvanced.checked : true;
+    const advancedParams = includeAdvanced ? collectAdvancedParams() : {};
 
-    const training_params = {
+    let training_params = {
       ...basicParams,
       ...advancedParams,
       preprocess_text: !!dom.preprocessCheckbox?.checked,
@@ -1418,9 +1474,39 @@ const renderBasicGroupParams = (modelName) => {
       }
     }
 
+    // Map collected parameter IDs to expected backend parameter names
+    // This handles the mismatch between form field IDs and backend expectations
+    const paramMapping = {
+      "tm-trad-do_labeller": "do_labeller",
+      "tm-trad-do_summarizer": "do_summarizer",
+      "tm-trad-llm_model_type": "llm_model_type",
+      "tm-trad-labeller_prompt": "labeller_prompt",
+      "tm-trad-labeller_model_path": "labeller_model_path",
+      "tm-trad-summarizer_prompt": "summarizer_prompt",
+      "tm-trad-llm_server": "llm_server",
+    };
+
+    // Apply parameter name mapping by modifying the object in place
+    const keysToUpdate = Object.keys(training_params).filter(key => paramMapping.hasOwnProperty(key));
+    keysToUpdate.forEach(key => {
+      const mappedKey = paramMapping[key];
+      if (mappedKey && mappedKey !== key) {
+        training_params[mappedKey] = training_params[key];
+        delete training_params[key];
+      }
+    });
 
     // Map provider -> llm_model_type / llm / llm_server
-    applyLlmSelection(training_params, model);
+    // Only map provider fields if LLM section is included and a provider is chosen
+    const includeLlm = document.querySelector("#include_llm")?.checked;
+    if (includeLlm && training_params.llm_provider) {
+      applyLlmSelection(training_params, model);
+    } else {
+      // strip any leftover llm_* fields if not including LLM
+      Object.keys(training_params)
+        .filter((k) => k.startsWith("llm_"))
+        .forEach((k) => delete training_params[k]);
+    }
     
     console.log("training_params being sent:", training_params);
 
