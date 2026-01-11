@@ -7,12 +7,10 @@ from typing import Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import pandas as pd
-from scipy import sparse
-from sklearn.preprocessing import normalize
+
 
 from tova.preprocessing.tm_preprocessor import TMPreprocessor
 from tova.topic_models.models.base_model import BaseTMModel
-from tova.topic_models.tm_model import TMmodel
 from tova.utils.cancel import CancellationToken, check_cancel
 from tova.utils.progress import (ProgressCallback,  # type: ignore
                                  ProgressReporter)
@@ -159,48 +157,6 @@ class TradTMmodel(BaseTMModel, ABC):
                      * np.arange(0, len(all_values))[::step])
         plt.savefig(plot_file)
         plt.close()
-
-    def _createTMmodel(self, thetas, betas, vocab):
-        """Creates an object of class TMmodel hosting the topic model
-        that has been trained and whose output is available at the
-        provided folder
-
-        Parameters
-        ----------
-        modelFolder: Path
-            the folder with the mallet output files
-
-        Returns
-        -------
-        tm: TMmodel
-            The topic model as an object of class TMmodel
-
-        """
-        # Sparsification of thetas matrix
-        # self._save_thr_fig(thetas, self.model_path.joinpath('thetasDist.pdf'))
-
-        # Set to zeros all thetas below threshold, and renormalize
-        thetas[thetas < self.thetas_thr] = 0
-        thetas = normalize(thetas, axis=1, norm='l1')
-        thetas = sparse.csr_matrix(thetas, copy=True)
-
-        # Recalculate topic weights to avoid errors due to sparsification
-        alphas = np.asarray(np.mean(thetas, axis=0)).ravel()
-
-        tm = TMmodel(
-            TMfolder=self.model_path.joinpath('TMmodel'),
-            config_path=self._config_path,
-            df_corpus_train=self.df,
-            do_labeller=self.do_labeller,
-            do_summarizer=self.do_summarizer,
-            llm_model_type=self.llm_model_type,
-            labeller_prompt=self.labeller_prompt,
-            summarizer_prompt=self.summarizer_prompt,
-        )
-        tm.create(
-            betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
-
-        return tm
 
     def train_model(
         self,

@@ -52,12 +52,12 @@ class TestTopicModels(unittest.TestCase):
                     preprocess_text=True,
                 )
 
-                # Train the model
+                # train
                 model.train_model(self.train_data)
                 
                 self.model_path = model_path
 
-                # Perform inference
+                # inference
                 infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
                 infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
                 thetas, time_taken = model.infer(infer_data)
@@ -66,18 +66,17 @@ class TestTopicModels(unittest.TestCase):
                 print(f"Inference completed in {time_taken} seconds for model {model_name}")
 
     def test_load_and_infer(self):
-        # Load the model
+        # load the model
         for model_name, model_path in self.model_registry.items():
             with self.subTest(model=model_name):
                 model_cls = self.load_class_from_path(model_path)
                 tm_model = model_cls.from_saved_model(f"test_{model_name}")
             
-                # Perform inference
+                # inference
                 infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
                 infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
                 thetas, duration = tm_model.infer(infer_data)
 
-                # Assertions
                 self.assertIsNotNone(thetas, "Thetas should not be None")
                 self.assertGreater(len(thetas), 0, "Thetas should contain results")
                 self.assertGreater(duration, 0, "Duration should be greater than 0")

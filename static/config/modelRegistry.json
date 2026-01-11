@@ -1,11 +1,5 @@
 {   
-    "traditional":{
-        "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
-        "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
-    },
-    "llm_based":{
-        "topicGPT": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
-    }
-    
+    "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
+    "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel",
+    "topicGPT": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
 }
-

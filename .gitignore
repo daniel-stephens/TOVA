@@ -15,3 +15,4 @@ dashboardData.json
 build
 venv
 src/tova.egg-info
+*.DS_Store
