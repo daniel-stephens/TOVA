@@ -34,8 +34,8 @@ build-api:
 build-web:
 	docker compose build web
 
-build-solr-api:
-	docker compose build solr-api
+# build-solr-api:
+# 	docker compose build solr-api
 
 rebuild-api:
 	docker compose build --no-cache api
@@ -43,20 +43,20 @@ rebuild-api:
 rebuild-web:
 	docker compose build --no-cache web
 
-rebuild-solr-api:
-	docker compose build --no-cache solr-api
+# rebuild-solr-api:
+# 	docker compose build --no-cache solr-api
 
 # ---------- combos ----------
-build: build-builder build-assets build-api build-web build-solr-api
+build: build-builder build-assets build-api build-web
 
-rebuild-all: rebuild-builder rebuild-assets rebuild-api rebuild-web rebuild-solr-api
-	docker compose up -d api web solr-api solr zoo solr_config
+rebuild-all: rebuild-builder rebuild-assets rebuild-api rebuild-web # rebuild-solr-api
+	docker compose up -d api web postgres # solr-api solr zoo solr_config
 
-rebuild-run: rebuild-api rebuild-web rebuild-solr-api
-	docker compose up -d api web solr-api
+rebuild-run: rebuild-api rebuild-web # rebuild-solr-api
+	docker compose up -d api web postgres # solr-api
 
 up: build
-	docker compose up -d api web solr-api solr zoo solr_config
+	docker compose up -d api web postgres # solr-api solr zoo solr_config
 
 down:
 	docker compose down --remove-orphans
@@ -67,11 +67,14 @@ logs-api:
 logs-web:
 	docker compose logs -f web
 
-logs-solr-api:
-	docker compose logs -f solr-api
+logs-postgres:
+	docker compose logs -f postgres
+
+# logs-solr-api:
+# 	docker compose logs -f solr-api
 
 .PHONY: build-builder build-assets rebuild-builder rebuild-assets \
-        build-api build-web build-solr-api \
-        rebuild-api rebuild-web rebuild-solr-api \
+        build-api build-web \
+        rebuild-api rebuild-web \
         build rebuild-all rebuild-run up down \
-        logs-api logs-web logs-solr-api
+        logs-api logs-web logs-postgres

@@ -1,23 +1,4 @@
 services:
-  # 1. POSTGRESQL SERVICE (NEW)
-  postgres:
-    image: postgres:15-alpine # Use a recent, small image for performance
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}        # Default to 'user' if not set
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password} # Default to 'password' if not set
-      POSTGRES_DB: ${POSTGRES_DB:-mydb}          # Default database name
-    ports:
-      - "5432:5432" # Expose for easy local access (optional)
-    volumes:
-      - postgres_data:/var/lib/postgresql/data # Mount persistent volume
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-mydb}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
   api:
     build:
       context: .
@@ -25,12 +6,11 @@ services:
       args:
         BUILDER_IMAGE: tova-builder:${VERSION}
         ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
-    # 2. ADD POSTGRES DEPENDENCY
     depends_on:
       postgres:
-        condition: service_healthy # Wait for postgres to be healthy before starting API
-      #solr-api: # original dependency commented out
-      #  condition: service_healthy
+        condition: service_healthy
+    #solr-api:
+    #  condition: service_healthy
     ports:
       - "8000:8000"
     healthcheck:
@@ -43,9 +23,7 @@ services:
       - PYTHONUNBUFFERED=1
       - API_SOLR_URL=http://solr-api:8001
       - DRAFTS_SAVE=/data/drafts
-      # 3. ADD DATABASE CONNECTION STRING
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
-      # OpenAI API Key for labeling and summarization
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       - ./data:/data
@@ -73,8 +51,25 @@ services:
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}       
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password} 
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}          
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-mydb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     
-# (The rest of your services like solr-api, solr-initializer, zoo, solr, and solr_config remain unchanged)
   solr-api:
     build:
       context: .
@@ -88,6 +83,12 @@ services:
       - 8001:8001
     environment:
       SOLR_URL: http://solr:8983
+    #healthcheck:
+    #  test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2).getcode()==200 else 1)"]
+    #  interval: 10s
+    #  timeout: 3s
+    #  retries: 5
+    #  start_period: 15s
     volumes:
       - ./data:/data
       - ./dashbaord:/dashboard
@@ -123,7 +124,7 @@ services:
     volumes:
       - ./db/data/solr:/var/solr
     command: ["solr", "-f", "-c", "-z", "zoo:2181", "-a",
-              "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=1044 -Djute.maxbuffer=0x5000000"]
+      "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=1044 -Djute.maxbuffer=0x5000000"]
 
   solr_config:
     build: ./solr/config
@@ -134,7 +135,6 @@ services:
       - ./db/data/solr:/db/data/solr
     command: ["sh","-c","chmod +x /bash_scripts/init_config.sh && ls /bash_scripts && bash_scripts/init_config.sh /db/data/solr/data"]
 
-# 4. DEFINE NEW VOLUME
 volumes:
   data:
   postgres_data: # New volume for persistent Postgres data
