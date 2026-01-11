@@ -451,6 +451,7 @@ footer {
                     </div>
                     </div>
                 </div>
+                <div class="mt-2 small text-muted" id="inferStatus"></div>
                 <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 <button class="btn btn-primary" id="inferBtn">Infer</button>
@@ -720,9 +721,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let dashboardV2 = null;        // normalized single-fetch bundle
   let themeChartInstance = null;
   let scatterChartInstance = null;
-  let docInferenceChart = null;
+  const inferenceCharts = {};    // keyed by canvas id
   let themeColorMap = {};        // { [themeId]: color }
-  let docsArray = [];            // cached rows for main table
+  let docsArray = [];
+  let textInferenceChart = null;            // cached rows for main table
 
   // ---------------------------
   // Helpers
@@ -869,16 +871,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function renderDocInferenceChart(topThemes = []) {
-    const canvas = document.getElementById("docInferenceChart");
+  function renderDocInformationChart(topThemes = [], targetCanvasId = "docInferenceChart") {
+    const canvas = document.getElementById(targetCanvasId);
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    if (docInferenceChart) docInferenceChart.destroy();
+    if (inferenceCharts[targetCanvasId]) inferenceCharts[targetCanvasId].destroy();
 
     const getColor = id => themeColorMap[Number(id)] || "#0d6efd";
     const backgroundColors = topThemes.map(t => getColor(t.theme_id));
 
-    docInferenceChart = new Chart(ctx, {
+    inferenceCharts[targetCanvasId] = new Chart(ctx, {
       type: "bar",
       data: {
         labels: topThemes.map(t => t.label),
@@ -903,12 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         },
-        onClick: (e, els) => {
-          if (!els.length) return;
-          const idx = els[0].index;
-          const theme = topThemes[idx];
-          openThemeModal(theme.theme_id, themeColorMap[theme.theme_id] || "#0d6efd");
-        }
+        
       }
     });
   }
@@ -1033,12 +1030,12 @@ document.addEventListener("DOMContentLoaded", () => {
           legend: { display: false },
           tooltip: { callbacks: { label: ctx => `Similarity: ${ctx.raw.toFixed(3)}` } }
         },
-        onClick: (e, els) => {
-          if (!els.length) return;
-          const idx = els[0].index;
-          const t = processed[idx];
-          openThemeModal(t.id, themeColorMap[t.id] || "#0d6efd");
-        }
+        // onClick: (e, els) => {
+        //   if (!els.length) return;
+        //   const idx = els[0].index;
+        //   const t = processed[idx];
+        //   openThemeModal(t.id, themeColorMap[t.id] || "#0d6efd");
+        // }
       }
     });
   }
@@ -1165,7 +1162,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .join(" ").toLowerCase();
       row.dataset.search = searchBlob;
       row.classList.add("small-text");
-      row.addEventListener("click", () => showInferenceModal(doc));
+      row.addEventListener("click", () => showDocumentInfoModal(doc));
 
       columns.forEach(col => {
         const td = document.createElement("td");
@@ -1430,7 +1427,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const row = document.createElement("tr");
         row.classList.add("small");
         row.dataset.search = [filter.id, filter.text, String(filter.score ?? ""), filter.rationale ?? ""].join(" ").toLowerCase();
-        row.addEventListener("click", () => showInferenceModal?.(filter));
+        row.addEventListener("click", () => showDocumentInfoModal?.(filter));
 
         columns.forEach(col => {
           const td = document.createElement("td");
@@ -1446,10 +1443,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
-  // ---------------------------
-  // Inference modal 
-  // ---------------------------
-  async function showInferenceModal(doc) {
+
+  async function showDocumentInfoModal(doc) {
     const docId = doc.id;
     const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
 
@@ -1512,7 +1507,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    renderDocInferenceChart(result.top_themes);
+    renderDocInformationChart(result.top_themes);
     const docThemeId = resolvedThemeId;
 
     const grid = ensureDocDiagnosticsBlock();
@@ -1671,17 +1666,233 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
 
-      // Inference input toggle
+
+      // ---------------------------
+      // Inference modal 
+      // ---------------------------
       (() => {
         const toggleTextBtn = document.getElementById("toggleTextInput");
         const toggleFileBtn = document.getElementById("toggleFileInput");
         const textArea = document.getElementById("textAreaSpace");
         const fileGroup = document.getElementById("fileInputGroup");
         const inferredBlock = document.getElementById("inferredResults");
-        if (!toggleTextBtn || !toggleFileBtn || !textArea || !fileGroup) return;
+        const inferBtn = document.getElementById("inferBtn");
+        const inputText = document.getElementById("inputText");
+        const fileInput = document.getElementById("files");
+        const textSelect = document.getElementById("textColumn");
+        const idSelect = document.getElementById("idColumn");
+        const statusEl = document.getElementById("inferStatus");
+
+        if (!toggleTextBtn || !toggleFileBtn || !textArea || !fileGroup || !inferBtn) return;
 
         let madeInference = false;
+        let mode = "text";
+        let cachedFileContent = "";
+        let cachedFileExt = "";
+
+        const setLoading = (loading, label = "Infer") => {
+          inferBtn.disabled = loading;
+          inferBtn.textContent = loading ? "Running..." : label;
+        };
+
+        const showStatus = (msg, isError = false) => {
+          if (!statusEl) return;
+          statusEl.textContent = msg || "";
+          statusEl.classList.toggle("text-danger", !!isError);
+          statusEl.classList.toggle("text-muted", !isError);
+        };
+
+        const setOptions = (selectEl, options) => {
+          if (!selectEl) return;
+          selectEl.innerHTML = "";
+          const placeholder = document.createElement("option");
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          placeholder.textContent = "Select column...";
+          selectEl.appendChild(placeholder);
+          (options || []).forEach((opt) => {
+            const o = document.createElement("option");
+            o.value = opt;
+            o.textContent = opt;
+            selectEl.appendChild(o);
+          });
+        };
+
+        const parseHeaderKeys = (content, ext) => {
+          try {
+            if (ext === "json") {
+              const parsed = JSON.parse(content);
+              const first = Array.isArray(parsed) ? parsed[0] : parsed;
+              return first && typeof first === "object" ? Object.keys(first) : [];
+            }
+            if (ext === "jsonl") {
+              const line = (content.split(/\r?\n/).find((l) => l.trim()) || "").trim();
+              if (!line) return [];
+              const obj = JSON.parse(line);
+              return obj && typeof obj === "object" ? Object.keys(obj) : [];
+            }
+            if (ext === "csv") {
+              const firstLine = (content.split(/\r?\n/).find((l) => l.trim()) || "").trim();
+              return firstLine ? firstLine.split(",").map((s) => s.trim()) : [];
+            }
+            return [];
+          } catch {
+            return [];
+          }
+        };
+
+        const parseRecords = (content, ext, idCol, textCol) => {
+          const records = [];
+          if (!idCol || !textCol) return records;
+          try {
+            if (ext === "json") {
+              const parsed = JSON.parse(content);
+              const arr = Array.isArray(parsed) ? parsed : [parsed];
+              arr.forEach((row, idx) => {
+                if (row && typeof row === "object" && row[textCol]) {
+                  records.push({ id: row[idCol] ?? `row-${idx + 1}`, text: row[textCol] });
+                }
+              });
+              return records;
+            }
+            if (ext === "jsonl") {
+              content.split(/\r?\n/).forEach((line, idx) => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                try {
+                  const obj = JSON.parse(trimmed);
+                  if (obj && obj[textCol]) {
+                    records.push({ id: obj[idCol] ?? `row-${idx + 1}`, text: obj[textCol] });
+                  }
+                } catch {
+                  /* ignore bad line */
+                }
+              });
+              return records;
+            }
+            if (ext === "csv") {
+              const lines = content.split(/\r?\n/).filter((l) => l.trim());
+              if (!lines.length) return records;
+              const header = lines[0].split(",").map((s) => s.trim());
+              const idIdx = header.indexOf(idCol);
+              const textIdx = header.indexOf(textCol);
+              if (idIdx === -1 || textIdx === -1) return records;
+              for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(",").map((s) => s.trim());
+                const text = cols[textIdx];
+                if (!text) continue;
+                const id = cols[idIdx] || `row-${i}`;
+                records.push({ id, text });
+              }
+              return records;
+            }
+            // fallback: treat as plain text (one record)
+            if (content.trim()) {
+              records.push({ id: "1", text: content.trim() });
+            }
+            return records;
+          } catch {
+            return records;
+          }
+        };
+
+        function renderDocInference(result) {
+          const inferredThemeEl = document.getElementById("inferredTheme");
+          const inferredKeywordsEl = document.getElementById("inferredKeywords");
+          const infRationaleEl = document.getElementById("inferredRationale");
+          const infRationaleWrapper = document.getElementById("inferredRationaleWrapper");
+          const textArea = document.getElementById("textAreaSpace");
+          const inferredBlock = document.getElementById("inferredResults");
+
+          const safeThemeById = (tid) => {
+            try {
+              return dashboardV2?.themes?.byId?.[String(tid)] || null;
+            } catch {
+              return null;
+            }
+          };
+
+          console.log(result)
+
+          let topThemes = [];
+          const thetas = result?.thetas;
+          if (Array.isArray(thetas) && thetas.length) {
+            const firstEntry = thetas[0] || {};
+            const [, themeScoresObj] = Object.entries(firstEntry)[0] || [];
+            if (themeScoresObj && typeof themeScoresObj === "object") {
+              topThemes = Object.entries(themeScoresObj)
+                .map(([tid, score]) => {
+                  const t = safeThemeById(tid);
+                  return {
+                    theme_id: Number(tid),
+                    label: t?.label || `Theme ${tid}`,
+                    score: typeof score === "number" ? score : Number(score) || 0,
+                    keywords: Array.isArray(t?.keywords) ? t.keywords.join(", ") : (t?.keywords || "")
+                  };
+                })
+                .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+            }
+          }
+
+          const top = topThemes[0] || null;
+          const inferredColor = top?.theme_id != null ? (themeColorMap[Number(top.theme_id)] || null) : null;
+
+          if (inferredThemeEl) {
+            inferredThemeEl.textContent = top?.label || "-";
+            inferredThemeEl.style.color = inferredColor || "";     
+            inferredThemeEl.style.fontWeight = inferredColor ? "600" : "";
+          }
+
+          // No rationale in this response; hide it
+          if (infRationaleEl && infRationaleWrapper) {
+            infRationaleEl.textContent = "—";
+            infRationaleWrapper.style.display = "none";
+          }
+
+          if (inferredKeywordsEl) {
+            const kw = top?.keywords || "";
+            const formatted = typeof kw === "string"
+              ? kw.split(", ").reduce((acc, word, idx) => {
+                  const line = Math.floor(idx / 5);
+                  acc[line] = acc[line] ? acc[line] + ", " + word : word;
+                  return acc;
+                }, []).join("\n")
+              : "";
+            inferredKeywordsEl.textContent = formatted || "—";
+          }
+
+          renderDocInformationChart(
+            topThemes.map(t => ({
+              ...t,
+              keywords: t.keywords || ""
+            })),
+            "inferredThemeChart"
+          );
+
+          if (textArea) textArea.className = "col-md-6";
+          if (inferredBlock) inferredBlock.style.display = "block";
+
+          return topThemes;
+        }
+
+        const handleFileChange = async () => {
+          const file = fileInput?.files?.[0];
+          if (!file) return;
+          const ext = (file.name.split(".").pop() || "").toLowerCase();
+          cachedFileExt = ext;
+          cachedFileContent = await file.text();
+          const keys = parseHeaderKeys(cachedFileContent, ext);
+          if (keys.length) {
+            setOptions(textSelect, keys);
+            setOptions(idSelect, keys);
+            showStatus("Columns detected. Choose text and id columns.", false);
+          } else {
+            showStatus("Could not detect columns. Please select manually or use text input.", true);
+          }
+        };
+
         toggleTextBtn.addEventListener("click", () => {
+          mode = "text";
           textArea.style.display = "block";
           fileGroup.style.display = "none";
           toggleTextBtn.classList.add("active");
@@ -1689,83 +1900,65 @@ document.addEventListener("DOMContentLoaded", () => {
           if (madeInference && inferredBlock) inferredBlock.style.display = "block";
         });
         toggleFileBtn.addEventListener("click", () => {
+          mode = "file";
           textArea.style.display = "none";
           fileGroup.style.display = "block";
           toggleFileBtn.classList.add("active");
           toggleTextBtn.classList.remove("active");
           if (inferredBlock) inferredBlock.style.display = "none";
         });
+        fileInput?.addEventListener("change", handleFileChange);
 
-        const inferBtn = document.getElementById("inferBtn");
-        const inputText = document.getElementById("inputText");
-        if (inferBtn && inputText) {
+        if (inferBtn) {
           inferBtn.addEventListener("click", async () => {
-            const text = inputText.value.trim();
-            if (!text) return alert("Please enter some text.");
+            showStatus("");
+            const payload = {
+              model_id: modelId,
+              id_col: "id",
+              text_col: "text",
+              config_path: "static/config/config.yaml",
+              data: []
+              // owner_id could be added here if supported by backend
+            };
+
             try {
+              setLoading(true);
+              if (mode === "file") {
+                const file = fileInput?.files?.[0];
+                const idCol = idSelect?.value;
+                const textCol = textSelect?.value;
+                if (!file) throw new Error("Please choose a file.");
+                if (!idCol || !textCol) throw new Error("Select ID and Text columns.");
+                if (!cachedFileContent) cachedFileContent = await file.text();
+                const records = parseRecords(cachedFileContent, cachedFileExt || (file.name.split(".").pop() || "").toLowerCase(), idCol, textCol);
+                if (!records.length) throw new Error("No rows found with the selected columns.");
+                payload.data = records.map((r) => ({ id: r.id, text: r.text }));
+              } else {
+                const text = inputText?.value.trim() || "";
+                if (!text) throw new Error("Please enter some text.");
+                payload.data = [{ id: "1", text }];
+                console.log(payload);
+              }
+
               const response = await fetch("/infer-text", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, id: "temp_id", model_path: modelPath })
+                body: JSON.stringify(payload),
               });
-              if (!response.ok) throw new Error("Failed to fetch inference");
-              const result = await response.json();
+              if (!response.ok) throw new Error(`Failed to fetch inference (${response.status})`);
+              const rawResult = await response.json();
+              console.log(rawResult)
+              const result = rawResult?.results || rawResult?.result || rawResult || {};
 
-              const inferredThemeEl = document.getElementById("inferredTheme");
-              const inferredKeywordsEl = document.getElementById("inferredKeywords");
-
-              const top = result?.top_themes?.[0] || null;
-
-              if (inferredThemeEl) {
-                inferredThemeEl.textContent = top?.label || "-";
-              }
-
-              const inferredColor =
-                top?.theme_id != null ? (themeColorMap[Number(top.theme_id)] || null) : null;
-
-              if (inferredThemeEl) {
-                inferredThemeEl.style.color = inferredColor || "";     
-                inferredThemeEl.style.fontWeight = inferredColor ? "600" : "";
-              }
-
-              const infRationaleText = (result?.rationale || "").trim();
-              const infRationaleEl = document.getElementById("inferredRationale");
-              const infRationaleWrapper = document.getElementById("inferredRationaleWrapper");
-              if (infRationaleEl && infRationaleWrapper) {
-                if (infRationaleText) {
-                  infRationaleEl.textContent = infRationaleText;
-                  infRationaleWrapper.style.display = "";
-                } else {
-                  infRationaleEl.textContent = "—";
-                  infRationaleWrapper.style.display = "none";
-                }
-              }
-
-              if (inferredKeywordsEl) {
-                const kw = result.top_themes?.[0]?.keywords || "";
-                const formatted = typeof kw === "string"
-                  ? kw.split(", ").reduce((acc, word, idx) => {
-                      const line = Math.floor(idx / 5);
-                      acc[line] = acc[line] ? acc[line] + ", " + word : word;
-                      return acc;
-                    }, []).join("\n")
-                  : "";
-                inferredKeywordsEl.textContent = formatted || "—";
-              }
-
-              renderDocInferenceChart(
-                (result.top_themes || []).map(t => ({
-                  ...t,
-                  keywords: t.keywords || ""
-                }))
-              );
-
-              if (textArea) textArea.className = "col-md-6";
-              if (inferredBlock) inferredBlock.style.display = "block";
+              renderDocInference(result);
               madeInference = true;
+              showStatus("Inference complete.");
             } catch (err) {
               console.error("Inference error:", err);
+              showStatus(err?.message || "Failed to perform inference.", true);
               alert("Failed to perform inference.");
+            } finally {
+              setLoading(false);
             }
           });
         }

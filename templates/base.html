@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}TOVA - Topic Visualization{% endblock %}</title>
 
-  <!-- CSRF token (optional; only if provided by backend) -->
   {% if csrf_token is defined %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
   {% endif %}
 
-  <!-- Bootstrap CSS -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
     rel="stylesheet"
+  >
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
   >
 
   <style>
@@ -64,7 +66,6 @@
 </head>
 <body>
 
-  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
     <div class="container">
       <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">TOVA</a>
@@ -75,7 +76,6 @@
       </button>
 
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <!-- Left nav links -->
         <ul class="navbar-nav">
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'home' %}active{% endif %}"
@@ -97,14 +97,13 @@
           </li>
         </ul>
 
-        <!-- Right-side auth / actions -->
         <div class="d-flex align-items-center gap-2">
           {% if user %}
             <span class="navbar-text small text-muted d-none d-md-inline">
               Hi, {{ user.name }}
             </span>
-            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#llmModal">
-              LLM Settings
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#configModal">
+              Config Editor
             </button>
             <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
               Logout
@@ -113,7 +112,7 @@
             <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">
               Login
             </a>
-            <a href="{{ url_for('register') }}" class="btn btn-success btn-sm">
+            <a href="{{ url_for('signup') }}" class="btn btn-success btn-sm">
               Sign up
             </a>
           {% endif %}
@@ -122,7 +121,6 @@
     </div>
   </nav>
 
-  <!-- Optional global flash messages -->
   <div class="container mt-3">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -135,302 +133,598 @@
     {% endwith %}
   </div>
 
-  <!-- Main content -->
   <main class="flex-grow-1">
     {% block content %}{% endblock %}
   </main>
 
-  <!-- LLM Settings Modal: only for logged-in users -->
   {% if user %}
-  <div class="modal fade" id="llmModal" tabindex="-1" aria-labelledby="llmModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <form class="modal-content" id="llmForm">
-        <div class="modal-header">
-          <h5 class="modal-title" id="llmModalLabel">LLM Settings</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <form class="modal-content" id="configForm">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold" id="configModalLabel"><i class="bi bi-gear-fill me-2"></i>Global Configuration Editor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <div class="alert alert-info small d-flex align-items-center gap-2" role="status">
+          <i class="bi bi-person-gear"></i>
+          <span>Your configuration is saved to your account and defaults to <code>static/config/config.yaml</code>.</span>
         </div>
-
-        <div class="modal-body">
-          <!-- Provider -->
-          <div class="mb-3">
-            <label for="llmProvider" class="form-label">Provider</label>
-            <select class="form-select" id="llmProvider" name="provider" required>
-              <!-- Filled dynamically from /llm/ui-config -->
-            </select>
-            <div class="form-text">
-              Choose where TOVA should send your text for analysis.
-            </div>
-          </div>
-
-          <!-- Model (optional per provider) -->
-          <div class="mb-3" id="modelGroup">
-            <label for="llmModel" class="form-label">Model</label>
-            <select class="form-select" id="llmModel" name="model">
-              <!-- Filled dynamically based on provider -->
-            </select>
-            <div id="modelHelp" class="form-text">
-              Select a model that fits your needs.
-            </div>
-          </div>
-
-          <!-- API Key (for providers that need it, e.g. GPT) -->
-          <div class="mb-3" id="apiKeyGroup" style="display:none;">
-            <label for="llmApiKey" class="form-label" id="apiKeyLabel">API key</label>
-            <input
-              type="password"
-              class="form-control"
-              id="llmApiKey"
-              name="api_key"
-              placeholder="sk-..."
-              autocomplete="off"
-            >
-            <div id="apiKeyHelp" class="form-text">
-              Your key is only used to call the provider on your behalf.
-            </div>
-          </div>
-
-          <!-- Host URL (for local providers like Ollama / llama.cpp) -->
-          <div class="mb-3" id="hostGroup" style="display:none;">
-            <label for="llmHost" class="form-label">Host URL</label>
-            <input
-              type="text"
-              class="form-control"
-              id="llmHost"
-              name="host"
-              placeholder="http://localhost:11434"
-            >
-            <div id="hostHelp" class="form-text">
-              URL of your local LLM server.
-            </div>
-          </div>
-
-          <div id="llm-feedback" class="small" style="display:none;" aria-live="polite"></div>
+        <div id="configStatus" class="text-secondary small mb-2 d-none">
+          <i class="bi bi-info-circle me-1"></i>
+          <span id="configStatusText">Loading your configuration...</span>
         </div>
-
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-success">Save LLM settings</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="small text-muted">Last update: <span id="configLastSaved">not loaded</span></div>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" id="configRefreshBtn">Reload</button>
+            <button type="button" class="btn btn-outline-danger" id="configResetBtn">Reset to defaults</button>
+          </div>
         </div>
-      </form>
-    </div>
+        <div id="llm-feedback" class="alert small" style="display:none;" aria-live="polite"></div>
+
+        <ul class="nav nav-pills nav-fill mb-4 border-bottom pb-2" id="configTabs" role="tablist">
+          <li class="nav-item" role="presentation"><button class="nav-link active" id="logger-tab" data-bs-toggle="tab" data-bs-target="#logger-pane" type="button" role="tab" aria-controls="logger-pane" aria-selected="true"><i class="bi bi-journal-text me-1"></i> Logging</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link" id="topic-modeling-tab" data-bs-toggle="tab" data-bs-target="#topic-modeling-pane" type="button" role="tab" aria-controls="topic-modeling-pane" aria-selected="false"><i class="bi bi-tags-fill me-1"></i> Topic Modeling</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link" id="preprocessor-tab" data-bs-toggle="tab" data-bs-target="#preprocessor-pane" type="button" role="tab" aria-controls="preprocessor-pane" aria-selected="false"><i class="bi bi-funnel-fill me-1"></i> Preprocessing</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link" id="llm-tab" data-bs-toggle="tab" data-bs-target="#llm-pane" type="button" role="tab" aria-controls="llm-pane" aria-selected="false"><i class="bi bi-robot me-1"></i> LLM/Prompter</button></li>
+        </ul>
+
+        <div class="tab-content" id="configTabsContent">
+
+          <div class="tab-pane fade show active" id="logger-pane" role="tabpanel" aria-labelledby="logger-tab" tabindex="0">
+            <h4 class="mb-3">Log Settings</h4>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="logger-dir_logger" class="form-label">Log Directory</label>
+                <input type="text" class="form-control" id="logger-dir_logger" name="logger.dir_logger" placeholder="data/logs">
+                <div class="form-text">Relative path to store log files.</div>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="logger-log_level" class="form-label">Log Level</label>
+                <select class="form-select" id="logger-log_level" name="logger.log_level">
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="INFO">INFO</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+                <div class="form-text">Minimum severity level to record.</div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-4 mb-3 form-check form-switch p-4 bg-light rounded">
+                <input class="form-check-input" type="checkbox" role="switch" id="logger-console_log" name="logger.console_log">
+                <label class="form-check-label ms-2" for="logger-console_log">Enable Console Logging</label>
+              </div>
+              <div class="col-md-4 mb-3 form-check form-switch p-4 bg-light rounded">
+                <input class="form-check-input" type="checkbox" role="switch" id="logger-file_log" name="logger.file_log">
+                <label class="form-check-label ms-2" for="logger-file_log">Enable File Logging</label>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="logger-N_log_keep" class="form-label">Max Log Files to Keep (N_log_keep)</label>
+                <input type="number" class="form-control" id="logger-N_log_keep" name="logger.N_log_keep" min="1" value="5">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="topic-modeling-pane" role="tabpanel" aria-labelledby="topic-modeling-tab" tabindex="0">
+            <h4 class="mb-3">Topic Modeling Algorithms & Global Params</h4>
+            
+            <ul class="nav nav-tabs nav-justified mb-3" id="topicModelSubTabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active" id="tm-general-tab" data-bs-toggle="pill" data-bs-target="#tm-general" type="button" role="tab">General Settings</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-traditional-tab" data-bs-toggle="pill" data-bs-target="#tm-traditional" type="button" role="tab">Traditional/DFT</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-llm-based-tab" data-bs-toggle="pill" data-bs-target="#tm-llm-based" type="button" role="tab">LLM-based</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-bertopic-tab" data-bs-toggle="pill" data-bs-target="#tm-bertopic" type="button" role="tab">BERTopic</button></li>
+            </ul>
+            
+            <div class="tab-content card card-body bg-light" id="topicModelSubTabsContent">
+              
+              <div class="tab-pane fade show active" id="tm-general" role="tabpanel" aria-labelledby="tm-general-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Model Output Filters</h6>
+                <div class="row">
+                  <div class="col-md-4 mb-3"><label for="tm-general-n_similar_tpcs" class="form-label">n_similar_tpcs</label><input type="number" class="form-control" id="tm-general-n_similar_tpcs" name="topic_modeling.general.n_similar_tpcs" value="5"></div>
+                  <div class="col-md-4 mb-3"><label for="tm-general-similar_tpcs_thr" class="form-label">similar_tpcs_thr (Threshold)</label><input type="text" class="form-control" id="tm-general-similar_tpcs_thr" name="topic_modeling.general.similar_tpcs_thr" value="1e-3"></div>
+                  <div class="col-md-4 mb-3"><label for="tm-general-n_top_docs_per_topic" class="form-label">n_top_docs_per_topic</label><input type="number" class="form-control" id="tm-general-n_top_docs_per_topic" name="topic_modeling.general.n_top_docs_per_topic" value="20"></div>
+                </div>
+                <div class="mb-3">
+                  <label for="tm-general-not_include" class="form-label">not_include (Variables to exclude from saving)</label>
+                  <textarea class="form-control form-control-sm" id="tm-general-not_include" name="topic_modeling.general.not_include" rows="3" placeholder="Comma-separated list (e.g., train_data, df, embeddings, ...)">train_data, df, embeddings, ids_corpus, _logger, _embedding_model, _umap_model, _hdbscan_model, _vectorizer_model, _ctfidf_model, _representation_model, _model</textarea>
+                  <div class="form-text">These Python objects will be skipped during model saving.</div>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="tm-traditional" role="tabpanel" aria-labelledby="tm-traditional-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Traditional Topic Modeling (LDA, NMF, etc.)</h6>
+                <div class="row">
+                  <div class="col-md-4 mb-3"><label for="tm-trad-num_topics" class="form-label">num_topics</label><input type="number" class="form-control" id="tm-trad-num_topics" name="topic_modeling.traditional.num_topics" value="15"></div>
+                  <div class="col-md-4 mb-3"><label for="tm-trad-thetas_thr" class="form-label">thetas_thr</label><input type="text" class="form-control" id="tm-trad-thetas_thr" name="topic_modeling.traditional.thetas_thr" value="3e-3"></div>
+                  <div class="col-md-4 mb-3"><label for="tm-trad-topn" class="form-label">Top N Words</label><input type="number" class="form-control" id="tm-trad-topn" name="topic_modeling.traditional.topn" value="15"></div>
+                </div>
+                <hr class="my-3">
+                <h6 class="mb-3">LLM Post-Processing</h6>
+                <div class="row">
+                  <div class="col-md-6 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_labeller" name="topic_modeling.traditional.do_labeller" checked><label class="form-check-label ms-2" for="tm-trad-do_labeller">Enable LLM Labeller</label></div>
+                  <div class="col-md-6 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_summarizer" name="topic_modeling.traditional.do_summarizer" checked><label class="form-check-label ms-2" for="tm-trad-do_summarizer">Enable LLM Summarizer</label></div>
+                </div>
+                <div class="row">
+                  <div class="col-md-6 mb-3"><label for="tm-trad-llm_model_type" class="form-label">LLM Model</label><input type="text" class="form-control" id="tm-trad-llm_model_type" name="topic_modeling.traditional.llm_model_type" value="qwen:32b"></div>
+                  <div class="col-md-6 mb-3"><label for="tm-trad-llm_server" class="form-label">LLM Server URL</label><input type="url" class="form-control" id="tm-trad-llm_server" name="topic_modeling.traditional.llm_server" value="http://kumo01.tsc.uc3m.es:11434"></div>
+                </div>
+                <div class="row">
+                  <div class="col-md-6 mb-3"><label for="tm-trad-labeller_prompt" class="form-label">Labeller Prompt Path</label><input type="text" class="form-control" id="tm-trad-labeller_prompt" name="topic_modeling.traditional.labeller_model_path" value="src/prompter/prompts/labelling_dft.txt"></div>
+                  <div class="col-md-6 mb-3"><label for="tm-trad-summarizer_prompt" class="form-label">Summarizer Prompt Path</label><input type="text" class="form-control" id="tm-trad-summarizer_prompt" name="topic_modeling.traditional.summarizer_prompt" value="src/prompter/prompts/summarization_dft.txt"></div>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="tm-llm-based" role="tabpanel" aria-labelledby="tm-llm-based-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Settings for LLM-Based Topic Modeling</h6>
+                <div class="mb-3"><label for="tm-llm-based-llm" class="form-label">Default LLM Model</label><input type="text" class="form-control" id="tm-llm-based-llm" name="topic_modeling.llm-based.llm" value="qwen:32b"></div>
+                <div class="mb-3"><label for="tm-llm-based-llm_server" class="form-label">LLM Server URL</label><input type="url" class="form-control" id="tm-llm-based-llm_server" name="topic_modeling.llm-based.llm_server" value="http://kumo01.tsc.uc3m.es:11434"></div>
+              </div>
+              
+              <div class="tab-pane fade" id="tm-bertopic" role="tabpanel" aria-labelledby="tm-bertopic-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">BERTopic Configuration</h6>
+                <div class="row">
+                  <div class="col-md-4 mb-3"><label for="tm-bertopic-language" class="form-label">Language</label><input type="text" class="form-control" id="tm-bertopic-language" name="topic_modeling.bertopic.language" value="english"></div>
+                  <div class="col-md-8 mb-3"><label for="tm-bertopic-sbert_model" class="form-label">Sentence-BERT Model</label><input type="text" class="form-control" id="tm-bertopic-sbert_model" name="topic_modeling.bertopic.sbert_model" value="all-MiniLM-L6-v2"></div>
+                </div>
+                <hr>
+                <fieldset class="border p-3 mb-3 bg-white rounded">
+                    <legend class="float-none w-auto px-2 fs-6 fw-bold">UMAP Reduction Settings</legend>
+                    <div class="row">
+                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_n_components" class="form-label">n_components</label><input type="number" class="form-control" id="tm-bertopic-umap_n_components" name="topic_modeling.bertopic.umap_n_components" value="5"></div>
+                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_n_neighbors" class="form-label">n_neighbors</label><input type="number" class="form-control" id="tm-bertopic-umap_n_neighbors" name="topic_modeling.bertopic.umap_n_neighbors" value="15"></div>
+                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_min_dist" class="form-label">min_dist</label><input type="text" class="form-control" id="tm-bertopic-umap_min_dist" name="topic_modeling.bertopic.umap_min_dist" value="0.0"></div>
+                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_metric" class="form-label">metric</label><input type="text" class="form-control" id="tm-bertopic-umap_metric" name="topic_modeling.bertopic.umap_metric" value="cosine"></div>
+                    </div>
+                </fieldset>
+                
+                <fieldset class="border p-3 mb-3 bg-white rounded">
+                    <legend class="float-none w-auto px-2 fs-6 fw-bold">HDBSCAN Clustering Settings</legend>
+                    <div class="row">
+                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_min_cluster_size" class="form-label">min_cluster_size</label><input type="number" class="form-control" id="tm-bertopic-hdbscan_min_cluster_size" name="topic_modeling.bertopic.hdbscan_min_cluster_size" value="10"></div>
+                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_metric" class="form-label">metric</label><input type="text" class="form-control" id="tm-bertopic-hdbscan_metric" name="topic_modeling.bertopic.hdbscan_metric" value="euclidean"></div>
+                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_cluster_selection_method" class="form-label">selection_method</label><input type="text" class="form-control" id="tm-bertopic-hdbscan_cluster_selection_method" name="topic_modeling.bertopic.hdbscan_cluster_selection_method" value="eom"></div>
+                      <div class="col-md-4 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-bertopic-hbdsan_prediction_data" name="topic_modeling.bertopic.hbdsan_prediction_data" checked><label class="form-check-label ms-2" for="tm-bertopic-hbdsan_prediction_data">Enable Prediction Data</label></div>
+                    </div>
+                </fieldset>
+                
+                <hr>
+                <div class="row">
+                  <div class="col-md-6 mb-3"><label for="tm-bertopic-repr_model_diversity" class="form-label">Representation Diversity</label><input type="number" step="0.1" class="form-control" id="tm-bertopic-repr_model_diversity" name="topic_modeling.bertopic.repr_model_diversity" value="0.3"></div>
+                  <div class="col-md-6 mb-3"><label for="tm-bertopic-repr_model_topnwords" class="form-label">Top N Words (Representation)</label><input type="number" class="form-control" id="tm-bertopic-repr_model_topnwords" name="topic_modeling.bertopic.repr_model_topnwords" value="15"></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="preprocessor-pane" role="tabpanel" aria-labelledby="preprocessor-tab" tabindex="0">
+            <h4 class="mb-3">Text Cleaning and Transformation</h4>
+             
+            <ul class="nav nav-tabs nav-justified mb-3" id="preprocessorSubTabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active" id="pp-spacy-tab" data-bs-toggle="pill" data-bs-target="#pp-spacy" type="button" role="tab"><i class="bi bi-robot me-1"></i> SpaCy</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="pp-vectorization-tab" data-bs-toggle="pill" data-bs-target="#pp-vectorization" type="button" role="tab"><i class="bi bi-grid me-1"></i> Vectorization</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="pp-embeddings-tab" data-bs-toggle="pill" data-bs-target="#pp-embeddings" type="button" role="tab"><i class="bi bi-infinity me-1"></i> Embeddings</button></li>
+            </ul>
+            
+            <div class="tab-content card card-body bg-light">
+              <div class="tab-pane fade show active" id="pp-spacy" role="tabpanel" aria-labelledby="pp-spacy-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">SpaCy Settings</h6>
+                <div class="mb-3"><label for="pp-spacy-model" class="form-label">SpaCy Model Name</label><input type="text" class="form-control" id="pp-spacy-model" name="tm_preprocessor.spacy.spacy_model" value="en_core_web_sm"></div>
+                <div class="mb-3">
+                    <label for="pp-spacy-disable" class="form-label">Disable Components (Comma Separated)</label>
+                    <input type="text" class="form-control" id="pp-spacy-disable" name="tm_preprocessor.spacy.spacy_disable" value="ner, parser">
+                    <div class="form-text">e.g., `ner, parser`</div>
+                </div>
+                <div class="mb-3">
+                    <label for="pp-spacy-valid_pos" class="form-label">Valid Parts-of-Speech (Comma Separated)</label>
+                    <input type="text" class="form-control" id="pp-spacy-valid_pos" name="tm_preprocessor.spacy.valid_pos" value="VERB, NOUN, ADJ, PROPN">
+                    <div class="form-text">e.g., `VERB, NOUN, ADJ, PROPN`</div>
+                </div>
+              </div>
+              
+              <div class="tab-pane fade" id="pp-vectorization" role="tabpanel" aria-labelledby="pp-vectorization-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Count/TF-IDF Vectorization</h6>
+                <div class="row">
+                  <div class="col-md-4 mb-3"><label for="pp-vector-max_features" class="form-label">max_features</label><input type="number" class="form-control" id="pp-vector-max_features" name="tm_preprocessor.vectorization.max_features" value="100000"></div>
+                  <div class="col-md-4 mb-3"><label for="pp-vector-min_df" class="form-label">min_df</label><input type="text" class="form-control" id="pp-vector-min_df" name="tm_preprocessor.vectorization.min_df" value="1"></div>
+                  <div class="col-md-4 mb-3"><label for="pp-vector-max_df" class="form-label">max_df</label><input type="text" class="form-control" id="pp-vector-max_df" name="tm_preprocessor.vectorization.max_df" value="1"></div>
+                </div>
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="pp-vector-ngram_range" class="form-label">ngram_range</label>
+                    <input type="text" class="form-control" id="pp-vector-ngram_range" name="tm_preprocessor.vectorization.ngram_range" value="[1, 2]">
+                    <div class="form-text">e.g., `[1, 2]`</div>
+                  </div>
+                  <div class="col-md-6 mb-3 form-check form-switch p-4 bg-white rounded">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pp-vector-binary" name="tm_preprocessor.vectorization.binary">
+                    <label class="form-check-label ms-2" for="pp-vector-binary">Binary (count presence only)</label>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="tab-pane fade" id="pp-embeddings" role="tabpanel" aria-labelledby="pp-embeddings-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Sentence Embedding Settings</h6>
+                <div class="mb-3"><label for="pp-embed-model_name" class="form-label">Embedding Model Name</label><input type="text" class="form-control" id="pp-embed-model_name" name="tm_preprocessor.embeddings.model_name" value="all-MiniLM-L6-v2"></div>
+                <div class="row">
+                  <div class="col-md-6 mb-3 form-check form-switch p-4 bg-white rounded">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pp-embed-normalize" name="tm_preprocessor.embeddings.normalize" checked>
+                    <label class="form-check-label ms-2" for="pp-embed-normalize">Normalize Embeddings</label>
+                  </div>
+                  <div class="col-md-6 mb-3"><label for="pp-embed-batch_size" class="form-label">Batch Size</label><input type="number" class="form-control" id="pp-embed-batch_size" name="tm_preprocessor.embeddings.batch_size" value="32"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="tab-pane fade" id="llm-pane" role="tabpanel" aria-labelledby="llm-tab" tabindex="0">
+            <h4 class="mb-3">LLM Generation Parameters & Providers</h4>
+            
+            <ul class="nav nav-tabs nav-justified mb-3" id="llmSubTabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active" id="llm-params-tab" data-bs-toggle="pill" data-bs-target="#llm-params" type="button" role="tab">Global Parameters</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-gpt-tab" data-bs-toggle="pill" data-bs-target="#llm-gpt" type="button" role="tab">GPT (OpenAI)</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-ollama-tab" data-bs-toggle="pill" data-bs-target="#llm-ollama" type="button" role="tab">Ollama (Local)</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-llama-cpp-tab" data-bs-toggle="pill" data-bs-target="#llm-llama-cpp" type="button" role="tab">Llama.cpp</button></li>
+            </ul>
+
+            <div class="tab-content card card-body bg-light">
+              <div class="tab-pane fade show active" id="llm-params" role="tabpanel" aria-labelledby="llm-params-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Model Generation Controls</h6>
+                <div class="row">
+                  <div class="col-md-3 mb-3"><label for="llm-params-temperature" class="form-label">Temperature</label><input type="number" step="0.01" class="form-control" id="llm-params-temperature" name="llm.parameters.temperature" value="0"></div>
+                  <div class="col-md-3 mb-3"><label for="llm-params-top_p" class="form-label">Top P</label><input type="number" step="0.01" class="form-control" id="llm-params-top_p" name="llm.parameters.top_p" value="0.1"></div>
+                  <div class="col-md-3 mb-3"><label for="llm-params-frequency_penalty" class="form-label">Frequency Penalty</label><input type="number" step="0.01" class="form-control" id="llm-params-frequency_penalty" name="llm.parameters.frequency_penalty" value="0.0"></div>
+                  <div class="col-md-3 mb-3"><label for="llm-params-random_seed" class="form-label">Seed</label><input type="number" class="form-control" id="llm-params-random_seed" name="llm.parameters.random_seed" value="1234"></div>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="llm-gpt" role="tabpanel" aria-labelledby="llm-gpt-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">OpenAI (GPT) Settings</h6>
+                <div class="mb-3"><label for="llm-gpt-path_api_key" class="form-label">API Key Path</label><input type="text" class="form-control" id="llm-gpt-path_api_key" name="llm.gpt.path_api_key" value=".env"></div>
+                <div class="mb-3">
+                  <label class="form-label">Available Models (Read-Only)</label>
+                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll;">{ "gpt-4o-2024-08-06", "gpt-4o-mini-2024-07-18", "chatgpt-4o-latest", "gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4", "gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4-32k", "gpt-4-0125-preview", "gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-3.5-turbo-0125", "gpt-3.5-turbo-instruct", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613", "gpt-3.5-turbo-0301" }</textarea>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="llm-ollama" role="tabpanel" aria-labelledby="llm-ollama-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Ollama Settings</h6>
+                <div class="mb-3"><label for="llm-ollama-host" class="form-label">Host URL</label><input type="url" class="form-control" id="llm-ollama-host" name="llm.ollama.host" value="http://kumo01.tsc.uc3m.es:11434"></div>
+                <div class="mb-3">
+                  <label class="form-label">Available Models (Read-Only)</label>
+                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll;">{ "llama3.2", "llama3.1:8b-instruct-q8_0", "qwen:32b", "llama3.3:70b", "qwen2.5:32b" }</textarea>
+                </div>
+              </div>
+
+              <div class="tab-pane fade" id="llm-llama-cpp" role="tabpanel" aria-labelledby="llm-llama-cpp-tab" tabindex="0">
+                <h6 class="border-bottom pb-2 mb-3">Llama.cpp Settings</h6>
+                <div class="mb-3"><label for="llm-llama-cpp-host" class="form-label">Host URL</label><input type="url" class="form-control" id="llm-llama-cpp-host" name="llm.llama_cpp.host" value="http://kumo01:11435/v1/chat/completions"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-success" id="configSaveBtn"><i class="bi bi-save me-2"></i>Save Configuration</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </form>
   </div>
-  {% endif %}
+</div>
+{% endif %}
 
-  <!-- Footer -->
   <footer class="bg-dark text-white text-center py-2">
     <p class="mb-0">&copy; 2025 TOVA. Internal Research Tool.</p>
   </footer>
 
-  <!-- JS: Bootstrap + Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
   
 
-  {% if user %}
+{% if user %}
   <script>
-    let providerConfig = {};  // filled from backend: /llm/ui-config
+    document.addEventListener('DOMContentLoaded', () => {
+      const configForm = document.getElementById('configForm');
+      if (!configForm) return;
 
-    function renderProviderUI(provider, existing) {
-      const cfg = providerConfig[provider];
-      if (!cfg) return;
+      const configModalEl = document.getElementById('configModal');
+      const feedbackDiv = document.getElementById('llm-feedback');
+      const statusRow = document.getElementById('configStatus');
+      const statusText = document.getElementById('configStatusText');
+      const lastSavedSpan = document.getElementById('configLastSaved');
+      const refreshBtn = document.getElementById('configRefreshBtn');
+      const resetBtn = document.getElementById('configResetBtn');
+      const saveBtn = document.getElementById('configSaveBtn');
 
-      const modelGroup = document.getElementById("modelGroup");
-      const modelSelect = document.getElementById("llmModel");
-      const modelHelp = document.getElementById("modelHelp");
+      const showFeedback = (message, variant = 'success') => {
+        if (!feedbackDiv) return;
+        feedbackDiv.textContent = message;
+        feedbackDiv.className = `alert alert-${variant} small`;
+        feedbackDiv.style.display = 'block';
+      };
 
-      const apiKeyGroup = document.getElementById("apiKeyGroup");
-      const apiKeyLabel = document.getElementById("apiKeyLabel");
-      const apiKeyInput = document.getElementById("llmApiKey");
-      const apiKeyHelp = document.getElementById("apiKeyHelp");
+      const clearFeedback = () => {
+        if (feedbackDiv) feedbackDiv.style.display = 'none';
+      };
 
-      const hostGroup = document.getElementById("hostGroup");
-      const hostInput = document.getElementById("llmHost");
-      const hostHelp = document.getElementById("hostHelp");
-
-      // --- Models (may be empty) ---
-      if (cfg.models && cfg.models.length) {
-        modelGroup.style.display = "";
-        modelSelect.innerHTML = "";
-
-        cfg.models.forEach(m => {
-          const value = typeof m === "string" ? m : m.id;
-          const label = typeof m === "string" ? m : (m.label || m.id);
-          const opt = document.createElement("option");
-          opt.value = value;
-          opt.textContent = label;
-          modelSelect.appendChild(opt);
+      const setLoading = (isLoading, text = 'Loading...') => {
+        if (statusRow) statusRow.classList.toggle('d-none', !isLoading);
+        if (statusText && text) statusText.textContent = text;
+        [saveBtn, resetBtn, refreshBtn].forEach((btn) => {
+          if (btn) btn.disabled = isLoading;
         });
+      };
 
-        const existingModel =
-          existing && existing.provider === provider ? existing.model : null;
+      const updateLastSaved = (value) => {
+        if (!lastSavedSpan) return;
+        if (!value) {
+          lastSavedSpan.textContent = 'using defaults';
+          return;
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        lastSavedSpan.textContent = date.toLocaleString();
+      };
 
-        if (existingModel) {
-          [...modelSelect.options].forEach(opt => {
-            if (opt.value === existingModel) opt.selected = true;
+      // Build ID-to-path mapping cache from DOM (optimized - no hardcoding)
+      // This is built once and reused, using the existing 'name' attributes
+      let idToPathCache = null;
+      const buildIdToPathCache = () => {
+        if (idToPathCache !== null) return idToPathCache; // Return cached version
+        idToPathCache = new Map();
+        const inputs = configForm.querySelectorAll("input[id], textarea[id], select[id]");
+        inputs.forEach((el) => {
+          if (el.id && el.name) {
+            idToPathCache.set(el.id, el.name);
+          }
+        });
+        return idToPathCache;
+      };
+
+      // Get config path for an element ID (optimized with cache)
+      const getIdToPath = (id) => {
+        const cache = buildIdToPathCache();
+        return cache.get(id) || id; // Fallback to ID if not found
+      };
+
+      // Reusable param collector (optimized version - same approach as training modal)
+      const collectParamsFromContainer = (container) => {
+        const out = {};
+        if (!container) return out;
+        
+        // Build cache once if not already built
+        buildIdToPathCache();
+        
+        const inputs = container.querySelectorAll("input, textarea, select");
+        inputs.forEach((el) => {
+          const id = el.id;
+          if (!id) return;
+
+          // Skip provider-specific fields that are hidden
+          const llmSection = el.closest(".llm-provider-section");
+          if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
+
+          // Get config path from cache (uses name attribute)
+          const path = getIdToPath(id);
+          if (!path || path === id) return; // Skip if no valid path found
+
+          // Handle special case for not_include (array)
+          if (path.includes("not_include")) {
+            const items = String(el.value || "")
+              .split(/[\n,]/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            setNestedValue(path, items, out);
+            return;
+          }
+
+          // Handle checkboxes
+          if (el.type === "checkbox") {
+            setNestedValue(path, el.checked, out);
+            return;
+          }
+
+          const raw = el.value;
+          const trimmed = raw != null ? raw.trim() : "";
+          
+          // Handle numbers (allow empty/zero values)
+          if (el.type === "number") {
+            const n = Number(trimmed);
+            if (Number.isFinite(n)) {
+              setNestedValue(path, n, out);
+            }
+            return;
+          }
+
+          // Skip empty text fields (but allow empty strings for textareas if needed)
+          if (!trimmed && el.tagName !== "TEXTAREA") return;
+
+          // Handle text/textarea/select
+          setNestedValue(path, trimmed, out);
+        });
+        return out;
+      };
+
+      function setNestedValue(key, value, obj) {
+        const parts = key.split('.');
+        let current = obj;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          if (i === parts.length - 1) {
+            current[part] = value;
+          } else {
+            if (!current[part] || typeof current[part] !== 'object') {
+              current[part] = {};
+            }
+            current = current[part];
+          }
+        }
+      }
+
+      const formatForInput = (value) => {
+        if (Array.isArray(value)) return value.join(', ');
+        return value;
+      };
+
+      // Optimized form population using cache (reverse lookup)
+      function populateForm(config, prefix = '') {
+        // Build reverse cache (path -> element) for faster lookups
+        if (!populateForm._pathToElementCache) {
+          populateForm._pathToElementCache = new Map();
+          const cache = buildIdToPathCache();
+          cache.forEach((path, id) => {
+            const element = configForm.querySelector(`#${id}`);
+            if (element) {
+              populateForm._pathToElementCache.set(path, element);
+            }
           });
-        } else {
-          modelSelect.selectedIndex = 0;
+          // Also cache direct name lookups
+          configForm.querySelectorAll('[name]').forEach((el) => {
+            if (el.name && !populateForm._pathToElementCache.has(el.name)) {
+              populateForm._pathToElementCache.set(el.name, el);
+            }
+          });
         }
 
-        if (provider === "gpt") {
-          modelHelp.textContent = "Choose an OpenAI GPT model.";
-        } else if (provider === "ollama") {
-          modelHelp.textContent = "Choose an Ollama model running locally.";
-        } else {
-          modelHelp.textContent = "Select a model if required.";
+        for (const key in config) {
+          if (!Object.hasOwn(config, key)) continue;
+          const fullKey = prefix ? `${prefix}.${key}` : key;
+          const value = config[key];
+
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            populateForm(value, fullKey);
+          } else {
+            // Use cached lookup (much faster than querySelector)
+            const element = populateForm._pathToElementCache.get(fullKey);
+
+            if (element) {
+              if (element.type === 'checkbox') {
+                element.checked = Boolean(value);
+              } else if (['number', 'text', 'url'].includes(element.type) || ['TEXTAREA', 'SELECT'].includes(element.tagName)) {
+                const formatted = formatForInput(value);
+                element.value = formatted === undefined || formatted === null ? '' : formatted;
+              }
+            }
+          }
         }
-      } else {
-        modelGroup.style.display = "none";
-        modelSelect.innerHTML = "";
       }
+      
+      // Clear cache when form is reset/reloaded
+      const clearFormCaches = () => {
+        idToPathCache = null;
+        populateForm._pathToElementCache = null;
+      };
 
-      // --- API key section ---
-      if (cfg.show_api_key) {
-        apiKeyGroup.style.display = "";
-        apiKeyLabel.textContent   = cfg.api_key_label || "API key";
-        apiKeyInput.placeholder   = cfg.api_key_placeholder || "sk-...";
-        apiKeyHelp.textContent    = cfg.api_key_help || "Your key is only used to call the provider on your behalf.";
-        apiKeyInput.value = "";  // never prefill secrets in UI
-      } else {
-        apiKeyGroup.style.display = "none";
-        apiKeyInput.value = "";
-      }
+      const collectConfig = () => {
+        return collectParamsFromContainer(configForm);
+      };
 
-      // --- Host URL section ---
-      if (cfg.show_host) {
-        hostGroup.style.display = "";
-        const existingHost =
-          existing && existing.provider === provider ? (existing.host || "") : "";
-        hostInput.value = existingHost || cfg.default_host || "";
-        hostHelp.textContent = cfg.host_help || "URL of your local LLM server.";
-      } else {
-        hostGroup.style.display = "none";
-        hostInput.value = "";
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", async function () {
-      const providerSelect = document.getElementById("llmProvider");
-      const llmForm        = document.getElementById("llmForm");
-      const feedback       = document.getElementById("llm-feedback");
-      const modelSelect    = document.getElementById("llmModel");
-      const apiKeyInput    = document.getElementById("llmApiKey");
-      const hostInput      = document.getElementById("llmHost");
-
-      if (!providerSelect || !llmForm) return;
-
-      let existingConfig = null;
-
-      // 1) Load UI config (from YAML via backend)
-      try {
-        const res = await fetch("/llm/ui-config", { cache: "no-store" });
-        if (res.ok) {
-          providerConfig = await res.json();
-        } else {
-          console.warn("Could not load /llm/ui-config:", res.status);
-          providerConfig = {};
+      async function fetchAndFill() {
+        clearFeedback();
+        setLoading(true, 'Loading your configuration...');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch('/api/user-config', {
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal,
+          });
+          if (!res.ok) throw new Error(`Load failed (${res.status})`);
+          const data = await res.json();
+          populateForm(data || {});
+          updateLastSaved(new Date());
+          showFeedback('Loaded your saved configuration.', 'info');
+        } catch (err) {
+          console.error(err);
+          showFeedback(err.message || 'Failed to load your config.', 'danger');
+        } finally {
+          clearTimeout(timeoutId);
+          setLoading(false);
+          setTimeout(clearFeedback, 4000);
         }
-      } catch (err) {
-        console.error("Error fetching LLM UI config:", err);
-        providerConfig = {};
       }
 
-      // Populate provider select from providerConfig
-      providerSelect.innerHTML = "";
-      Object.entries(providerConfig).forEach(([key, cfg]) => {
-        const opt = document.createElement("option");
-        opt.value = key;                 // e.g. "gpt", "ollama", "llama_cpp"
-        opt.textContent = cfg.label || key;
-        providerSelect.appendChild(opt);
-      });
-
-      if (!Object.keys(providerConfig).length) {
-        // If config failed to load, disable the form gracefully
-        providerSelect.disabled = true;
-        llmForm.querySelectorAll("input, button, select").forEach(el => {
-          if (el.id !== "llmProvider") el.disabled = true;
-        });
-        if (feedback) {
-          feedback.textContent = "LLM configuration is not available. Please contact the administrator.";
-          feedback.classList.add("text-danger");
-          feedback.style.display = "block";
-        }
-        return;
-      }
-
-      // 2) Load existing per-user config if present
-      try {
-        const res = await fetch("/get-llm-config", { cache: "no-store" });
-        if (res.ok) {
-          existingConfig = await res.json();
-        }
-      } catch (err) {
-        console.warn("Could not load existing LLM config:", err);
-      }
-
-      // Initial provider: from existing config, or first in list
-      const initialProvider =
-        existingConfig?.provider && providerConfig[existingConfig.provider]
-          ? existingConfig.provider
-          : Object.keys(providerConfig)[0] || "";
-
-      if (initialProvider) {
-        providerSelect.value = initialProvider;
-        renderProviderUI(initialProvider, existingConfig);
-      }
-
-      providerSelect.addEventListener("change", () => {
-        renderProviderUI(providerSelect.value, existingConfig);
-      });
-
-      // 3) Save handler
-      llmForm.addEventListener("submit", async function (e) {
+      configForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        if (feedback) feedback.style.display = "none";
+        clearFeedback();
 
-        const provider = providerSelect.value;
-        const model    = modelSelect.value || "";
-        const api_key  = apiKeyInput.value || "";
-        const host     = hostInput.value || "";
-
-        // Optional CSRF header if available
-        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-        const csrfToken = csrfMeta ? csrfMeta.getAttribute("content") : "";
+        const newConfig = collectConfig();
+        setLoading(true, 'Saving...');
 
         try {
-          const response = await fetch("/save-llm-config", {
-            method: "POST",
+          const response = await fetch("/api/user-config", {
+            method: 'POST',
             headers: {
-              "Content-Type": "application/json",
-              ...(csrfToken ? { "X-CSRFToken": csrfToken } : {})
+              'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ provider, model, api_key, host })
+            body: JSON.stringify(newConfig)
           });
 
           const result = await response.json().catch(() => ({}));
-          if (!response.ok || !result.success) {
-            throw new Error(result.message || "Failed to save settings.");
-          }
 
-          if (feedback) {
-            feedback.textContent = "LLM settings saved successfully.";
-            feedback.classList.remove("text-danger");
-            feedback.classList.add("text-success");
-            feedback.style.display = "block";
+          if (response.ok && result.success !== false) {
+            updateLastSaved(new Date());
+            showFeedback(result.message || 'Configuration saved successfully!', 'success');
+          } else {
+            throw new Error(result.message || `Error (${response.status}): Failed to save settings.`);
           }
-        } catch (err) {
-          console.error(err);
-          if (feedback) {
-            feedback.textContent = err.message || "An error occurred while saving settings.";
-            feedback.classList.remove("text-success");
-            feedback.classList.add("text-danger");
-            feedback.style.display = "block";
-          }
+        } catch (error) {
+          console.error(error);
+          showFeedback(error.message || 'An error occurred while communicating with the server.', 'danger');
+        } finally {
+          setLoading(false);
+          setTimeout(() => {
+            if (feedbackDiv) feedbackDiv.style.display = 'none';
+          }, 5000);
         }
       });
+
+      refreshBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        clearFormCaches(); // Clear caches on refresh
+        fetchAndFill();
+      });
+
+      resetBtn?.addEventListener('click', async (event) => {
+        event.preventDefault();
+        clearFeedback();
+
+        const confirmed = window.confirm('Reset to defaults from config.yaml?');
+        if (!confirmed) return;
+
+        setLoading(true, 'Resetting to defaults...');
+        try {
+          const response = await fetch("/api/user-config/reset", { method: 'POST' });
+          const result = await response.json().catch(() => ({}));
+          if (response.ok && result.success !== false) {
+            clearFormCaches(); // Clear caches on reset
+            populateForm(result.config || {});
+            updateLastSaved(null);
+            showFeedback('Configuration reset to defaults.', 'info');
+          } else {
+            throw new Error(result.message || `Reset failed (${response.status}).`);
+          }
+        } catch (error) {
+          console.error(error);
+          showFeedback(error.message || 'Failed to reset configuration.', 'danger');
+        } finally {
+          setLoading(false);
+          setTimeout(() => {
+            if (feedbackDiv) feedbackDiv.style.display = 'none';
+          }, 5000);
+        }
+      });
+
+      fetchAndFill();
+
+      // Ensure spinner is hidden if modal is closed while a request is in flight
+      configModalEl?.addEventListener('hidden.bs.modal', () => setLoading(false));
     });
   </script>
-  {% endif %}
+{% endif %}
 
   {% block extra_scripts %}{% endblock %}
 </body>

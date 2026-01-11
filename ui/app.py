@@ -2,9 +2,11 @@ import json
 import logging
 import os
 from pathlib import Path
-from time import time
+from time import time, sleep, monotonic
 from datetime import timedelta
 from functools import wraps
+from uuid import uuid4
+from copy import deepcopy
 
 import requests
 import yaml
@@ -23,6 +25,8 @@ from flask import (
     redirect,
     g,
 )
+from sqlalchemy import text
+from models import db, User, UserConfig
 
 # ------------------------------------------------------------------------------
 # App setup
@@ -34,11 +38,33 @@ server.logger.setLevel(logging.INFO)
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me")
 server.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-# In-memory user store (replace with DB later)
-users: dict[str, dict] = {}
+# Database config
+server.config.from_object("config")
+db.init_app(server)
+
+RUN_DB_INIT_ON_START = os.getenv("RUN_DB_INIT_ON_START", "1") == "1"
+
+
+def _run_db_init_once():
+    """
+    Initialize tables once, guarded by an advisory lock to avoid
+    gunicorn worker races that can cause duplicate type errors.
+    """
+    if not RUN_DB_INIT_ON_START:
+        return
+    with server.app_context():
+        with db.engine.begin() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(420420)"))
+            try:
+                db.create_all()
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(420420)"))
+
+
+_run_db_init_once()
 
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))  # TODO: remove if unused
-API = os.getenv("API_BASE_URL", "http://api:8000")
+API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
 _CACHE_MODELS: dict = {}
 _CACHE_CORPORA: dict = {}
@@ -52,7 +78,10 @@ CACHE_TTL = 600
 # ------------------------------------------------------------------------------
 BASE_DIR = Path(server.root_path)
 CONFIG_PATH = BASE_DIR / "static" / "config" / "config.yaml"
-
+USER_CONFIGS_DIR = BASE_DIR / "static" / "config" / "users"
+USER_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)  # Create directory if it doesn't exist
+JOB_STATUS_TIMEOUT_SECONDS = 10
+JOB_STATUS_POLLING_INTERVAL_SECONDS = 1
 try:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         RAW_CONFIG = yaml.safe_load(f) or {}
@@ -64,9 +93,135 @@ except Exception as e:
     RAW_CONFIG = {}
 
 
-def build_llm_ui_config():
+def _json_safe(obj):
     """
-    Build a UI-friendly LLM provider config based on static/config/config.yaml.
+    Convert YAML/py objects into JSON-serializable structures (sets -> list, tuples -> list).
+    """
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, set):
+        return sorted(_json_safe(v) for v in obj)
+    return obj
+
+
+DEFAULT_CONFIG = _json_safe(RAW_CONFIG) if RAW_CONFIG else {}
+
+
+def _deep_merge(base: dict, overrides: dict | None) -> dict:
+    """
+    Recursively merge two dictionaries without mutating the originals.
+    """
+    result = deepcopy(base) if isinstance(base, dict) else {}
+    for key, value in (overrides or {}).items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _load_user_config(user_id: str) -> dict | None:
+    """Return raw stored user config (if any)."""
+    if not user_id:
+        return None
+    entry = UserConfig.query.filter_by(user_id=user_id).first()
+    return entry.config if entry else None
+
+
+def _get_user_config_file_path(user_id: str) -> Path | None:
+    """Get the file path for a user's config file."""
+    if not user_id:
+        return None
+    # Sanitize user_id for filename (remove any path separators or dangerous chars)
+    safe_user_id = user_id.replace("/", "_").replace("\\", "_").replace("..", "")
+    return USER_CONFIGS_DIR / f"{safe_user_id}.yaml"
+
+
+def _ensure_user_config_file(user_id: str) -> str | None:
+    """
+    Ensure a user's config file exists on disk with their effective config.
+    Returns the relative path to the config file (e.g., "static/config/users/{user_id}.yaml")
+    or None if user_id is missing.
+    """
+    if not user_id:
+        return None
+    
+    config_file_path = _get_user_config_file_path(user_id)
+    if config_file_path is None:
+        return None
+    
+    # Get the effective config (merged default + user overrides)
+    effective_config = get_effective_user_config(user_id)
+    
+    # Write to file
+    try:
+        with config_file_path.open("w", encoding="utf-8") as f:
+            yaml.dump(effective_config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        server.logger.debug("Saved user config to file: %s", config_file_path)
+    except Exception as e:
+        server.logger.exception("Failed to write user config file %s: %s", config_file_path, e)
+        # Fallback to default config path
+        return "static/config/config.yaml"
+    
+    # Return relative path from project root
+    relative_path = config_file_path.relative_to(BASE_DIR)
+    return str(relative_path).replace("\\", "/")  # Normalize path separators
+
+
+def _save_user_config(user_id: str, config: dict):
+    """Upsert user configuration in the database and static file."""
+    if not user_id:
+        return
+    sanitized = _json_safe(config or {})
+    entry = UserConfig.query.filter_by(user_id=user_id).first()
+    if entry:
+        entry.config = sanitized
+    else:
+        entry = UserConfig(user_id=user_id, config=sanitized)
+        db.session.add(entry)
+    db.session.commit()
+    
+    # Also save to static file
+    _ensure_user_config_file(user_id)
+
+
+def _reset_user_config(user_id: str):
+    """Remove user-specific configuration (falls back to defaults) and update static file."""
+    if not user_id:
+        return
+    entry = UserConfig.query.filter_by(user_id=user_id).first()
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+    
+    # Update the static config file (will now contain only defaults)
+    _ensure_user_config_file(user_id)
+
+
+def get_effective_user_config(user_id: str) -> dict:
+    """
+    Return the default config merged with the user's overrides (if any).
+    Cached per-request on g to avoid duplicate queries.
+    """
+    if hasattr(g, "_effective_user_config"):
+        return g._effective_user_config
+
+    base = deepcopy(DEFAULT_CONFIG)
+    if not user_id:
+        g._effective_user_config = base
+        return base
+
+    overrides = _load_user_config(user_id) or {}
+    merged = _deep_merge(base, overrides if isinstance(overrides, dict) else {})
+    g._effective_user_config = merged
+    return merged
+
+
+def build_llm_ui_config(config: dict | None = None):
+    """
+    Build a UI-friendly LLM provider config based on a configuration dict.
 
     Returns a dict like:
     {
@@ -91,7 +246,8 @@ def build_llm_ui_config():
       "llama_cpp": { ... }
     }
     """
-    llm = RAW_CONFIG.get("llm", {}) or {}
+    cfg = config or DEFAULT_CONFIG
+    llm = cfg.get("llm", {}) or {}
     ui: dict[str, dict] = {}
 
     # GPT / OpenAI
@@ -200,7 +356,7 @@ def login_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
         # check the same key you actually set in login/signup/Okta
-        if "user_email" not in session:
+        if "user_id" not in session:
             next_url = request.path  # or request.full_path
             return redirect(url_for("login", next=next_url))
         return view_func(*args, **kwargs)
@@ -211,15 +367,23 @@ def login_required(view_func):
 @server.before_request
 def load_logged_in_user():
     """Attach the current user to g before every request, based on session."""
-    email = session.get("user_email")
-    name = session.get("user_name")
-    if email:
+    user_id = session.get("user_id")
+    if not user_id:
+        g.user = None
+        return
+
+    user = User.query.filter_by(id=user_id).first()
+    if user:
         g.user = {
-            "email": email,
-            "name": name or email,
+            "id": user.id,
+            "email": user.email,
+            "name": user.name or user.email,
         }
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
     else:
         g.user = None
+        session.clear()
 
 
 @server.context_processor
@@ -250,22 +414,26 @@ def signup():
             flash("Passwords do not match.", "danger")
             return redirect(url_for("signup"))
 
-        if email in users:
+        existing = User.query.filter_by(email=email).first()
+        if existing:
             flash("An account with that email already exists. Please sign in.", "warning")
             return redirect(url_for("login"))
 
         # Create user
-        password_hash = generate_password_hash(password)
-        users[email] = {
-            "name": name,
-            "email": email,
-            "password_hash": password_hash,
-        }
+        user = User(
+            id=str(uuid4()),
+            name=name or email,
+            email=email,
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
 
         # Log them in
         session.clear()
-        session["user_email"] = email
-        session["user_name"] = name
+        session["user_id"] = user.id
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
         session.permanent = True
 
         flash("Account created! Welcome to TOVA.", "success")
@@ -282,17 +450,18 @@ def login():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
-        user = users.get(email)
-        if not user or not user.get("password_hash") or not check_password_hash(
-            user["password_hash"], password
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.password_hash or not check_password_hash(
+            user.password_hash, password
         ):
             flash("Invalid email or password.", "danger")
             return redirect(url_for("login"))
 
         # Credentials OK
         session.clear()
-        session["user_email"] = email
-        session["user_name"] = user.get("name") or email
+        session["user_id"] = user.id
+        session["user_email"] = user.email
+        session["user_name"] = user.name or user.email
         session.permanent = True
 
         flash("Signed in successfully.", "success")
@@ -341,26 +510,28 @@ def auth_okta_callback():
         flash("Okta did not provide an email address.", "danger")
         return redirect(url_for("login"))
 
-    # Find or create user in your in-memory users dict
-    user = users.get(email)
+    # Find or create user in the database
+    user = User.query.filter_by(email=email).first()
     if not user:
-        user = {
-            "name": name,
-            "email": email,
-            "password_hash": None,  # They may not have a local password
-            "okta_sub": okta_sub,
-            "auth_source": "okta",
-        }
-        users[email] = user
+        user = User(
+            id=str(uuid4()),
+            name=name or email,
+            email=email,
+            password_hash=None,  # They may not have a local password
+            auth_source="okta",
+        )
+        db.session.add(user)
     else:
         # Link the Okta account to an existing user
-        user["okta_sub"] = okta_sub
-        user["auth_source"] = "okta"
+        user.auth_source = "okta"
+
+    db.session.commit()
 
     # Log them in
     session.clear()
-    session["user_email"] = email
-    session["user_name"] = user.get("name") or name or email
+    session["user_id"] = user.id
+    session["user_email"] = user.email
+    session["user_name"] = user.name or name or email
     session.permanent = True
 
     flash("Signed in with Okta.", "success")
@@ -414,7 +585,8 @@ def privacy():
 @server.route("/llm/ui-config", methods=["GET"])
 @login_required
 def llm_ui_config():
-    return jsonify(build_llm_ui_config())
+    cfg = get_effective_user_config(session.get("user_id"))
+    return jsonify(build_llm_ui_config(cfg))
 
 
 @server.route("/get-llm-config", methods=["GET"])
@@ -452,6 +624,50 @@ def save_llm_config():
 
 
 # ------------------------------------------------------------------------------
+# User configuration (persisted per user)
+# ------------------------------------------------------------------------------
+@server.route("/api/user-config", methods=["GET"])
+@login_required
+def api_get_user_config():
+    cfg = get_effective_user_config(session.get("user_id"))
+    return jsonify(cfg), 200
+
+
+@server.route("/api/user-config", methods=["POST"])
+@login_required
+def api_update_user_config():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "message": "Config must be a JSON object."}), 400
+
+    user_id = session.get("user_id")
+    merged = _deep_merge(DEFAULT_CONFIG, _json_safe(payload))
+    _save_user_config(user_id, merged)
+    config_path = _ensure_user_config_file(user_id)
+    return jsonify({
+        "success": True, 
+        "config": merged, 
+        "message": "Configuration saved.",
+        "config_path": config_path  # Return the file path where config was saved
+    }), 200
+
+
+@server.route("/api/user-config/reset", methods=["POST"])
+@login_required
+def api_reset_user_config():
+    user_id = session.get("user_id")
+    _reset_user_config(user_id)
+    fresh = get_effective_user_config(user_id)
+    config_path = _ensure_user_config_file(user_id)
+    return jsonify({
+        "success": True, 
+        "config": fresh, 
+        "message": "Configuration reset to defaults.",
+        "config_path": config_path  # Return the file path where config was saved
+    }), 200
+
+
+# ------------------------------------------------------------------------------
 # Data / Corpus-related routes
 # ------------------------------------------------------------------------------
 @server.route("/load-data-page/")
@@ -482,6 +698,7 @@ def create_corpus():
         try:
             upstream = requests.get(
                 f"{API}/data/datasets/{el['id']}",
+                params={"owner_id": session.get("user_id")},
                 timeout=(3.05, 30),
             )
             if not upstream.ok:
@@ -496,9 +713,12 @@ def create_corpus():
         except requests.RequestException as e:
             return jsonify({"error": f"Upstream connection error: {e}"}), 502
 
+    owner_id = payload.get("owner_id") or session.get("user_id")
+
     corpus_payload = {
         "name": payload.get("corpus_name", ""),
         "description": f"Corpus from datasets {', '.join([d['id'] for d in datasets])}",
+        "owner_id": owner_id,
         "datasets": datasets_lst,
     }
 
@@ -567,13 +787,14 @@ def delete_corpus():
     """
     payload = request.get_json(silent=True) or {}
     corpus_name = payload.get("corpus_name")
+    owner_id = payload.get("owner_id") or session.get("user_id")
 
     if not corpus_name:
         return jsonify({"error": "Missing corpus_name"}), 400
 
     # Find the corpus by name to get its ID
     try:
-        r = requests.get(f"{API}/data/corpora", timeout=10)
+        r = requests.get(f"{API}/data/corpora", params={"owner_id": owner_id}, timeout=10)
         r.raise_for_status()
         corpora = r.json()
     except requests.RequestException as e:
@@ -675,7 +896,7 @@ def create_dataset():
     metadata = payload.get("metadata", {})
     data = payload.get("data", {})
     documents = data.get("documents", [])
-    owner_id = payload.get("owner_id")
+    owner_id = payload.get("owner_id") or session.get("user_id")
 
     dataset_payload = {
         "name": metadata.get("name", ""),
@@ -782,7 +1003,11 @@ def train_tfidf_corpus(corpus_id):
 
     # fetch corpus from backend
     try:
-        up = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 60),
+        )
         up.raise_for_status()
         corpus = up.json()
     except requests.Timeout:
@@ -828,13 +1053,48 @@ def training_start():
     model = payload.get("model")
     model_name = payload.get("model_name")
     training_params = payload.get("training_params") or {}
+    user_id = session.get("user_id")
 
     if not corpus_id or not model or not model_name:
         return jsonify({"error": "Missing corpus_id/model/model_name"}), 400
 
+    # Merge training_params into user config for traditional models
+    # This ensures the config file has the correct values when the base class reads from it
+    if training_params and model in ["tomotopyLDA", "CTM"]:  # Traditional models
+        current_config = get_effective_user_config(user_id)
+        # Map training_params to config structure
+        if "do_labeller" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_labeller"] = training_params["do_labeller"]
+        if "do_summarizer" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_summarizer"] = training_params["do_summarizer"]
+        if "llm_model_type" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["llm_model_type"] = training_params["llm_model_type"]
+        if "labeller_prompt" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_prompt"]
+        elif "labeller_model_path" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_model_path"]
+        if "summarizer_prompt" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["summarizer_prompt"] = training_params["summarizer_prompt"]
+        if "num_topics" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["num_topics"] = training_params["num_topics"]
+        if "thetas_thr" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["thetas_thr"] = training_params["thetas_thr"]
+        if "topn" in training_params:
+            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["topn"] = training_params["topn"]
+        
+        # Save the updated config
+        _save_user_config(user_id, current_config)
+
+    # Ensure user config file exists and get its path
+    config_path = _ensure_user_config_file(user_id) or "static/config/config.yaml"
+
     # get corpus
     try:
-        up = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}",
+            params={"owner_id": user_id},
+            timeout=(3.05, 60),
+        )
         up.raise_for_status()
         corpus = up.json()
     except requests.Timeout:
@@ -856,8 +1116,9 @@ def training_start():
         "id_col": "id",
         "text_col": "text",
         "training_params": training_params,
-        "config_path": "static/config/config.yaml",
+        "config_path": config_path,  # Use user-specific config path
         "model_name": model_name,
+        "owner_id": user_id,
     }
 
     try:
@@ -890,6 +1151,7 @@ def training_start():
             "status_url": loc or (f"/status/jobs/{job_id}" if job_id else None),
             "corpus_id": corpus_id,
             "model_id": model_id,
+            "config_path": config_path,  # Return the config path used
         }
     ), 200
 
@@ -940,7 +1202,11 @@ def get_unique_corpus_names():
     Prefers the most recent 'created_at' when duplicates exist.
     """
     try:
-        r = requests.get(f"{API}/data/corpora", timeout=10)
+        r = requests.get(
+            f"{API}/data/corpora",
+            params={"owner_id": session.get("user_id")},
+            timeout=10,
+        )
         r.raise_for_status()
         items = r.json()
     except requests.RequestException:
@@ -969,7 +1235,11 @@ def getAllCorpora():
     Pulls all corpora (draft or permanent storage) from the upstream API.
     """
     try:
-        r = requests.get(f"{API}/data/corpora", timeout=10)
+        r = requests.get(
+            f"{API}/data/corpora",
+            params={"owner_id": session.get("user_id")},
+            timeout=10,
+        )
         r.raise_for_status()
         items = r.json()
     except requests.RequestException:
@@ -995,7 +1265,11 @@ def getAllCorpora():
 @login_required
 def get_corpus(corpus_id):
     try:
-        response = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=10)
+        response = requests.get(
+            f"{API}/data/corpora/{corpus_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=10,
+        )
         response.raise_for_status()
         return Response(
             response.content,
@@ -1024,7 +1298,12 @@ def trained_models():
 
 def fetch_trained_models():
     try:
-        corpora_response = requests.get(f"{API}/data/corpora", timeout=10)
+        owner_id = session.get("user_id")
+        corpora_response = requests.get(
+            f"{API}/data/corpora",
+            params={"owner_id": owner_id},
+            timeout=10,
+        )
         corpora_response.raise_for_status()
         corpora = corpora_response.json()
         current_app.logger.info("Corpora response: %s", corpora)
@@ -1038,7 +1317,9 @@ def fetch_trained_models():
 
             try:
                 models_response = requests.get(
-                    f"{API}/data/corpora/{corpus_id}/models", timeout=10
+                    f"{API}/data/corpora/{corpus_id}/models",
+                    params={"owner_id": owner_id},
+                    timeout=10,
                 )
                 models_response.raise_for_status()
                 server.logger.info(
@@ -1135,7 +1416,11 @@ def delete_model():
     # get model entity
     try:
         t0 = time()
-        up = requests.get(f"{API}/data/models/{model_id}", timeout=(3.05, 60))
+        up = requests.get(
+            f"{API}/data/models/{model_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 60),
+        )
         up.raise_for_status()
         model_metadata = up.json()
         server.logger.info(
@@ -1178,7 +1463,11 @@ def delete_model():
 
     # delete model
     try:
-        up = requests.delete(f"{API}/data/models/{model_id}", timeout=(3.05, 30))
+        up = requests.delete(
+            f"{API}/data/models/{model_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 30),
+        )
         server.logger.info("Model delete upstream response status=%s", up.status_code)
         if up.status_code == 204:
             return jsonify({"message": f"Model '{model_id}' deleted successfully"}), 200
@@ -1225,7 +1514,9 @@ def dashboard():
 def proxy_dashboard_data():
     t0 = time()
     payload = request.get_json(silent=True) or {}
-    payload.setdefault("config_path", "static/config/config.yaml")
+    # Prefer per-user config blob over static path for advanced dashboard config
+    payload["config"] = get_effective_user_config(session.get("user_id"))
+    payload.pop("config_path", None)
 
     model_id = payload.get("model_id", "")
 
@@ -1238,7 +1529,11 @@ def proxy_dashboard_data():
     # model metadata
     try:
         up0 = time()
-        up = requests.get(f"{API}/data/models/{model_id}", timeout=(3.05, 60))
+        up = requests.get(
+            f"{API}/data/models/{model_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 60),
+        )
         up.raise_for_status()
         model_metadata = up.json()
         server.logger.info(
@@ -1261,7 +1556,11 @@ def proxy_dashboard_data():
     # corpus data
     try:
         up0 = time()
-        up = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up = requests.get(
+            f"{API}/data/corpora/{corpus_id}",
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 60),
+        )
         up.raise_for_status()
         corpus_training_data = up.json()
         server.logger.info(
@@ -1369,6 +1668,8 @@ def text_info():
     """
     t0 = time()
     payload = request.get_json(silent=True) or {}
+    payload["config"] = get_effective_user_config(session.get("user_id"))
+    payload.pop("config_path", None)
     model_id = payload.get("model_id", "")
     doc_id = str(payload.get("document_id", "")).strip()
 
@@ -1383,7 +1684,11 @@ def text_info():
     if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
         try:
             up0 = time()
-            up = requests.get(f"{API}/data/models/{model_id}", timeout=(3.05, 30))
+            up = requests.get(
+                f"{API}/data/models/{model_id}",
+                params={"owner_id": session.get("user_id")},
+                timeout=(3.05, 30),
+            )
             up.raise_for_status()
             model = up.json()
             _CACHE_MODELS[model_id] = {"ts": time(), "data": model}
@@ -1409,7 +1714,11 @@ def text_info():
     if not corpus_entry or (time() - corpus_entry["ts"] > CACHE_TTL):
         try:
             up0 = time()
-            up = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+            up = requests.get(
+                f"{API}/data/corpora/{corpus_id}",
+                params={"owner_id": session.get("user_id")},
+                timeout=(3.05, 60),
+            )
             up.raise_for_status()
             corpus = up.json()
             _CACHE_CORPORA[corpus_id] = {"ts": time(), "data": corpus}
@@ -1537,12 +1846,112 @@ def text_info():
         }
     )
 
+@server.post("/infer-text")
+def infer_text():
+    """
+    Handles the initial inference request from the frontend.
+    1. Sends the request body to the external API's inference endpoint.
+    2. Receives a job_id.
+    3. Polls the API's status endpoint using the job_id until results are available or a timeout occurs.
+    4. Returns the final inference results to the frontend.
+    """
+    try:
+        # 1. Get the JSON payload from the frontend request
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({"error": "Invalid or missing JSON payload"}), 400
+
+        # 2. Send the exact payload to the external API's inference endpoint
+        inference_url = f"{API}/infer/json"
+        
+        # Note: The 'text' in your example is a single string. 
+        # Ensure your external API expects this format.
+        
+        response = requests.post(
+            inference_url,
+            json=request_data,
+            headers={"Content-Type": "application/json"}
+        )
+        # response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
+
+        # Assuming the response body contains a job_id (e.g., {"job_id": "..."})
+        job_info = response.json()
+        job_id = job_info.get("job_id")
+        # print(f"Inference job submitted. Job ID: {job_id}")
+
+
+
+        if not job_id:
+            return jsonify({"error": "Inference API did not return a job_id"}), 500
+
+        print(f"Inference job submitted. Job ID: {job_id}")
+        
+        
+        # 3. Poll the job status (short delay) before returning
+        status_url = f"{API}/status/jobs/{job_id}"
+        poll_interval = float(os.getenv("INFER_POLL_INTERVAL_SEC", "1.0"))
+        max_wait = float(os.getenv("INFER_POLL_TIMEOUT_SEC", "30.0"))
+
+        deadline = monotonic() + max_wait
+        last_status = None
+        last_job_status = None
+
+        while True:
+            status_response = requests.get(status_url)
+            status_response.raise_for_status()
+            job_status = status_response.json()
+            status = str(job_status.get("status", "")).lower()
+            last_status = status
+            last_job_status = job_status
+
+            if status in ["completed", "succeeded", "success"]:
+                return jsonify(job_status.get("results", job_status))
+            if status in ["failed", "error"]:
+                print(f"Job {job_id} failed.")
+                return jsonify({"error": "Inference job failed", "details": job_status}), 500
+
+            if monotonic() >= deadline:
+                return jsonify({"status": last_status or "running", "details": last_job_status, "timeout": True}), 202
+
+            sleep(poll_interval)
+
+    except requests.exceptions.HTTPError as e:
+        # Handle exceptions from the external API calls
+        return jsonify({"error": f"External API HTTP Error: {e.response.text}", "status_code": e.response.status_code}), e.response.status_code
+    except requests.exceptions.RequestException as e:
+        # Handle network-level errors (e.g., connection refused)
+        return jsonify({"error": f"Error communicating with external API: {e}"}), 503
+    except Exception as e:
+        # Catch any other unexpected errors
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
 
 @server.post("/save-settings")
 def save_settings():
     payload = request.get_json(silent=True) or {}
     server.logger.info("Dummy /save-settings received: %s", payload)
     return jsonify({"ok": True, "echo": payload}), 200
+
+import yaml
+import os
+
+# Function to read the YAML config file
+def load_config(filepath=CONFIG_PATH):
+    """Reads and parses the YAML configuration file."""
+    if not os.path.exists(filepath):
+        # Handle the case where the file doesn't exist
+        print(f"Error: Config file not found at {filepath}")
+        return {}
+    try:
+        with open(filepath, 'r') as f:
+            # Use safe_load to avoid potential security issues
+            return yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        print(f"Error reading YAML file: {exc}")
+        return {}
+    except Exception as exc:
+        print(f"An unexpected error occurred: {exc}")
+        return {}
 
 
 # ------------------------------------------------------------------------------

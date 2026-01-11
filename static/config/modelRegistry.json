@@ -1,6 +1,5 @@
 {   
     "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
     "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel",
-    "topicGPT": "tova.topic_models.models.llm_based.topicgpt.topicgpt_tm_model.TopicGPTTMmodel"
+    "topicGPT": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
 }
-

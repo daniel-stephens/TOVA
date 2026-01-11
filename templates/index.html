@@ -1,13 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Corpus Upload with Validation</title>
-
-  <!-- Bootstrap CSS & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
+{% extends "base.html" %}
+{% block title %}Corpus Upload with Validation{% endblock %}
+{% block extra_head %}
   <style>
     .tooltip-custom {
       position: fixed;
@@ -76,43 +69,9 @@
     display: flex; flex-direction: column; align-items: center;
   }
   </style>
-</head>
+{% endblock %}
 
-<body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="/">TOVA</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-
-      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <ul class="navbar-nav">
-          <li class="nav-item">
-            <a class="nav-link{% if request.path == '/' %} active{% endif %}" href="/load-data-page">Upload Data</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link{% if 'load' in request.path %} active{% endif %}" href="/model">Initiate Training</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link{% if 'train' in request.path %} active{% endif %}" href="/trained-models">Model Repository</a>
-          </li>
-        </ul>
-
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-info btn-sm" id="previewSelectedBtn"
-                  data-bs-toggle="modal" data-bs-target="#filePreviewModal">
-            Preview Before Validation
-          </button>
-          <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#instructionModal">
-            Instructions
-          </button>
-        </div>
-      </div>
-    </div>
-  </nav>
-
+{% block content %}
   <div class="container py-5">
     <div class="row justify-content-center">
       <div class="col-md-8">
@@ -1301,10 +1260,4 @@ initCorpusNameValidator({ endpoint: '/getAllCorpora' });
 }); // <-- end of the outer DOMContentLoaded handler
 
   </script>
-  
-  
-
-
-  
-</body>
-</html>
+{% endblock %}

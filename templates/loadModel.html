@@ -4,31 +4,73 @@
 
 {% block extra_head %}
 <style>
-  /* Larger, clearer form controls (applies to radios too) */
-  .form-check-input {
-    width: 1.2em;
-    height: 1.2em;
-    border: 2px solid #6c757d;
-    background-color: #f8f9fa;
-    transition: all 0.2s ease-in-out;
+  /* Custom Scrollbar for tables */
+  .table-responsive::-webkit-scrollbar {
+    height: 8px;
   }
-  .form-check-input:hover {
-    border-color: #0d6efd;
-    background-color: #e9ecef;
+  .table-responsive::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+  }
+
+  .form-check-input {
     cursor: pointer;
   }
-  .form-check-input:checked {
-    background-color: #076bce;
-    border-color: #215dc5;
+  .corpus-row.hidden {
+    display: none;
   }
-  .form-check-input:focus {
-    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+  
+  .toast-container {
+    z-index: 1055;
+  }
+
+  /* Compact Advanced Settings Panel */
+  .advanced-panel {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .advanced-scroll-area {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  .advanced-scroll-area::-webkit-scrollbar {
+    width: 6px;
+  }
+  .advanced-scroll-area::-webkit-scrollbar-thumb {
+    background-color: #adb5bd;
+    border-radius: 3px;
+  }
+
+  .form-label-compact {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .form-switch .form-check-input {
+    width: 2em;
+    height: 1em;
+    margin-top: 0.15em;
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container py-5">
+  <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
   <div class="row justify-content-center">
     <div class="col-md-10 col-lg-9">
       <div class="card shadow">
@@ -40,12 +82,8 @@
                 Pick a corpus, choose an algorithm, then configure and start training.
               </p>
             </div>
-            <button
-              class="btn btn-sm btn-outline-secondary"
-              type="button"
-              onclick="history.back()"
-            >
-              Back
+            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="history.back()">
+              <i class="bi bi-arrow-left"></i> Back
             </button>
           </div>
 
@@ -53,27 +91,31 @@
 
           <form id="modelSelectionForm">
             <ol class="list-unstyled mb-0">
-              <!-- Step 1 -->
+              
               <li class="mb-4">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="fw-bold mb-0">1) Choose Training Data</h6>
-                  <a href="{{ url_for('load_corpus_page') }}"
-                     class="btn btn-sm btn-outline-secondary">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="fw-bold mb-0">1. Choose Training Data</h6>
+                  <a href="{{ url_for('load_corpus_page') }}" class="btn btn-sm btn-outline-secondary">
                     Manage corpora
                   </a>
                 </div>
 
-                <div class="table-responsive mt-2">
-                  <table class="table table-bordered table-hover table-sm mb-0">
-                    <thead class="table-light">
+                <input type="text" id="corpusSearch"
+                       class="form-control form-control-sm mb-2"
+                       placeholder="Search corpora..."
+                       aria-label="Search corpora">
+
+                <div class="table-responsive border rounded" style="max-height: 300px; overflow-y: auto;">
+                  <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead class="table-light sticky-top">
                       <tr>
-                        <th scope="col" style="width: 80px">Select</th>
+                        <th scope="col" style="width: 50px" class="text-center">Select</th>
                         <th scope="col">Corpus Name</th>
                       </tr>
                     </thead>
                     <tbody id="corpusCheckboxTable">
                       <tr>
-                        <td colspan="2"><em>Loading...</em></td>
+                        <td colspan="2" class="text-center text-muted py-3">Loading corpora...</td>
                       </tr>
                     </tbody>
                   </table>
@@ -83,209 +125,166 @@
                      style="min-height:1.5rem;"></div>
               </li>
 
-              <!-- Step 2 -->
               <li class="mb-4">
-                <h6 class="fw-bold mb-2">2) Choose Algorithm</h6>
-                <small class="text-muted d-block mb-2">
-                  Pick the topic modeling algorithm to use.
-                </small>
+                <h6 class="fw-bold mb-2">2. Choose Algorithm</h6>
                 <select class="form-select" id="model_type" name="model_type">
                   <option selected disabled>Loading models...</option>
                 </select>
               </li>
 
-              <!-- Step 3 -->
               <li class="mb-0">
-                <h6 class="fw-bold mb-2">3) Configure &amp; Train</h6>
-                <small class="text-muted d-block mb-2">
-                  Click <strong>“Train Model”</strong> to review settings
-                  (name, number of topics, preprocessing, and advanced parameters)
-                  before starting training.
-                </small>
-                <div class="d-flex justify-content-center gap-2">
-                  <button
-                    id="trainBtn"
-                    type="submit"
-                    disabled
-                    class="btn btn-primary"
-                  >
-                    Train Model
+                <h6 class="fw-bold mb-2">3. Configure &amp; Train</h6>
+                <div class="d-flex justify-content-start gap-2">
+                  <button id="trainBtn" type="submit" disabled class="btn btn-primary px-4">
+                    Configure &amp; Train
                   </button>
                 </div>
               </li>
             </ol>
           </form>
         </div>
-        <!-- card-body -->
       </div>
     </div>
   </div>
 </div>
 
-<!-- Configure & Train Modal -->
-<div
-  class="modal fade"
-  id="modelNameModal"
-  tabindex="-1"
-  aria-labelledby="modelNameModalLabel"
-  aria-hidden="true"
->
+<div class="modal fade" id="modelNameModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content shadow-lg border-0">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modelNameModalLabel">
-          Configure &amp; Train Model
-        </h5>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-          aria-label="Close"
-        ></button>
+      
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold">Configure Model</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <div class="modal-body">
-        <!-- Basic Settings -->
-        <h6 class="fw-bold mb-3">Basic Settings</h6>
+      <div class="modal-body pt-3">
+        <div class="p-3 mb-3 bg-white border rounded shadow-sm">
+          <h6 class="fw-bold text-primary mb-3 small text-uppercase">
+            <i class="bi bi-sliders me-1"></i> Basic Settings
+          </h6>
+          
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label for="modelNameInput" class="form-label small fw-bold">
+                Model Name
+              </label>
+              <input type="text" id="modelNameInput" class="form-control"
+                     placeholder="e.g. Finance Topic Model v1" required />
+              <div id="nameWarning" class="invalid-feedback">Name already exists.</div>
+            </div>
 
-        <div class="row g-3">
-          <div class="col-md-6 mb-3">
-            <label for="modelNameInput" class="form-label">Model Name</label>
-            <input
-              type="text"
-              id="modelNameInput"
-              class="form-control"
-              placeholder="Enter model name..."
-              required
-            />
-            <div
-              id="nameWarning"
-              class="form-text text-danger"
-              style="display: none"
-            >
-              This model name already exists. Please choose a different name.
+            <div class="col-md-5" id="topicCountGroup">
+              <label for="numTopics" class="form-label small fw-bold">Number of Topics</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="numTopics" value="10" min="2" max="200" required />
+                <span class="input-group-text bg-light"><small>topics</small></span>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="preprocessText" checked>
+                <label class="form-check-label small text-muted" for="preprocessText">
+                  Enable <strong>automatic preprocessing</strong> (Lemmatization, Stopwords removal)
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- Topics + Preprocess toggle -->
-          <div class="col-md-6 mb-3" id="topicCountGroup">
-            <label for="numTopics" class="form-label">Number of Topics</label>
-            <input
-              type="number"
-              class="form-control"
-              id="numTopics"
-              name="num_topics"
-              value="10"
-              min="2"
-              max="100"
-              required
-            />
+          <!-- Dynamic group-level settings: traditional / llm-based -->
+          <div class="row g-2 mt-3" id="basicGroupParams"></div>
+        </div>
 
-            <div class="form-check mt-2">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                id="preprocessText"
-                name="preprocess_text"
-                data-bs-toggle="tooltip"
-                data-bs-placement="right"
-                title="If the data of your corpus have not been preprocessed, select this so lemmatization is done."
-              />
-              <label class="form-check-label" for="preprocessText">
-                Preprocess text
+        <div class="border rounded">
+          <div class="d-flex justify-content-between align-items-center px-2 pt-2">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="includeAdvanced" checked>
+              <label class="form-check-label small text-muted" for="includeAdvanced">
+                Include advanced parameters
               </label>
             </div>
           </div>
-        </div>
-
-        <!-- Advanced Settings Toggle -->
-        <div class="mb-3 text-center">
-          <button
-            class="btn btn-outline-primary btn-sm"
-            type="button"
-            id="toggleAdvanced"
-          >
-            Show Advanced Settings
+          <button class="btn btn-light w-100 d-flex justify-content-between align-items-center p-2 rounded-top"
+                  type="button" id="toggleAdvanced" style="font-size: 0.9rem;">
+            <span class="fw-bold text-secondary">
+              <i class="bi bi-gear-fill me-1"></i> Advanced Configuration
+            </span>
+            <i class="bi bi-chevron-down text-muted" id="advancedIcon"></i>
           </button>
-        </div>
 
-        <!-- Advanced Settings Section -->
-        <div id="advancedSettings" style="display: none">
-          <div class="border rounded p-3 bg-light">
-            <h6 class="fw-bold mb-3">Advanced Settings</h6>
-            <div id="modelParamsArea" class="row g-3"></div>
+          <div id="advancedSettings" class="advanced-panel" style="display: none;">
+
+            <div class="advanced-scroll-area">
+              <div id="modelParamsArea" class="row g-2"></div>
+            </div>
           </div>
         </div>
       </div>
-      <!-- modal-body -->
 
-      <div class="modal-footer">
-        <button
-          type="button"
-          class="btn btn-secondary"
-          data-bs-dismiss="modal"
-        >
+      <div class="modal-footer border-top-0 pt-0 pb-3 pe-4">
+        <button type="button" class="btn btn-sm btn-link text-decoration-none text-muted me-auto"
+                data-bs-dismiss="modal">
           Cancel
         </button>
-        <button type="button" class="btn btn-success" id="confirmModelName">
-          Continue
+        <button type="button" class="btn btn-primary px-4 shadow-sm" id="confirmModelName">
+          <i class="bi bi-lightning-charge-fill me-1"></i> Start Training
         </button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Fullscreen Loader (if you want to hook it up later) -->
-<div
-  id="fullscreenLoader"
-  style="
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(255, 255, 255, 0.7);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-  "
->
-  <div
-    class="spinner-border text-primary"
-    style="width: 3rem; height: 3rem"
-    role="status"
-  >
-    <span class="visually-hidden">Loading...</span>
+<div id="fullscreenLoader"
+     class="d-none position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75
+            d-flex align-items-center justify-content-center"
+     style="z-index: 9999;">
+  <div class="text-center">
+    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+    <p class="mt-2 fw-bold text-muted" id="loaderText">Starting training...</p>
   </div>
 </div>
+
+<template id="toastTemplate">
+  <div class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto"
+              data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</template>
 {% endblock %}
 
 {% block extra_scripts %}
-{# js-yaml is only used on this page #}
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-
 <script>
 "use strict";
 
 (() => {
-  // Use url_for so the correct route is always used
-  const TRAINING_START_URL = "{{ url_for('training_start') }}";
+  const URLS = {
+    start: "{{ url_for('training_start') }}",
+    models: "{{ url_for('get_model_registry') }}",
+    corpora: "{{ url_for('getAllCorpora') }}",
+    names: "{{ url_for('get_model_names') }}",
+    config: "{{ url_for('static', filename='config/config.yaml') }}",
+    page: "{{ url_for('training_page_get') }}"
+  };
 
   const state = {
     modelConfig: {},
     selectedDataset: null,
-    existingModelNames: [],
-    namesLoadedAt: 0,
+    existingModelNames: new Set(),
+    modelKinds: {},     // model_name -> "traditional" | "llm-based"
+    promptModels: {},   // derived from config.llm + config.topic_modeling
   };
 
   const dom = {};
-  const $  = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const $  = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
   const escapeHtml = (str) =>
     String(str ?? "").replace(
-      /[&<>\"']/g,
+      /[&<>"']/g,
       (m) =>
         ({
           "&": "&amp;",
@@ -296,490 +295,1282 @@
         }[m])
     );
 
-  const safeJson = async (res) => {
-    const ct = res.headers.get("content-type") || "";
-    return ct.includes("application/json")
-      ? res.json().catch(() => null)
-      : null;
+  const showToast = (message, type = "danger") => {
+    const container = $("#toastContainer");
+    const template = $("#toastTemplate");
+    if (!container || !template) return;
+    const clone = template.content.cloneNode(true);
+    const toastEl = clone.querySelector(".toast");
+    toastEl.classList.add(`text-bg-${type}`);
+    toastEl.querySelector(".toast-body").textContent = message;
+    container.appendChild(toastEl);
+    const bsToast = window.bootstrap ? new bootstrap.Toast(toastEl, { delay: 5000 }) : null;
+    if (bsToast) {
+      bsToast.show();
+      toastEl.addEventListener("hidden.bs.toast", () => toastEl.remove());
+    } else {
+      setTimeout(() => toastEl.remove(), 5000);
+    }
+  };
+
+  const toggleLoader = (show, text = "Loading...") => {
+    const el = $("#fullscreenLoader");
+    const label = $("#loaderText");
+    if (!el) return;
+    if (show) {
+      if (label) label.textContent = text;
+      el.classList.remove("d-none");
+    } else {
+      el.classList.add("d-none");
+    }
   };
 
   const fetchJSON = async (url, opts = {}) => {
     const res = await fetch(url, opts);
-    const body = await safeJson(res);
     if (!res.ok) {
-      const msg =
-        (body && (body.error || body.detail || body.message)) ||
-        `${res.status} ${res.statusText}`;
-      throw new Error(msg);
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || `${res.status} ${res.statusText}`);
     }
-    return body;
+    return res.json();
   };
 
-  const ensureModelConfigLoaded = async () => {
-    if (Object.keys(state.modelConfig || {}).length) return;
-    await loadModelConfig();
-  };
+  // Infer model kinds from registry (no hard-coded model names)
+  const deriveModelKindsFromRegistry = (models) => {
+    console.log(models)
+    const kinds = {};
+    if (!models || typeof models !== "object") return kinds;
 
-  // --- /get-models-names normalization ---
-  function normalizeNames(payload) {
-    if (!payload) return [];
-    const raw = Array.isArray(payload)
-      ? payload
-      : payload.models ||
-        payload.items ||
-        payload.data ||
-        payload.results ||
-        [];
-    const out = new Set();
-    raw.forEach((item) => {
-      let v = item;
-      if (v && typeof v === "object") {
-        v =
-          v.name ??
-          v.model_name ??
-          v.save_name ??
-          v.title ??
-          v.label ??
-          v.id;
-      }
-      if (typeof v === "string") {
-        const s = v.trim();
-        if (s) out.add(s);
+    // Pattern A: grouped registry: { traditional: [...], "llm-based": [...] }
+    ["traditional", "llm_based"].forEach((group) => {
+      const val = models[group];
+  
+      if (!val) return;
+
+      if (Array.isArray(val)) {
+        val.forEach((item) => {
+          if (typeof item === "string") {
+            kinds[item] = group;
+          } else if (item && typeof item === "object") {
+            const name = item.name || item.id || item.model || item.model_name;
+            if (name) kinds[name] = group;
+          }
+        });
+      } else if (typeof val === "object") {
+        Object.keys(val).forEach((name) => {
+          kinds[name] = group;
+        });
       }
     });
-    return Array.from(out);
-  }
 
-  async function refreshNames() {
-    try {
-      const data = await fetchJSON("{{ url_for('get_model_names') }}", {
-        cache: "no-store",
-      });
-      state.existingModelNames = normalizeNames(data);
-    } catch (e) {
-      console.error("Failed to load existing models:", e);
-      state.existingModelNames = [];
-    } finally {
-      state.namesLoadedAt = Date.now();
+    // Pattern B: flat registry with explicit kind/type/category
+    Object.entries(models).forEach(([name, value]) => {
+      if (!value || typeof value !== "object") return;
+      const k = value.kind || value.type || value.category;
+      if (k === "traditional" || k === "llm_based") {
+        kinds[name] = k;
+      }
+    });
+
+    return kinds;
+  };
+
+  // Robustly get model kind with fallbacks
+  const getModelKind = (modelName) => {
+    const tm = state.modelConfig?.topic_modeling || {};
+    const fromRegistry = state.modelKinds?.[modelName];
+
+    if (fromRegistry === "traditional" || fromRegistry === "llm_based") {
+      return fromRegistry;
     }
-  }
 
-  function isDuplicateName(name) {
-    const key = String(name || "").trim().toLowerCase();
-    return (
-      !!key &&
-      state.existingModelNames.some(
-        (n) => String(n).toLowerCase() === key
-      )
-    );
-  }
+    if (tm.traditional) return "traditional";
+    if (tm["llm_based"]) return "llm_based";
 
-  document.addEventListener("DOMContentLoaded", async () => {
+    return null;
+  };
+
+  // Find model-specific config block in topic_modeling (case-insensitive)
+  const findModelConfigBlock = (tm, modelName) => {
+    if (!tm || !modelName) return {};
+
+    if (tm[modelName]) return tm[modelName];
+
+    const lower = modelName.toLowerCase();
+    const key = Object.keys(tm).find((k) => k.toLowerCase() === lower);
+    if (key) return tm[key];
+
+    return {};
+  };
+
+  // Build a prompt/LLM registry from the YAML config
+  const derivePromptModelsFromConfig = (cfg) => {
+    const tm  = cfg?.topic_modeling || {};
+    const llm = cfg?.llm || {};
+
+    const extractModelList = (val) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val.map((x) => String(x));
+      if (typeof val === "object") return Object.keys(val).map((x) => String(x));
+      return [];
+    };
+
+    const pm = {
+      traditional: {
+        model: tm.traditional?.llm_model_type ?? null,
+        server: tm.traditional?.llm_server ?? null,
+        labeller_prompt: tm.traditional?.labeller_prompt ?? null,
+        summarizer_prompt: tm.traditional?.summarizer_prompt ?? null,
+        do_labeller: tm.traditional?.do_labeller ?? null,
+        do_summarizer: tm.traditional?.do_summarizer ?? null,
+      },
+      llm_based: {
+        model: tm["llm_based"]?.llm ?? null,
+        server: tm["llm_based"]?.llm_server ?? null,
+      },
+      backends: {
+        openai: {
+          models: extractModelList(llm.gpt?.available_models),
+          api_key_path: llm.gpt?.path_api_key ?? null,
+        },
+        ollama: {
+          models: extractModelList(llm.ollama?.available_models),
+          host: llm.ollama?.host ?? null,
+        },
+        llama_cpp: {
+          host: llm.llama_cpp?.host ?? null,
+        },
+      },
+    };
+
+    return pm;
+  };
+
+  // ---- INIT ----
+  const init = async () => {
     Object.assign(dom, {
       modelSelect: $("#model_type"),
-      topicGroup: $("#topicCountGroup"),
-      formEl: $("#modelSelectionForm"),
+      form: $("#modelSelectionForm"),
       modalEl: $("#modelNameModal"),
-      confirmBtn: $("#confirmModelName"),
+      tableBody: $("#corpusCheckboxTable"),
       trainBtn: $("#trainBtn"),
       paramsArea: $("#modelParamsArea"),
-      corpusTableBody: $("#corpusCheckboxTable"),
-      toggleAdvancedBtn: $("#toggleAdvanced"),
-      advancedSection: $("#advancedSettings"),
+      confirmBtn: $("#confirmModelName"),
       modelNameInput: $("#modelNameInput"),
-      nameWarning: $("#nameWarning"),
+      searchInput: $("#corpusSearch"),
+      selectionSummary: $("#selectionSummary"),
+      topicCountGroup: $("#topicCountGroup"),
       numTopicsInput: $("#numTopics"),
       preprocessCheckbox: $("#preprocessText"),
-      selectionSummary: $("#selectionSummary"),
+      nameWarning: $("#nameWarning"),
+      basicGroupParams: $("#basicGroupParams"),
+      advancedSettings: $("#advancedSettings"),
+      advancedIcon: $("#advancedIcon"),
+      toggleAdvancedBtn: $("#toggleAdvanced"),
+      includeAdvanced: $("#includeAdvanced"),
+      includeLlm: $("#include_llm"),
     });
 
-    // Tooltips
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    [...tooltipTriggerList].forEach((el) => new bootstrap.Tooltip(el));
+    // Safe modal init
+    if (dom.modalEl && window.bootstrap && typeof bootstrap.Modal === "function") {
+      try {
+        dom.modal = bootstrap.Modal.getOrCreateInstance(dom.modalEl);
+      } catch (e) {
+        console.error("Failed to init Bootstrap modal:", e);
+        dom.modal = null;
+      }
+    } else {
+      dom.modal = null;
+    }
 
-    await loadModelOptions();
-    await loadCorpusRadioTable();
-    await refreshNames();
-    loadModelConfig().catch(() => {});
-    initAdvancedToggle();
+    try {
+      const [models, corpora, names, configText] = await Promise.all([
+        fetchJSON(URLS.models),
+        fetchJSON(URLS.corpora),
+        fetchJSON(URLS.names),
+        fetch(URLS.config).then((r) => r.text()),
+      ]);
+      console.log(models)
 
-    const syncTopicsVisibility = () => {
-      const isExternal = dom.modelSelect?.value === "External";
-      dom.topicGroup?.classList.toggle("d-none", !!isExternal);
+      state.modelConfig =
+        (window.jsyaml ? window.jsyaml.load(configText) : {}) || {};
+      state.modelKinds   = deriveModelKindsFromRegistry(models);
+      state.promptModels = derivePromptModelsFromConfig(state.modelConfig);
+      console.log(state.modelKinds)
+      renderModelOptions(models);
+      renderCorporaTable(corpora);
+      parseModelNames(names);
+
+      setupEventListeners();
+
+      if (dom.modelSelect && dom.modelSelect.value) {
+        renderParamsIntoModal(dom.modelSelect.value);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load initialization data. Please refresh.", "danger");
+    }
+  };
+
+  // ---- Rendering helpers ----
+  const renderModelOptions = (models) => {
+    if (!dom.modelSelect) return;
+
+    if (!models || typeof models !== "object") {
+      dom.modelSelect.innerHTML = '<option disabled>No models found</option>';
+      return;
+    }
+
+    const hasTraditionalGroup =
+      Array.isArray(models.traditional) ||
+      (models.traditional && typeof models.traditional === "object");
+    const hasLLMGroup =
+      Array.isArray(models["llm_based"]) ||
+      (models["llm_based"] && typeof models["llm_based"] === "object");
+
+    const pieces = [];
+
+    const extractNames = (val) => {
+      const out = [];
+      if (!val) return out;
+      if (Array.isArray(val)) {
+        val.forEach((item) => {
+          if (typeof item === "string") out.push(item);
+          else if (item && typeof item === "object") {
+            const name = item.name || item.id || item.model || item.model_name;
+            if (name) out.push(name);
+          }
+        });
+      } else if (typeof val === "object") {
+        out.push(...Object.keys(val));
+      }
+      return out;
     };
-    dom.modelSelect?.addEventListener("change", syncTopicsVisibility);
-    syncTopicsVisibility();
 
-    const modal = dom.modalEl ? new bootstrap.Modal(dom.modalEl) : null;
+    if (hasTraditionalGroup || hasLLMGroup) {
+      if (hasTraditionalGroup) {
+        const names = extractNames(models.traditional);
+        if (names.length) {
+          pieces.push('<optgroup label="Traditional models">');
+          names.forEach((name) => {
+            pieces.push(
+              `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+            );
+          });
+          pieces.push("</optgroup>");
+        }
+      }
 
-    // Form submit -> open modal
-    dom.formEl?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const chosen = $$(".corpus-radio:checked");
-      if (chosen.length !== 1) {
-        dom.trainBtn?.classList.add("disabled");
-        setTimeout(() => dom.trainBtn?.classList.remove("disabled"), 400);
+      if (hasLLMGroup) {
+        const names = extractNames(models["llm_based"]);
+        if (names.length) {
+          pieces.push('<optgroup label="LLM_based models">');
+          names.forEach((name) => {
+            pieces.push(
+              `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+            );
+          });
+          pieces.push("</optgroup>");
+        }
+      }
+
+      const groupedNames = new Set(Object.keys(state.modelKinds || {}));
+      const otherNames = Object.keys(models).filter(
+        (k) => k !== "traditional" && k !== "llm_based" && !groupedNames.has(k)
+      );
+      if (otherNames.length) {
+        pieces.push('<optgroup label="Other models">');
+        otherNames.forEach((name) => {
+          pieces.push(
+            `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+          );
+        });
+        pieces.push("</optgroup>");
+      }
+    } else {
+      const keys = Object.keys(models || {});
+      if (!keys.length) {
+        dom.modelSelect.innerHTML = '<option disabled>No models found</option>';
         return;
       }
-      await ensureModelConfigLoaded();
-      renderParamsIntoModal(dom.modelSelect?.value || "");
+      pieces.push(
+        ...keys.map(
+          (k) =>
+            `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`
+        )
+      );
+    }
 
-      const rb = chosen[0];
-      state.selectedDataset = {
-        id: rb.dataset.id,
-        name: rb.dataset.name,
-        isDraft: rb.dataset.draft === "1",
-      };
+    dom.modelSelect.innerHTML =
+      pieces.length > 0
+        ? pieces.join("")
+        : '<option disabled>No models found</option>';
 
-      modal?.show();
+    toggleTopicInput();
+  };
+
+  const renderCorporaTable = (items) => {
+    if (!dom.tableBody) return;
+    if (!Array.isArray(items) || !items.length) {
+      dom.tableBody.innerHTML =
+        '<tr><td colspan="2" class="text-center">No corpora found.</td></tr>';
+      return;
+    }
+    dom.tableBody.innerHTML = items
+      .map((it, idx) => {
+        const isDraft = !!it.is_draft;
+        const safeName = escapeHtml(it.name || "Untitled");
+        const id = escapeHtml(it.id || "");
+        return `
+          <tr class="corpus-row" data-search="${safeName.toLowerCase()}">
+            <td class="text-center">
+              <input type="radio"
+                     class="form-check-input corpus-radio"
+                     name="corpusRadio"
+                     id="c_${idx}"
+                     data-id="${id}"
+                     data-name="${safeName}"
+                     data-draft="${isDraft ? 1 : 0}">
+            </td>
+            <td>
+              <label class="w-100 cursor-pointer mb-0" for="c_${idx}">
+                ${safeName}
+                ${
+                  isDraft
+                    ? '<span class="badge bg-warning text-dark ms-2" style="font-size:0.7em">Draft</span>'
+                    : ""
+                }
+              </label>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+  };
+
+  const parseModelNames = (payload) => {
+    const raw = Array.isArray(payload)
+      ? payload
+      : payload?.models || payload?.items || [];
+    state.existingModelNames = new Set(
+      raw
+        .map((x) =>
+          (x?.name || x?.model_name || x || "").toString().toLowerCase().trim()
+        )
+        .filter(Boolean)
+    );
+  };
+
+  // Helper to setup LLM provider show/hide behavior
+  // Helper to setup LLM provider show/hide behavior
+const setupLlmProviderUi = (initialProvider) => {
+  const providerSelect = $("#llm_provider");
+  if (!providerSelect || !dom.basicGroupParams) return;
+  const sections = dom.basicGroupParams.querySelectorAll(".llm-provider-section");
+
+  const showProvider = (prov) => {
+    sections.forEach((sec) => {
+      const p = sec.dataset.provider || "";
+      sec.classList.toggle("d-none", p !== prov);
     });
+  };
 
-    dom.modalEl?.addEventListener("shown.bs.modal", () => {
-      resetNameValidation();
-      dom.modelNameInput?.focus();
-    });
+  showProvider(initialProvider || "");
 
-    dom.confirmBtn?.addEventListener("click", onConfirmCreate);
+  providerSelect.addEventListener("change", (e) => {
+    showProvider(e.target.value || "");
+  });
+};
 
-    // Radio selection -> enable Train button + summary
-    document.addEventListener("change", (e) => {
-      if (!(e.target instanceof HTMLInputElement)) return;
-      if (!e.target.classList.contains("corpus-radio")) return;
-      updateTrainEnabled();
-      updateSelectionSummary();
-    });
-    updateTrainEnabled();
-    updateSelectionSummary();
+// ---- Basic group-level params (traditional / llm-based) ----
+const renderBasicGroupParams = (modelName) => {
+  if (!dom.basicGroupParams) return;
+  dom.basicGroupParams.innerHTML = "";
 
-    wireNameValidation();
+  const tm = state.modelConfig?.topic_modeling || {};
+  const kind = getModelKind(modelName);
+  const groupKey =
+    kind === "traditional" || kind === "llm_based" ? kind : null;
+
+  if (!groupKey) return;
+
+  const groupCfg = tm[groupKey] || {};
+
+  // remove num_topics, preprocess_text, and topn from basic group config
+  const entries = Object.entries(groupCfg).filter(
+    ([key]) =>
+      key !== "num_topics" &&
+      key !== "preprocess_text" &&
+      key !== "topn"
+  );
+
+  const isLlmField = (key) => {
+  const k = key.toLowerCase();
+  return (
+    k.includes("llm") ||   // llm, llm_server, llm_model_type, etc.
+    k.includes("prompt")   // labeller_prompt, summarizer_prompt, etc.
+  );
+};
+
+  const nonLlmEntries = entries.filter(([key]) => !isLlmField(key));
+
+  const makeFieldHtml = (key, val) => {
+    const labelText = key.replace(/_/g, " ");
+    const labelSafe = escapeHtml(labelText);
+
+    if (key === "not_include") {
+      const items = Array.isArray(val)
+        ? val
+        : String(val || "")
+            .split(/[\n,]/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+      const text = escapeHtml(items.join("\n"));
+      return `
+        <div class="col-12">
+          <label class="form-label-compact" for="${key}" title="${labelSafe}">
+            ${labelSafe}
+          </label>
+          <textarea id="${key}"
+                    class="form-control form-control-sm"
+                    rows="2"
+                    placeholder="Item 1&#10;Item 2&#10;...">${text}</textarea>
+        </div>
+      `;
+    }
+
+    if (typeof val === "boolean") {
+      return `
+        <div class="col-md-4 col-sm-6 d-flex align-items-center">
+          <div class="form-check form-switch mb-0">
+            <input type="checkbox"
+                   class="form-check-input"
+                   id="${key}"
+                   ${val ? "checked" : ""}>
+            <label class="form-check-label small ms-1"
+                   for="${key}"
+                   title="${labelSafe}"
+                   style="white-space:nowrap;">
+              ${labelSafe}
+            </label>
+          </div>
+        </div>
+      `;
+    }
+
+    const isPrompt = key.toLowerCase().includes("prompt");
+    const type = typeof val === "number" ? "number" : "text";
+    const rawVal =
+      typeof val === "object" && val !== null ? JSON.stringify(val) : val;
+    const safeVal = escapeHtml(rawVal ?? "");
+
+    if (isPrompt) {
+      return `
+        <div class="col-12">
+          <label class="form-label-compact" for="${key}" title="${labelSafe}">
+            ${labelSafe}
+          </label>
+          <textarea id="${key}"
+                    class="form-control form-control-sm"
+                    rows="3">${safeVal}</textarea>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="col-md-4 col-sm-6">
+        <label class="form-label-compact" for="${key}" title="${labelSafe}">
+          ${labelSafe}
+        </label>
+        <input type="${type}"
+               class="form-control form-control-sm"
+               id="${key}"
+               value="${safeVal}">
+      </div>
+    `;
+  };
+
+  const parts = [];
+
+  // 1) Non-LLM group settings (e.g. thetas_thr, etc.) – topn is already filtered out above
+  nonLlmEntries.forEach(([key, val]) => {
+    parts.push(makeFieldHtml(key, val));
   });
 
-  // ===== Name validation helpers =====
-  function resetNameValidation() {
-    if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn) return;
-    dom.nameWarning.style.display = "none";
-    dom.modelNameInput.classList.remove("is-invalid");
-    dom.confirmBtn.disabled = true;
+  // 2) LLM provider UI in one aligned line: Provider | Model | Host/API
+  const pm = state.promptModels || {};
+  const kindCfg =
+    kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
+  const backends = pm.backends || {};
+
+  const openaiModels = backends.openai?.models || [];
+  const openaiApiPath = backends.openai?.api_key_path || null;
+  const ollamaModels = backends.ollama?.models || [];
+  const ollamaHostDefault = backends.ollama?.host || "";
+  const llamaCppHostDefault = backends.llama_cpp?.host || "";
+
+  let initialProvider = "";
+  let initialOpenaiModel = "";
+  let initialOllamaModel = "";
+  let initialOllamaHost = ollamaHostDefault;
+  let initialLlamaCppHost = llamaCppHostDefault;
+
+  const configuredModel = kindCfg.model;
+  const configuredServer = kindCfg.server;
+
+  if (configuredModel && openaiModels.includes(configuredModel)) {
+    initialProvider = "openai";
+    initialOpenaiModel = configuredModel;
+  } else if (configuredModel && ollamaModels.includes(configuredModel)) {
+    initialProvider = "ollama";
+    initialOllamaModel = configuredModel;
+  } else if (configuredServer && configuredServer === ollamaHostDefault) {
+    initialProvider = "ollama";
+  } else if (configuredServer && configuredServer === llamaCppHostDefault) {
+    initialProvider = "llama_cpp";
+  } else if (configuredModel && openaiModels.length && configuredModel.startsWith("gpt-")) {
+    initialProvider = "openai";
+    initialOpenaiModel = configuredModel;
+  } else if (configuredModel && ollamaModels.length) {
+    initialProvider = "ollama";
+    initialOllamaModel = configuredModel;
   }
 
-  function setValidity(ok) {
-    if (!dom.nameWarning || !dom.modelNameInput || !dom.confirmBtn) return;
-    const hasValue = !!dom.modelNameInput.value.trim();
-    dom.nameWarning.style.display = !ok && hasValue ? "block" : "none";
-    dom.modelNameInput.classList.toggle("is-invalid", !ok && hasValue);
-    dom.confirmBtn.disabled = !ok;
+  if (configuredServer && initialProvider === "ollama") {
+    initialOllamaHost = configuredServer;
+  } else if (configuredServer && initialProvider === "llama_cpp") {
+    initialLlamaCppHost = configuredServer;
   }
 
-  function wireNameValidation() {
-    if (!dom.modelNameInput) return;
-    let t = null;
-    dom.modelNameInput.addEventListener("input", () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        const value = dom.modelNameInput.value.trim();
-        if (!value) {
-          resetNameValidation();
+  const providerOptions = `
+    <option value="" selected>Choose a provider</option>
+    <option value="openai">OpenAI</option>
+    <option value="ollama">Ollama</option>
+    <option value="llama_cpp">llama.cpp</option>
+  `;
+
+  const openaiModelOptions = [
+    initialOpenaiModel && !openaiModels.includes(initialOpenaiModel)
+      ? initialOpenaiModel
+      : null,
+    ...openaiModels,
+  ]
+    .filter(Boolean)
+    .map((m) => {
+      const s = escapeHtml(String(m));
+      const selected = s === initialOpenaiModel ? "selected" : "";
+      return `<option value="${s}" ${selected}>${s}</option>`;
+    })
+    .join("") || '<option value="">(no models configured)</option>';
+
+  const ollamaModelOptions = [
+    initialOllamaModel && !ollamaModels.includes(initialOllamaModel)
+      ? initialOllamaModel
+      : null,
+    ...ollamaModels,
+  ]
+    .filter(Boolean)
+    .map((m) => {
+      const s = escapeHtml(String(m));
+      const selected = s === initialOllamaModel ? "selected" : "";
+      return `<option value="${s}" ${selected}>${s}</option>`;
+    })
+    .join("") || '<option value="">(no models configured)</option>';
+
+  const openaiApiHint = openaiApiPath
+    ? `Configured via <code>${escapeHtml(openaiApiPath)}</code>.`
+    : "Configured via server environment.";
+
+  parts.push(`
+    <div class="col-12 mt-3">
+      <div class="border rounded p-2 bg-light-subtle">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-secondary">
+            <i class="bi bi-toggle-on me-1"></i> Include LLM provider &amp; model
+          </span>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" id="include_llm" checked>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-secondary">
+            <i class="bi bi-cpu me-1"></i> LLM provider &amp; model
+          </span>
+        </div>
+        <div class="row g-2 align-items-end">
+          <!-- Provider -->
+          <div class="col-md-4 col-sm-12">
+            <label class="form-label-compact" for="llm_provider">
+              Provider
+            </label>
+            <select id="llm_provider"
+                    class="form-select form-select-sm llm-field">
+              ${providerOptions}
+            </select>
+          </div>
+
+          <!-- Model (OpenAI / Ollama) or N/A -->
+          <div class="col-md-4 col-sm-6">
+            <div class="llm-provider-section d-none" data-provider="openai">
+              <label class="form-label-compact" for="llm_openai_model">
+                Model
+              </label>
+              <select id="llm_openai_model" class="form-select form-select-sm llm-field">
+                ${openaiModelOptions}
+              </select>
+            </div>
+
+            <div class="llm-provider-section d-none" data-provider="ollama">
+              <label class="form-label-compact" for="llm_ollama_model">
+                Model
+              </label>
+              <select id="llm_ollama_model" class="form-select form-select-sm">
+                ${ollamaModelOptions}
+              </select>
+            </div>
+
+            <div class="llm-provider-section d-none" data-provider="llama_cpp">
+              <label class="form-label-compact" for="llm_llamacpp_model_placeholder">
+                Model
+              </label>
+              <input type="text"
+                     id="llm_llamacpp_model_placeholder"
+                     class="form-control form-control-sm"
+                     value="N/A for llama.cpp"
+                     disabled>
+            </div>
+          </div>
+
+          <!-- Host / API key -->
+          <div class="col-md-4 col-sm-6">
+            <!-- OpenAI: API key -->
+            <div class="llm-provider-section d-none" data-provider="openai">
+              <label class="form-label-compact" for="llm_openai_api_key">
+                API key / Host
+              </label>
+              <input type="password"
+                     class="form-control form-control-sm"
+                     id="llm_openai_api_key"
+                     placeholder="Leave blank to use server key">
+              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
+                ${openaiApiHint}
+              </small>
+            </div>
+
+            <!-- Ollama: host -->
+            <div class="llm-provider-section d-none" data-provider="ollama">
+              <label class="form-label-compact" for="llm_ollama_host">
+                Host
+              </label>
+              <input type="text"
+                     class="form-control form-control-sm llm-field"
+                     id="llm_ollama_host"
+                     value="${escapeHtml(initialOllamaHost || "")}">
+              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
+                Default: ${escapeHtml(ollamaHostDefault || "not set")}
+              </small>
+            </div>
+
+            <!-- llama.cpp: host -->
+            <div class="llm-provider-section d-none" data-provider="llama_cpp">
+              <label class="form-label-compact" for="llm_llamacpp_host">
+                Host
+              </label>
+              <input type="text"
+                     class="form-control form-control-sm llm-field"
+                     id="llm_llamacpp_host"
+                     value="${escapeHtml(initialLlamaCppHost || "")}">
+              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
+                Default: ${escapeHtml(llamaCppHostDefault || "not set")}
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  dom.basicGroupParams.innerHTML = parts.join("");
+
+  // Wire provider switching
+  setupLlmProviderUi(initialProvider);
+};
+
+
+
+
+  // ---- Basic group-level params (traditional / llm-based) ----
+  // Helper to setup LLM provider show/hide behavior
+
+// ---- Basic group-level params (traditional / llm-based) ----
+
+  // ---- Advanced params rendering (model-specific only) ----
+  const renderParamsIntoModal = (modelName) => {
+    if (!dom.paramsArea) return;
+    dom.paramsArea.innerHTML = "";
+
+    const tm = state.modelConfig?.topic_modeling || {};
+
+    const kind = getModelKind(modelName);
+    const groupKey =
+      kind === "traditional" || kind === "llm_based" ? kind : null;
+
+    const general = tm.general || {};
+    const groupCfg = groupKey ? tm[groupKey] || {} : {};
+    const specific = findModelConfigBlock(tm, modelName);
+
+    // Prefill num_topics from layered config
+    if (dom.numTopicsInput) {
+      const layered = { ...general, ...groupCfg, ...specific };
+      if ("num_topics" in layered) {
+        const n = Number(layered.num_topics);
+        if (Number.isFinite(n) && n > 0) {
+          dom.numTopicsInput.value = String(n);
+        }
+      }
+    }
+
+    // Render the group-level (traditional / llm-based) settings into Basic
+    renderBasicGroupParams(modelName);
+
+    // Advanced: only model-specific params
+    const params = { ...specific };
+    delete params.num_topics;
+    delete params.preprocess_text;
+
+    const keys = Object.keys(params);
+
+    if (!keys.length) {
+      dom.paramsArea.innerHTML =
+        '<div class="col-12 text-center text-muted small py-3">No advanced parameters for this model.</div>';
+      return;
+    }
+
+    const sortedKeys = keys.sort((a, b) => {
+      const va = params[a];
+      const vb = params[b];
+      const ta = typeof va;
+      const tb = typeof vb;
+      if (ta === "boolean" && tb !== "boolean") return -1;
+      if (ta !== "boolean" && tb === "boolean") return 1;
+      if (a === "not_include") return 1;
+      if (b === "not_include") return -1;
+      return 0;
+    });
+
+    const html = sortedKeys
+      .map((key) => {
+        const val = params[key];
+        const labelText = key.replace(/_/g, " ");
+        const labelSafe = escapeHtml(labelText);
+
+        // helper for include toggle
+        const includeSwitch = (k) => `
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input include-adv" type="checkbox" data-for="${k}" checked>
+          </div>
+        `;
+
+        if (key === "not_include") {
+          const items = Array.isArray(val)
+            ? val
+            : String(val || "")
+                .split(/[\n,]/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+          const text = escapeHtml(items.join("\n"));
+          return `
+            <div class="col-12 mt-2">
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <label class="form-label-compact mb-0" for="${key}" title="${labelSafe}">
+                  ${labelSafe}
+                </label>
+                ${includeSwitch(key)}
+              </div>
+              <textarea id="${key}"
+                        class="form-control form-control-sm"
+                        rows="2"
+                        placeholder="Item 1&#10;Item 2&#10;...">${text}</textarea>
+              <small class="text-muted">Comma or newline separated</small>
+            </div>
+          `;
+        }
+
+        if (typeof val === "boolean") {
+          return `
+            <div class="col-md-4 col-sm-6 d-flex align-items-center mt-2">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input include-adv" type="checkbox" data-for="${key}" checked>
+              </div>
+              <div class="form-check form-switch mb-0 ms-2">
+                <input type="checkbox"
+                       class="form-check-input"
+                       id="${key}"
+                       ${val ? "checked" : ""}>
+                <label class="form-check-label small ms-1"
+                       for="${key}"
+                       title="${labelSafe}"
+                       style="white-space:nowrap;">
+                  ${labelSafe}
+                </label>
+              </div>
+            </div>
+          `;
+        }
+
+        const type = typeof val === "number" ? "number" : "text";
+        const rawVal =
+          typeof val === "object" && val !== null ? JSON.stringify(val) : val;
+        const safeVal = escapeHtml(rawVal ?? "");
+
+        return `
+          <div class="col-md-4 col-sm-6">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label-compact mb-0" for="${key}" title="${labelSafe}">
+                ${labelSafe}
+              </label>
+              ${includeSwitch(key)}
+            </div>
+            <input type="${type}"
+                   class="form-control form-control-sm"
+                   id="${key}"
+                   value="${safeVal}">
+          </div>
+        `;
+      })
+      .join("");
+
+    dom.paramsArea.innerHTML = html;
+  };
+
+  // ---- Event wiring ----
+  const setupEventListeners = () => {
+    if (dom.searchInput) {
+      dom.searchInput.addEventListener("input", (e) => {
+        const term = e.target.value.toLowerCase();
+        $$(".corpus-row").forEach((row) => {
+          row.classList.toggle(
+            "hidden",
+            !row.dataset.search?.toLowerCase().includes(term)
+          );
+        });
+      });
+    }
+
+    if (dom.tableBody && dom.trainBtn && dom.selectionSummary) {
+      dom.tableBody.addEventListener("change", (e) => {
+        if (!e.target.classList.contains("corpus-radio")) return;
+        dom.trainBtn.disabled = false;
+        const name = e.target.dataset.name || "Unknown corpus";
+        dom.selectionSummary.innerHTML = `Selected: <strong>${escapeHtml(
+          name
+        )}</strong>`;
+      });
+    }
+
+    if (dom.form) {
+      dom.form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const rb = $(".corpus-radio:checked");
+        if (!rb) {
+          showToast("Please select a corpus first.", "warning");
           return;
         }
-        setValidity(!isDuplicateName(value));
-      }, 120);
+        state.selectedDataset = {
+          id: rb.dataset.id,
+          name: rb.dataset.name,
+        };
+
+        if (dom.modelSelect && dom.modelSelect.value) {
+          renderParamsIntoModal(dom.modelSelect.value);
+        }
+        if (dom.modelNameInput) {
+          dom.modelNameInput.value = "";
+          dom.modelNameInput.classList.remove("is-invalid");
+        }
+        if (dom.nameWarning) dom.nameWarning.style.display = "none";
+        if (dom.confirmBtn) dom.confirmBtn.disabled = true;
+
+        if (dom.modal) {
+          dom.modal.show();
+        } else if (dom.modalEl) {
+          dom.modalEl.classList.add("show");
+          dom.modalEl.style.display = "block";
+        }
+        setTimeout(() => dom.modelNameInput?.focus(), 150);
+      });
+    }
+
+    if (dom.modelNameInput && dom.confirmBtn && dom.nameWarning) {
+      dom.modelNameInput.addEventListener("input", (e) => {
+        const val = e.target.value.trim();
+        const exists = state.existingModelNames.has(val.toLowerCase());
+        e.target.classList.toggle("is-invalid", exists);
+        dom.nameWarning.style.display = exists ? "block" : "none";
+        dom.confirmBtn.disabled = exists || !val;
+      });
+    }
+
+    if (dom.modelSelect) {
+      dom.modelSelect.addEventListener("change", () => {
+        toggleTopicInput();
+        if (dom.modelSelect.value) {
+          renderParamsIntoModal(dom.modelSelect.value);
+        }
+      });
+    }
+
+    if (dom.toggleAdvancedBtn && dom.advancedSettings && dom.advancedIcon) {
+      dom.toggleAdvancedBtn.addEventListener("click", () => {
+      if (dom.includeAdvanced && !dom.includeAdvanced.checked) return;
+      const isHidden =
+          dom.advancedSettings.style.display === "none" ||
+          !dom.advancedSettings.style.display;
+        dom.advancedSettings.style.display = isHidden ? "block" : "none";
+        dom.advancedIcon.classList.toggle("bi-chevron-down", !isHidden);
+        dom.advancedIcon.classList.toggle("bi-chevron-up", isHidden);
+      });
+    }
+
+    // Wire include_llm toggle to disable/enable llm fields
+    if (dom.includeLlm) {
+      const toggleLlmFields = (enabled) => {
+        document.querySelectorAll(".llm-field").forEach((el) => {
+          el.disabled = !enabled;
+        });
+      };
+      toggleLlmFields(dom.includeLlm.checked);
+      dom.includeLlm.addEventListener("change", (e) => {
+        toggleLlmFields(e.target.checked);
+      });
+    }
+
+    if (dom.confirmBtn) {
+      dom.confirmBtn.addEventListener("click", handleTrainingStart);
+    }
+    if (dom.modalEl) {
+    const fallbackHideModal = () => {
+      if (dom.modal) {
+        // If Bootstrap Modal instance exists, delegate to it
+        dom.modal.hide();
+      } else {
+        // Manual hide fallback
+        dom.modalEl.classList.remove("show");
+        dom.modalEl.style.display = "none";
+        dom.modalEl.setAttribute("aria-hidden", "true");
+
+        // Clean up body + any leftover backdrop
+        document.body.classList.remove("modal-open");
+        document.body.style.overflow = "";
+        const backdrop = document.querySelector(".modal-backdrop");
+        if (backdrop) backdrop.remove();
+      }
+    };
+
+    // Any button with data-bs-dismiss="modal" should close the modal, even without Bootstrap JS
+    const dismissButtons =
+      dom.modalEl.querySelectorAll("[data-bs-dismiss='modal']") || [];
+    dismissButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        fallbackHideModal();
+      });
     });
   }
 
-  // ===== Confirm handler (includes /training/start) =====
-  async function onConfirmCreate() {
-    const model     = dom.modelSelect?.value || "";
-    const modelName = dom.modelNameInput?.value?.trim();
-    const isExternal = model === "External";
+  };
 
-    if (!modelName) {
-      alert("Please provide a model name.");
-      return;
-    }
+  const toggleTopicInput = () => {
+  if (!dom.modelSelect || !dom.topicCountGroup) return;
 
-    // Refresh names if older than 60s
-    if (Date.now() - state.namesLoadedAt > 60_000) {
-      await refreshNames();
-    }
-    if (isDuplicateName(modelName)) {
-      setValidity(false);
-      alert("This model name already exists. Please choose a different name.");
-      return;
-    }
-    if (!state.selectedDataset) {
-      alert("Please select a dataset.");
-      return;
-    }
+  const model = dom.modelSelect.value;
+  const kind = getModelKind(model); // "traditional" | "llm-based" | null
 
-    const training_params = {};
-    $$("#modelParamsArea input").forEach((input) => {
-      const key = input.id;
-      const val = input.value;
-      training_params[key] = input.type === "number" ? Number(val) : val;
+  const isTraditional = kind === "traditional";
+
+  // Only show number of topics for traditional models
+  dom.topicCountGroup.classList.toggle("d-none", !isTraditional);
+
+  if (dom.numTopicsInput) {
+    if (isTraditional) {
+      dom.numTopicsInput.setAttribute("required", "true");
+    } else {
+      dom.numTopicsInput.removeAttribute("required");
+    }
+  }
+};
+
+  // Reusable param collector for a container
+  const collectParamsFromContainer = (container) => {
+    const out = {};
+    if (!container) return out;
+    const inputs = container.querySelectorAll("input, textarea, select");
+    inputs.forEach((el) => {
+      const key = el.id;
+      if (!key) return;
+
+      const includeToggle = container.querySelector(`.include-adv[data-for="${key}"]`);
+      if (includeToggle && !includeToggle.checked) return;
+
+      // Skip provider-specific fields that are hidden
+      const llmSection = el.closest(".llm-provider-section");
+      if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
+
+      // If this element is gated by an include toggle and it's off, disable edits
+      if (includeToggle && !includeToggle.checked) {
+        if ("disabled" in el) el.disabled = true;
+        return;
+      } else if (includeToggle && includeToggle.checked && "disabled" in el) {
+        el.disabled = false;
+      }
+
+      if (key === "not_include") {
+        const items = String(el.value || "")
+          .split(/[\n,]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        out[key] = items;
+        return;
+      }
+
+      if (el.type === "checkbox") {
+        out[key] = el.checked;
+        return;
+      }
+
+      const raw = el.value;
+      const trimmed = raw != null ? raw.trim() : "";
+      if (!trimmed) return;
+
+      if (el.type === "number") {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) out[key] = n;
+        return;
+      }
+
+      out[key] = trimmed;
     });
-    if (!isExternal) {
-      const n = Number(dom.numTopicsInput?.value || 10);
-      training_params.num_topics = Number.isFinite(n) && n > 0 ? n : 10;
-    }
-    training_params.preprocess_text = !!dom.preprocessCheckbox?.checked;
+    return out;
+  };
 
-    const payload = {
-      model,
-      model_name: modelName,
-      training_params,
-      datasets: state.selectedDataset ? [state.selectedDataset] : [],
-    };
+  const collectBasicGroupParams = () =>
+    collectParamsFromContainer(dom.basicGroupParams);
+
+  const collectAdvancedParams = () =>
+    collectParamsFromContainer(dom.paramsArea);
+
+  // Map provider UI fields back into training_params.{llm_model_type|llm,llm_server,...}
+  const applyLlmSelection = (training_params, modelName) => {
+    const kind = getModelKind(modelName);
+    const pm = state.promptModels || {};
+    const backends = pm.backends || {};
+
+    const provider = training_params.llm_provider || "";
+    const openaiModel = training_params.llm_openai_model || "";
+    const openaiKey = training_params.llm_openai_api_key || "";
+    const ollamaModel = training_params.llm_ollama_model || "";
+    const ollamaHost = training_params.llm_ollama_host || "";
+    const llamaCppHost = training_params.llm_llamacpp_host || "";
+
+    delete training_params.llm_provider;
+    delete training_params.llm_openai_model;
+    delete training_params.llm_openai_api_key;
+    delete training_params.llm_ollama_model;
+    delete training_params.llm_ollama_host;
+    delete training_params.llm_llamacpp_host;
+
+    let targetModelField = null;
+    if (kind === "traditional") targetModelField = "llm_model_type";
+    else if (kind === "llm_based") targetModelField = "llm";
+
+    const kindCfg =
+      kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
+
+    if (!provider) return; // optional: no provider chosen, keep only what user set elsewhere
+
+    training_params.llm_provider = provider;
+
+    if (provider === "openai") {
+      const chosenModel =
+        openaiModel ||
+        kindCfg.model ||
+        (backends.openai?.models?.[0] || null);
+      if (targetModelField && chosenModel) {
+        training_params[targetModelField] = chosenModel;
+      }
+      if (openaiKey) {
+        training_params.llm_api_key = openaiKey;
+      }
+      // For OpenAI, server is implicit; clear explicit ollama/llama servers
+      if ("llm_server" in training_params && !kindCfg.server) {
+        delete training_params.llm_server;
+      }
+    } else if (provider === "ollama") {
+      const chosenModel =
+        ollamaModel ||
+        kindCfg.model ||
+        (backends.ollama?.models?.[0] || null);
+      const host =
+        ollamaHost ||
+        kindCfg.server ||
+        backends.ollama?.host ||
+        null;
+
+      if (targetModelField && chosenModel) {
+        training_params[targetModelField] = chosenModel;
+      }
+      if (host) {
+        training_params.llm_server = host;
+      }
+    } else if (provider === "llama_cpp") {
+      const host =
+        llamaCppHost ||
+        kindCfg.server ||
+        backends.llama_cpp?.host ||
+        null;
+      if (host) {
+        training_params.llm_server = host;
+      }
+      if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
+        training_params[targetModelField] = kindCfg.model;
+      }
+    }
+  };
+
+  const handleTrainingStart = async () => {
+    if (!dom.modelSelect || !dom.modelNameInput || !state.selectedDataset) return;
+
+    const model = dom.modelSelect.value;
+    const modelName = dom.modelNameInput.value.trim();
+    if (!modelName) {
+      showToast("Please enter a model name.", "warning");
+      return;
+    }
 
     const corpusId = state.selectedDataset.id;
 
+    const basicParams = collectBasicGroupParams();
+    const includeAdvanced = dom.includeAdvanced ? dom.includeAdvanced.checked : true;
+    const advancedParams = includeAdvanced ? collectAdvancedParams() : {};
+
+    let training_params = {
+      ...basicParams,
+      ...advancedParams,
+      preprocess_text: !!dom.preprocessCheckbox?.checked,
+    };
+
+    // Inject num_topics for non-external models
+    const kind = getModelKind(model);
+
+    // Only traditional models use num_topics
+    if (kind === "traditional") {
+      const n = Number(dom.numTopicsInput?.value || 10);
+      if (Number.isFinite(n) && n > 0) {
+        training_params.num_topics = n;
+      }
+    } else {
+      // Ensure we don't accidentally send num_topics for LLM-based or others
+      if ("num_topics" in training_params) {
+        delete training_params.num_topics;
+      }
+    }
+
+    // Map collected parameter IDs to expected backend parameter names
+    // This handles the mismatch between form field IDs and backend expectations
+    const paramMapping = {
+      "tm-trad-do_labeller": "do_labeller",
+      "tm-trad-do_summarizer": "do_summarizer",
+      "tm-trad-llm_model_type": "llm_model_type",
+      "tm-trad-labeller_prompt": "labeller_prompt",
+      "tm-trad-labeller_model_path": "labeller_model_path",
+      "tm-trad-summarizer_prompt": "summarizer_prompt",
+      "tm-trad-llm_server": "llm_server",
+    };
+
+    // Apply parameter name mapping by modifying the object in place
+    const keysToUpdate = Object.keys(training_params).filter(key => paramMapping.hasOwnProperty(key));
+    keysToUpdate.forEach(key => {
+      const mappedKey = paramMapping[key];
+      if (mappedKey && mappedKey !== key) {
+        training_params[mappedKey] = training_params[key];
+        delete training_params[key];
+      }
+    });
+
+    // Map provider -> llm_model_type / llm / llm_server
+    // Only map provider fields if LLM section is included and a provider is chosen
+    const includeLlm = document.querySelector("#include_llm")?.checked;
+    if (includeLlm && training_params.llm_provider) {
+      applyLlmSelection(training_params, model);
+    } else {
+      // strip any leftover llm_* fields if not including LLM
+      Object.keys(training_params)
+        .filter((k) => k.startsWith("llm_"))
+        .forEach((k) => delete training_params[k]);
+    }
+    
+    console.log("training_params being sent:", training_params);
+
+
+    const payload = {
+      corpus_id: corpusId,
+      model,
+      model_name: modelName,
+      training_params,
+    };
+
     try {
-      if (dom.confirmBtn) dom.confirmBtn.disabled = true;
+      if (dom.modal) dom.modal.hide();
+      else if (dom.modalEl) {
+        dom.modalEl.classList.remove("show");
+        dom.modalEl.style.display = "none";
+      }
 
-      const nClusters = Number(payload.training_params?.num_topics);
+      toggleLoader(true, "Calculating TF-IDF and initializing...");
 
-      // 1. TF-IDF clustering for visualization
-      console.log("[training] Requesting TF-IDF for corpus:", corpusId);
-      await requestTfidfForCorpusID({
-        corpusId,
-        nClusters:
-          Number.isFinite(nClusters) && nClusters > 0 ? nClusters : 15,
-      });
+      await fetch(
+        `/train/corpus/${encodeURIComponent(corpusId)}/tfidf/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            n_clusters:
+              Number(training_params.num_topics) > 0
+                ? Number(training_params.num_topics)
+                : 15,
+          }),
+        }
+      );
 
-      // 2. Start training
-      console.log("[training] Calling", TRAINING_START_URL, "with payload:", {
-        corpus_id: corpusId,
-        model: payload.model,
-        model_name: payload.model_name,
-        training_params: payload.training_params,
-      });
-
-      const startResp = await fetch(TRAINING_START_URL, {
+      const res = await fetch(URLS.start, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          corpus_id: corpusId,
-          model: payload.model,
-          model_name: payload.model_name,
-          training_params: payload.training_params,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!startResp.ok) {
-        const errText = await startResp.text().catch(() => "");
-        console.error("[training] /training/start error response:", errText);
-        throw new Error(errText || "Failed to start training");
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || "Failed to start training.");
       }
 
-      const { job_id, status_url, corpus_id, model_id } =
-        await startResp.json();
-
-      console.log("[training] Training started:", {
-        job_id,
-        status_url,
-        corpus_id,
-        model_id,
-      });
-
-      const u = new URL("{{ url_for('training_page_get') }}", location.origin);
-      u.searchParams.set("corpus_id", corpus_id);
-      u.searchParams.set("model_id", model_id);
-      u.searchParams.set("job_id", job_id);
+      const data = await res.json();
+      const u = new URL(URLS.page, location.origin);
+      if (data.corpus_id) u.searchParams.set("corpus_id", data.corpus_id);
+      if (data.model_id) u.searchParams.set("model_id", data.model_id);
+      if (data.job_id) u.searchParams.set("job_id", data.job_id);
       window.location.href = u.toString();
+
     } catch (err) {
-      console.error("Training request failed:", err);
-      alert(err?.message || "Failed to start training.");
-    } finally {
-      if (dom.confirmBtn) dom.confirmBtn.disabled = false;
+      console.error(err);
+      toggleLoader(false);
+      showToast(err.message || "An error occurred starting training.", "danger");
     }
-  }
+  };
 
-  // ===== UI helpers =====
-  function updateTrainEnabled() {
-    const anyChecked = $$(".corpus-radio:checked").length === 1;
-    if (dom.trainBtn) dom.trainBtn.disabled = !anyChecked;
-  }
-
-  function updateSelectionSummary() {
-    const rb = document.querySelector(".corpus-radio:checked");
-    if (!dom.selectionSummary) return;
-    if (!rb) {
-      dom.selectionSummary.textContent = "";
-      return;
-    }
-    const name   = rb?.dataset.name || "Unknown corpus";
-    const isDraft = rb?.dataset.draft === "1";
-    dom.selectionSummary.innerHTML =
-      `Selected: <strong>${name}</strong>` +
-      (isDraft
-        ? ' <span class="badge rounded-pill text-bg-warning ms-1">Draft</span>'
-        : "");
-  }
-
-  // ===== Data loaders =====
-  async function loadModelOptions() {
-    const select = dom.modelSelect;
-    if (!select) return;
-    try {
-      const models = await fetchJSON("{{ url_for('get_model_registry') }}");
-      select.innerHTML = "";
-      for (const [key] of Object.entries(models || {})) {
-        const opt = document.createElement("option");
-        opt.value = key;
-        opt.textContent = key;
-        select.appendChild(opt);
-      }
-      if (!select.options.length) {
-        select.innerHTML = "<option disabled>No models available</option>";
-      }
-    } catch (err) {
-      console.error("Error loading model options:", err);
-      select.innerHTML = "<option disabled>Error loading models</option>";
-    }
-  }
-
-  async function fetchAllCorpora() {
-    const res = await fetch("{{ url_for('getAllCorpora') }}", {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) throw new Error(`Failed to load corpora: ${res.status}`);
-    const items = await res.json();
-    return Array.isArray(items) ? items : [];
-  }
-
-  async function loadCorpusRadioTable() {
-    const tbody = dom.corpusTableBody;
-    const trainBtn = dom.trainBtn;
-    if (!tbody) return;
-
-    tbody.innerHTML =
-      '<tr><td colspan="2"><em>Loading...</em></td></tr>';
-
-    try {
-      const items = await fetchAllCorpora();
-      if (!items.length) {
-        tbody.innerHTML =
-          '<tr><td colspan="2"><em>No corpora found.</em></td></tr>';
-        if (trainBtn) trainBtn.disabled = true;
-        return;
-      }
-
-      const rows = items.map((it, idx) => {
-        const safeName = escapeHtml(it.name || "");
-        const badge = it.is_draft
-          ? '<span class="badge rounded-pill text-bg-warning ms-2">Draft</span>'
-          : "";
-        const id = `corpus_${idx}`;
-        const isDraft = !!it.is_draft;
-
-        return `
-          <tr>
-            <td class="text-center">
-              <input
-                type="radio"
-                class="form-check-input corpus-radio"
-                id="${id}"
-                name="corpusRadio"
-                data-id="${escapeHtml(it.id || "")}"
-                data-name="${safeName}"
-                data-draft="${isDraft ? "1" : "0"}"
-              >
-            </td>
-            <td>
-              <label class="ms-1 mb-0" for="${id}">${safeName}${badge}</label>
-            </td>
-          </tr>`;
-      });
-
-      tbody.innerHTML = rows.join("");
-      updateTrainEnabled();
-      updateSelectionSummary();
-    } catch (e) {
-      console.error("Error loading corpora:", e);
-      tbody.innerHTML =
-        '<tr><td colspan="2" class="text-danger"><em>Failed to load corpora.</em></td></tr>';
-      if (trainBtn) trainBtn.disabled = true;
-    }
-  }
-
-  async function loadModelConfig() {
-    try {
-      const res = await fetch("{{ url_for('static', filename='config/config.yaml') }}", {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`config load failed: ${res.status}`);
-      const yamlText = await res.text();
-      state.modelConfig =
-        (window.jsyaml ? window.jsyaml.load(yamlText) : {}) || {};
-    } catch (error) {
-      console.error("Error loading model config:", error);
-      state.modelConfig = {};
-    }
-  }
-
-  function initAdvancedToggle() {
-    const btn = dom.toggleAdvancedBtn;
-    const section = dom.advancedSection;
-    if (!btn || !section) return;
-    btn.addEventListener("click", () => {
-      const visible = section.style.display === "block";
-      section.style.display = visible ? "none" : "block";
-      btn.textContent = visible
-        ? "Show Advanced Settings"
-        : "Hide Advanced Settings";
-    });
-  }
-
-  function renderParamsIntoModal(model) {
-    const container = dom.paramsArea;
-    if (!container) return;
-    container.innerHTML = "";
-    const paramsRoot =
-      (state.modelConfig && state.modelConfig.topic_modeling) || {};
-    const params = paramsRoot?.[model];
-    if (!params) return;
-    for (const key of Object.keys(params)) {
-      const value = params[key];
-      const col = document.createElement("div");
-      col.className = "col-md-6";
-      const label = document.createElement("label");
-      label.textContent = key.replace(/_/g, " ");
-      label.setAttribute("for", key);
-      label.classList.add("form-label");
-      const input = document.createElement("input");
-      input.type = typeof value === "number" ? "number" : "text";
-      input.className = "form-control";
-      input.id = key;
-      input.name = key;
-      input.value = value ?? "";
-      col.appendChild(label);
-      col.appendChild(input);
-      container.appendChild(col);
-    }
-  }
-
-  async function requestTfidfForCorpusID({
-    corpusId,
-    nClusters,
-    fallbackClusters = 15,
-  }) {
-    const payload = {
-      n_clusters:
-        Number.isFinite(nClusters) && nClusters > 0
-          ? nClusters
-          : fallbackClusters,
-    };
-    const url = `/train/corpus/${encodeURIComponent(corpusId)}/tfidf/`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`TF-IDF request failed: ${res.status} ${txt}`);
-    }
-    return res.json();
-  }
+  // Start the application
+  init();
 })();
 </script>
 {% endblock %}
+
+
+
