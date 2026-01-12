@@ -26,8 +26,10 @@ COPY src ./src
 RUN mkdir /dist
 
 # Build wheels for all dependencies and put them in /dist
-RUN pip wheel --no-cache-dir -r requirements.txt -w /dist
-RUN pip wheel --no-cache-dir -r solr/solr-api/requirements.txt -w /dist
+RUN pip wheel --no-cache-dir \
+    -r requirements.txt \
+    -r solr/solr-api/requirements.txt \
+    -w /dist
 
 # Build wheel for your OWN code and also put it in /dist
 RUN python -m build --wheel --outdir /dist
