@@ -128,14 +128,16 @@ class LLMTModel(BaseTMModel, ABC):
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.0, 0.5)
         prs.report(0.0, "Preprocessing")
-        infer_data, df_infer, embeddings_infer = self.prepare_infer_data(data)
+        
+        # TODO: compute embeddings only if needed
+        df_infer = self.prepare_infer_data(data)
         prs.report(1.0, "Preprocessing completed")
 
         # 2. INFERENCE (50-100%)
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.2, 0.7)
         prs.report(0.0, "Inference")
-        thetas, _ = self.infer_core(infer_data, df_infer, embeddings_infer)
+        thetas, _ = self.infer_core(df_infer)
         prs.report(1.0, "Inference completed")
 
         return thetas, time.time() - t_start

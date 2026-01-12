@@ -1,3 +1,4 @@
+import os
 from pyexpat import model
 import unittest
 import pathlib
@@ -70,7 +71,7 @@ class TestTopicModels(unittest.TestCase):
         for model_name, model_path in self.model_registry.items():
             with self.subTest(model=model_name):
                 model_cls = self.load_class_from_path(model_path)
-                tm_model = model_cls.from_saved_model(f"test_{model_name}")
+                tm_model = model_cls.from_saved_model(os.path.abspath(f"test_{model_name}"))
             
                 # inference
                 infer_data = self.sample_data.rename(columns={"summary": "raw_text"})

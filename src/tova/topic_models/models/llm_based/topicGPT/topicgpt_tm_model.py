@@ -9,7 +9,7 @@ from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
 import numpy as np
-import topicgpt_python as tg
+import topicgpt_python as tg # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.preprocessing import normalize  # type: ignore
 from tqdm import tqdm
@@ -17,6 +17,9 @@ from tqdm import tqdm
 from tova.topic_models.models.llm_based.base import LLMTModel
 from tova.utils.cancel import CancellationToken, check_cancel
 from tova.utils.progress import ProgressCallback  # type: ignore
+
+_TOPICS_LINE_RE = re.compile(r"^\s*\[\d+\]\s*([^(]+?)(?:\s*\(|\s*:|$)")
+_RESP_RE = re.compile(r"^\s*\[(\d+)\]\s*([^:]+)\s*:")
 
 
 class TopicGPTTMmodel(LLMTModel):
@@ -38,9 +41,9 @@ class TopicGPTTMmodel(LLMTModel):
         load_model: bool = False,
         **kwargs
     ) -> None:
-        
+
         model_name = model_name if model_name else f"{self.__class__.__name__}_{int(time.time())}"
-        
+
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
@@ -94,17 +97,17 @@ class TopicGPTTMmodel(LLMTModel):
             f"temperature={self.temperature}, top_p={self.top_p}, "
             f"do_second_level={self.do_second_level}."
         )
-        
+
     def _prepare_data(self, model_files: pathlib.Path) -> pathlib.Path:
         """
         Prepare data files for TopicGPT scripts: full.jsonl (all docs)  and
         sample_*.jsonl (sampled docs). Returns paths to (sampled, full).
         """
-        
+
         df_full = self.df.copy().rename(columns={"raw_text": "text"})
         path_full = model_files / "full.jsonl"
         df_full.to_json(path_full, lines=True, orient="records")
-        
+
         df_sample = self.df.copy()
         # gpt expects 'text' field
         df_sample = df_sample.rename(columns={"raw_text": "text"})
@@ -123,8 +126,221 @@ class TopicGPTTMmodel(LLMTModel):
         df_sample.to_json(path_sample, lines=True, orient="records")
         self._logger.info(
             f"Sampling done. Using {len(df_sample)} docs. Saved to {path_sample.as_posix()}")
-        
+
         return path_sample, path_full
+
+    def _topic_label_from_topic_line(self, line: str) -> str:
+        # "[1] Healthcare (Count: 1): ..." -> "Healthcare"
+        m = _TOPICS_LINE_RE.match(line or "")
+        return self._norm(m.group(1)) if m else self._norm(line)
+
+    def _topic_label_from_response(self, resp: str) -> str:
+        # "[1] Immigration: ..." -> ("1", "Immigration")
+        m = _RESP_RE.match(resp or "")
+        return self._norm(m.group(2)) if m else ""
+
+    def _norm(self, s: str) -> str:
+        return " ".join((s or "").strip().lower().split())
+    
+    def _run_cmd(self, cmd: str, banner: str):
+        """
+        Run a shell command with logging; raise on failure.
+        """
+        self._logger.info(banner)
+        self._logger.info(f"-- -- Running command: {cmd}")
+        try:
+            check_output(args=cmd, shell=True)
+        except CalledProcessError as e:
+            self._logger.error(f"Command failed (returncode {e.returncode}).")
+            self._logger.error(e.output.decode("utf-8")
+                               if e.output else "<no output>")
+            raise
+        except Exception as e:
+            self._logger.exception("Failed to run external script.")
+            raise
+
+    def _read_topics(self, path: pathlib.Path) -> dict:
+        """
+        Read topic lines (non-empty) from a .md file into {idx: line}.
+        """
+        with open(path, "r", encoding="utf8") as fin:
+            lines = [ln.strip() for ln in fin.readlines() if ln.strip()]
+        topics = {i: ln for i, ln in enumerate(lines)}
+        self._logger.info(f"Loaded {len(topics)} topics from {path.name}")
+        return topics    
+   
+    def _approximate_thetas_from_assignments(self, assign_path: pathlib.Path) -> np.ndarray:
+        """Approximates document-topic distribution matrix (thetas) from
+        assignment_corrected.jsonl file.
+
+        Parameters
+        ----------
+        assign_path : Path
+            Path to assignment_corrected.jsonl file.
+
+        Returns
+        -------
+        thetas : np.ndarray
+            Document-topic distribution matrix (D x T).
+        """
+
+        if self.topics is None:
+            raise RuntimeError("Topics not available. Run training first.")
+
+        K = len(self.topics)
+        # map normalized topic name -> index (level 1)
+        topic_name_to_idx = {
+            self._topic_label_from_topic_line(name): k
+            for k, name in self.topics.items()
+        }
+        self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
+
+        doc_ids = self.df.id.values.tolist()
+
+        D = len(doc_ids)
+        df_ids = set(doc_ids)
+        thetas = np.zeros((D, K), dtype=np.float32)
+
+        # construct thetas from assignments
+        with open(assign_path, "r", encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                doc_id = obj["id"]
+                if doc_id not in df_ids:
+                    continue
+
+                resp = obj.get("responses", "")
+                if not isinstance(resp, str):
+                    continue
+
+                m = _RESP_RE.match(resp)
+                if not m:
+                    continue
+
+                level = int(m.group(1))
+                if level != 1:
+                    continue
+
+                topic_name = self._topic_label_from_response(resp)
+                k = topic_name_to_idx.get(topic_name)
+                if k is not None:
+                    d = doc_ids.index(doc_id)
+                    thetas[d, k] = 1.0
+
+        # normalize rows
+        row_sums = thetas.sum(axis=1, keepdims=True)
+        nz = row_sums.squeeze() > 0
+        thetas[nz] /= row_sums[nz]
+
+        self._logger.info(
+            f"Synthetic thetas built: theta={thetas.shape}"
+        )
+
+        return thetas
+
+    def _approximate_betas(self, thetas: np.ndarray) -> Tuple[np.ndarray, List[str]]:
+        """Approximates topic-word distribution matrix (betas) and vocabulary
+        from TF-IDF on 'pseudo-documents' formed by concatenating texts of
+        documents assigned to each topic.
+
+        Parameters
+        ----------
+        thetas : np.ndarray
+            Document-topic distribution matrix (D x T).
+
+        Returns
+        -------
+        betas : np.ndarray
+            Topic-word distribution matrix (T x V).
+        vocab : List[str]
+            Vocabulary list.
+        """
+
+        K = thetas.shape[1]
+        doc_texts = self.df.raw_text.values.tolist()
+
+        # pseudo-betas via TF-IDF on topic documents
+        topic_docs = defaultdict(list)
+        for d, text in enumerate(doc_texts):
+            ks = np.where(thetas[d] > 0)[0]
+            for k in ks:
+                topic_docs[k].append(text)
+
+        topic_texts = [
+            " ".join(topic_docs[k]) if k in topic_docs else ""
+            for k in range(K)
+        ]
+
+        n_topic_docs = len(topic_texts)
+
+        min_df = 2
+        max_df = 1.0
+
+        if n_topic_docs <= min_df:
+            min_df = 1
+
+        vectorizer = TfidfVectorizer(
+            max_features=5000,
+            min_df=min_df,
+            max_df=max_df,
+        )
+
+        X = vectorizer.fit_transform(topic_texts)
+        vocab = list(vectorizer.get_feature_names_out())
+
+        betas = X.toarray().astype(np.float32)
+
+        # normalize rows
+        beta_sums = betas.sum(axis=1, keepdims=True)
+        nz = beta_sums.squeeze() > 0
+        betas[nz] /= beta_sums[nz]
+
+        self._logger.info(
+            f"Synthetic betas built: beta={betas.shape}"
+        )
+
+        return betas, vocab
+
+    def _approximate_distributions(self) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+        """Approximates 'traditional' topic model distributions (thetas, betas) and vocabulary as follows:
+
+        1) thetas (from assignment_corrected.jsonl after correction step). After parsing [1] topics, each document d has a set of assigned topics. We then define theta[d, k] = 1/|T_d| if k in T_d, else 0, and row-normalize.
+        2) betas. We treat each topic as a 'pseudo-document' formed by concatenating the texts of all documents assigned to that topic. We then fit a TF-IDF vectorizer on these pseudo-documents to get a topic-term matrix, which we L1-normalize row-wise to get betas.
+        3) vocab is simply the feature list learned by the TF-IDF vectorizer, aligned with the columns of betas.
+
+        Returns
+        -------
+        thetas : np.ndarray
+            Document-topic distribution matrix (D x T).
+        betas : np.ndarray
+            Topic-word distribution matrix (T x V).
+        vocab : List[str]
+            Vocabulary list.
+        """
+
+        if self.topics is None:
+            raise RuntimeError("Topics not available. Run training first.")
+
+        assign_path = self.model_path / "modelFiles" / "assignment_corrected.jsonl"
+
+        K = len(self.topics)
+        # map normalized topic name -> index (level 1)
+        topic_name_to_idx = {
+            self._topic_label_from_topic_line(name): k
+            for k, name in self.topics.items()
+        }
+        self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
+
+        thetas = self._approximate_thetas_from_assignments(assign_path)
+
+        # pseudo-betas via TF-IDF on topic documents
+        betas, vocab = self._approximate_betas(thetas)
+
+        self._logger.info(
+            f"Synthetic distributions built: theta={thetas.shape}, beta={betas.shape}"
+        )
+
+        return thetas, betas, vocab
 
     def train_core(
         self,
@@ -170,7 +386,7 @@ class TopicGPTTMmodel(LLMTModel):
             seed_file=self._seed_1.as_posix(),
             out_file=outputs['generation_out'].as_posix(),
             topic_file=outputs['generation_topic'].as_posix(),
-            verbose=self.verbose_scripts   
+            verbose=self.verbose_scripts
         )
         prss and prss.report(1.0, "Generation completed")
 
@@ -220,7 +436,7 @@ class TopicGPTTMmodel(LLMTModel):
             output_path=outputs['correction_out'].as_posix(),
             verbose=self.verbose_scripts
         )
-        
+
         prss and prss.report(1.0, "Correction completed")
 
         # 80–90%: Optional 2nd level generation
@@ -255,153 +471,38 @@ class TopicGPTTMmodel(LLMTModel):
         # Save the raw topic strings
         with self.model_path.joinpath('orig_tpc_descriptions.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join([topics[k] for k in sorted(topics.keys())]))
-        
+
         thetas, betas, vocab = self._approximate_distributions()
         prss and prss.report(1.0, "Topics & synthetic distributions ready")
-        
+
         return time.time() - t_start, thetas, betas, vocab
-    
-    def _approximate_distributions(self) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-        """Approximates 'traditional' topic model distributions (thetas, betas) and vocabulary as follows:
-        
-        1) thetas (from assignment_corrected.jsonl after correction step). After parsing [1] topics, each document d has a set of assigned topics. We then define theta[d, k] = 1/|T_d| if k in T_d, else 0, and row-normalize.
-        2) betas. We treat each topic as a 'pseudo-document' formed by concatenating the texts of all documents assigned to that topic. We then fit a TF-IDF vectorizer on these pseudo-documents to get a topic-term matrix, which we L1-normalize row-wise to get betas.
-        3) vocab is simply the feature list learned by the TF-IDF vectorizer, aligned with the columns of betas.
-        
-        Returns
-        -------
-        thetas : np.ndarray
-            Document-topic distribution matrix (D x T).
-        betas : np.ndarray
-            Topic-word distribution matrix (T x V).
-        vocab : List[str]
-            Vocabulary list.
+
+    def infer_core(self, df_infer):
+        """
+        TopicGPT inference consists of re-using the assignment step.
         """
 
-        if self.topics is None:
-            raise RuntimeError("Topics not available. Run training first.")
-        
-        _TOPICS_LINE_RE = re.compile(r"^\s*\[\d+\]\s*([^(]+?)(?:\s*\(|\s*:|$)")
-        _RESP_RE        = re.compile(r"^\s*\[(\d+)\]\s*([^:]+)\s*:")
+        # save infer data to temp file
+        infer_path = self.model_path / "modelFiles" / "infer_data.jsonl"
+        df_infer_renamed = df_infer.rename(columns={"raw_text": "text"})
+        df_infer_renamed.to_json(infer_path, lines=True, orient="records")
 
-        def _topic_label_from_topic_line(line: str) -> str:
-            # "[1] Healthcare (Count: 1): ..." -> "Healthcare"
-            m = _TOPICS_LINE_RE.match(line or "")
-            return _norm(m.group(1)) if m else _norm(line)
+        # new topics should be saved in a different file
+        assign_out_path = self.model_path / "modelFiles" / "infer_assignment.jsonl"
 
-        def _topic_label_from_response(resp: str) -> str:
-            # "[1] Immigration: ..." -> ("1", "Immigration")
-            m = _RESP_RE.match(resp or "")
-            return _norm(m.group(2)) if m else ""
-
-        def _norm(s: str) -> str:
-            return " ".join((s or "").strip().lower().split())
-
-        assign_path = self.model_path / "modelFiles" / "assignment_corrected.jsonl"
-
-        K = len(self.topics)
-        # map normalized topic name -> index (level 1)
-        topic_name_to_idx = {
-            _topic_label_from_topic_line(name): k
-            for k, name in self.topics.items()
-        }
-        self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
-
-        
-        doc_ids = self.df.id.values.tolist()
-        texts = self.df.raw_text.values.tolist()
-
-        D = len(doc_ids)
-        df_ids = set(doc_ids)
-        thetas = np.zeros((D, K), dtype=np.float32)
-
-        # construct thetas from assignments
-        assignments = defaultdict(list)
-        with open(assign_path, "r", encoding="utf-8") as f:
-            for line in f:
-                obj = json.loads(line)
-                doc_id = obj["id"]
-                if doc_id not in df_ids:
-                    continue
-
-                resp = obj.get("responses", "")
-                if not isinstance(resp, str):
-                    continue
-
-                m = _RESP_RE.match(resp)
-                if not m:
-                    continue
-                level = int(m.group(1))
-                if level != 1:
-                    continue
-
-                topic_name = _topic_label_from_response(resp)
-                k = topic_name_to_idx.get(topic_name)
-                if k is not None:
-                    assignments[doc_id].append(k)
-
-        for d, doc_id in enumerate(self.df.id.values.tolist()):
-            ks = assignments.get(doc_id, [])
-            if not ks:
-                continue
-            w = 1.0 / len(ks)
-            for k in ks:
-                thetas[d, k] += w
-
-        # normalize rows
-        row_sums = thetas.sum(axis=1, keepdims=True)
-        nz = row_sums.squeeze() > 0
-        thetas[nz] /= row_sums[nz]
-
-        # pseudo-betas via TF-IDF on topic documents
-        topic_docs = defaultdict(list)
-        for d, text in enumerate(texts):
-            ks = np.where(thetas[d] > 0)[0]
-            for k in ks:
-                topic_docs[k].append(text)
-
-        topic_texts = [
-            " ".join(topic_docs[k]) if k in topic_docs else ""
-            for k in range(K)
-        ]
-        
-        n_topic_docs = len(topic_texts)
-
-        min_df = 2
-        max_df = 1.0
-
-        if n_topic_docs <= min_df:
-            min_df = 1
-
-        vectorizer = TfidfVectorizer(
-            max_features=5000,
-            min_df=min_df,
-            max_df=max_df,
+        tg.assign_topics(
+            api=self.llm_provider,
+            model=self.llm_model_type,
+            data=infer_path.as_posix(),
+            prompt_file=self._assignment_prompt.as_posix(),
+            topic_file=self.model_path.joinpath("modelFiles").joinpath(
+                "generation_1.md").as_posix(),
+            out_file=assign_out_path.as_posix(),
+            verbose=self.verbose_scripts
         )
-
-        X = vectorizer.fit_transform(topic_texts)
-        vocab = list(vectorizer.get_feature_names_out())
-
-        betas = X.toarray().astype(np.float32)
-
-        # normalize rows
-        beta_sums = betas.sum(axis=1, keepdims=True)
-        nz = beta_sums.squeeze() > 0
-        betas[nz] /= beta_sums[nz]
-
-        self._logger.info(
-            f"Synthetic distributions built: theta={thetas.shape}, beta={betas.shape}"
-        )
-
-        return thetas, betas, vocab
-
-
-    def infer_core(self, infer_data, df_infer, embeddings_infer):
-        """
-        TopicGPT doesn't support inference.
-        """
-        raise RuntimeError(
-            "TopicGPT does not support inference in this pipeline.")
+        # parse assignments to build thetas
+        thetas = self._approximate_thetas_from_assignments(assign_out_path)
+        return thetas, time.time() - 0
 
     def save_model(self):
         """
@@ -487,33 +588,6 @@ class TopicGPTTMmodel(LLMTModel):
             obj._logger.info("Loaded TopicGPT metadata.")
 
         return obj
-
-    def _run_cmd(self, cmd: str, banner: str):
-        """
-        Run a shell command with logging; raise on failure.
-        """
-        self._logger.info(banner)
-        self._logger.info(f"-- -- Running command: {cmd}")
-        try:
-            check_output(args=cmd, shell=True)
-        except CalledProcessError as e:
-            self._logger.error(f"Command failed (returncode {e.returncode}).")
-            self._logger.error(e.output.decode("utf-8")
-                               if e.output else "<no output>")
-            raise
-        except Exception as e:
-            self._logger.exception("Failed to run external script.")
-            raise
-
-    def _read_topics(self, path: pathlib.Path) -> dict:
-        """
-        Read topic lines (non-empty) from a .md file into {idx: line}.
-        """
-        with open(path, "r", encoding="utf8") as fin:
-            lines = [ln.strip() for ln in fin.readlines() if ln.strip()]
-        topics = {i: ln for i, ln in enumerate(lines)}
-        self._logger.info(f"Loaded {len(topics)} topics from {path.name}")
-        return topics
 
     def print_topics(self, verbose: bool = False, get_second_level: bool = False) -> dict:
         if get_second_level:
