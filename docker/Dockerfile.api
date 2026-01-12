@@ -20,9 +20,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy all wheels from the builder
 COPY --from=wheel /dist /tmp/wheels
 
-# Install all wheels from the local directory.
-RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl && \
-    rm -rf /tmp/wheels
+# Copy requirements files for installation
+COPY requirements.txt /tmp/requirements.txt
+COPY solr/solr-api/requirements.txt /tmp/solr-requirements.txt
+COPY pyproject.toml /tmp/pyproject.toml
+
+# Remove pytz-2025.2 wheel to resolve conflict with topicgpt-python (requires pytz<2025.0)
+# Keep pytz-2024.2 which is compatible with all requirements
+RUN find /tmp/wheels -name "pytz-2025.2*.whl" -delete || true
+
+# Install from requirements files using wheels as source, allowing pip to resolve conflicts
+# This ensures pip can choose the best version when duplicates exist
+# Also install the TOVA package itself
+RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels \
+    -r /tmp/requirements.txt -r /tmp/solr-requirements.txt && \
+    pip install --no-cache-dir --no-index --find-links=/tmp/wheels tova && \
+    rm -rf /tmp/wheels /tmp/requirements.txt /tmp/solr-requirements.txt /tmp/pyproject.toml
 
 COPY --from=static /static /app/static
 

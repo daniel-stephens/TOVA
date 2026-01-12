@@ -108,6 +108,82 @@ main {
     margin-bottom: 0.3rem;
   }
 
+  /* Chat Widget Styles */
+  #chatWidgetBtn {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border: none !important;
+    cursor: pointer !important;
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 9999 !important;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #chatWidgetBtn:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+    transform: scale(1.1) !important;
+  }
+
+  /* Rename Topic Button Styles */
+  #renameThemeBtn {
+    transition: opacity 0.2s ease, color 0.2s ease;
+    color: #212529 !important;
+    line-height: 1;
+    opacity: 0.85;
+  }
+
+  #renameThemeBtn:hover {
+    opacity: 1 !important;
+    color: #0d6efd !important;
+    transform: scale(1.1);
+  }
+
+  /* Show edit icon on hover of title */
+  #selectedThemeLabel:hover #renameThemeBtn {
+    opacity: 1;
+    color: #212529 !important;
+  }
+
+  #chatMessages {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f8f9fa;
+  }
+
+  #chatMessages::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #chatMessages::-webkit-scrollbar-track {
+    background: #f8f9fa;
+  }
+
+  #chatMessages::-webkit-scrollbar-thumb {
+    background-color: #cbd5e0;
+    border-radius: 3px;
+  }
+
+  #chatMessages::-webkit-scrollbar-thumb:hover {
+    background-color: #a0aec0;
+  }
+
+  .chat-message {
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* Make ID column narrower */
 footer {
       background-color: #f1f3f5;
@@ -345,6 +421,106 @@ footer {
     &copy; 2025 TOVA | AI-powered Topic Visualizer
   </footer>
 
+  <!-- Model Chat Widget Button (Fixed Position) -->
+  <button id="chatWidgetBtn" 
+          class="btn btn-primary rounded-circle shadow-lg" 
+          style="position: fixed !important; bottom: 20px !important; right: 20px !important; width: 64px !important; height: 64px !important; z-index: 9999 !important; display: flex !important; align-items: center !important; justify-content: center !important; background-color: #0d6efd !important; border: none !important; padding: 0 !important;"
+          data-bs-toggle="modal" 
+          data-bs-target="#chatModal"
+          title="Chat with Model - Ask questions about topics and documents">
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="white" viewBox="0 0 24 24" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
+      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+      <circle cx="8" cy="10" r="1.5" fill="white"/>
+      <circle cx="12" cy="10" r="1.5" fill="white"/>
+      <circle cx="16" cy="10" r="1.5" fill="white"/>
+      <path d="M12 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="white" opacity="0.8"/>
+    </svg>
+  </button>
+
+  <!-- Model Chat Modal -->
+  <div class="modal fade" id="chatModal" tabindex="-1" aria-labelledby="chatModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 600px;">
+      <div class="modal-content d-flex flex-column" style="height: 700px;">
+        <div class="modal-header bg-primary text-white">
+          <div class="d-flex align-items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 24 24" class="me-2" style="flex-shrink: 0;">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+              <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+            </svg>
+            <div>
+              <h5 class="modal-title mb-0" id="chatModalLabel">Chat with Model</h5>
+              <small class="opacity-75" id="chatModelName">Ask questions about topics and documents</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body flex-grow-1 d-flex flex-column p-0" style="overflow: hidden;">
+          <!-- Chat Messages Container -->
+          <div id="chatMessages" class="flex-grow-1 p-3" style="overflow-y: auto; background-color: #f8f9fa;">
+            <div class="chat-message mb-3">
+              <div class="d-flex align-items-start">
+                <div class="flex-shrink-0 me-2">
+                  <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                       style="width: 36px; height: 36px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                      <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                      <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                      <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-grow-1">
+                  <div class="bg-white rounded p-3 shadow-sm">
+                    <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
+                    <p class="mb-2">Hello! I can help you explore your topic model. You can ask me:</p>
+                    <ul class="mb-0 small text-muted" style="padding-left: 20px;">
+                      <li>Questions about specific topics or themes</li>
+                      <li>To explain document classifications</li>
+                      <li>About relationships between topics</li>
+                      <li>To analyze document patterns</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Chat Input Area -->
+          <div class="border-top p-3 bg-white">
+            <!-- Quick Action Buttons -->
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="What are the main topics in this model?">
+                📊 Main Topics
+              </button>
+              <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Explain the most common theme">
+                💡 Top Theme
+              </button>
+              <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Show me documents related to">
+                📄 Find Documents
+              </button>
+            </div>
+            <div class="input-group">
+              <input type="text" 
+                     id="chatInput" 
+                     class="form-control" 
+                     placeholder="Ask about topics, documents, or themes..." 
+                     autocomplete="off">
+              <button class="btn btn-primary" type="button" id="chatSendBtn" title="Send message">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-7.617L4.69 12.48l-1.655-2.597 9.782-1.91Z"/>
+                </svg>
+              </button>
+            </div>
+            <small class="text-muted d-block mt-2">
+              <span class="badge bg-info">Model Chat</span> Backend integration coming soon
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal -->
 <div class="modal fade" id="modelInfoModal" tabindex="-1" aria-labelledby="modelInfoModalLabel" aria-hidden="true">
@@ -526,7 +702,37 @@ footer {
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title fw-bold" id="selectedThemeLabel">Theme Details</h5>
+          <div class="d-flex align-items-center flex-grow-1">
+            <h5 class="modal-title fw-bold mb-0 d-flex align-items-center" id="selectedThemeLabel">
+              <span id="themeTitleText">Theme Details</span>
+              <button type="button" 
+                      class="btn btn-link p-0 ms-2" 
+                      id="renameThemeBtn" 
+                      title="Rename this topic"
+                      style="display: inline-flex; align-items: center; text-decoration: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .146-.354l6-6z"/>
+                </svg>
+              </button>
+            </h5>
+            <div id="renameControls" style="display: none; align-items: center; gap: 0.5rem;">
+              <input type="text" 
+                     class="form-control form-control-sm" 
+                     id="renameThemeInput" 
+                     style="max-width: 250px;"
+                     placeholder="Enter new topic name...">
+              <button type="button" 
+                      class="btn btn-sm btn-success" 
+                      id="saveRenameBtn">
+                Save
+              </button>
+              <button type="button" 
+                      class="btn btn-sm btn-secondary" 
+                      id="cancelRenameBtn">
+                Cancel
+              </button>
+            </div>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
   
@@ -751,6 +957,102 @@ document.addEventListener("DOMContentLoaded", () => {
   const themeById      = (id) => dashboardV2.themes.byId[String(id)];
   const coordByThemeId = (id) => dashboardV2.coordinates?.byThemeId?.[String(id)];
   const diagByThemeId  = (id) => dashboardV2.diagnostics?.byThemeId?.[String(id)];
+  
+  // ---------------------------
+  // Theme Rename Functionality
+  // ---------------------------
+  let themeRenames = {}; // Store renamed themes in memory only: { themeId: newLabel }
+  
+  // Load saved renames from backend API (called on page load)
+  async function loadThemeRenames() {
+    const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+    if (!modelId) {
+      themeRenames = {};
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/models/${modelId}/topics/renames`);
+      if (response.ok) {
+        const data = await response.json();
+        // Backend returns { topic_labels: { "1": "New Name", "2": "Another Name" } }
+        themeRenames = data.topic_labels || {};
+        console.log("Loaded topic renames from backend:", themeRenames);
+      } else {
+        // No renames found or error - use empty object
+        themeRenames = {};
+      }
+    } catch (e) {
+      console.error("Failed to load theme renames from backend:", e);
+      themeRenames = {};
+    }
+  }
+  
+  // Get theme label (with rename if exists)
+  function getThemeLabel(themeId) {
+    const id = String(themeId);
+    if (themeRenames[id]) {
+      return themeRenames[id];
+    }
+    const t = themeById(themeId);
+    return t?.label || `Theme ${themeId}`;
+  }
+  
+  // Update theme label everywhere
+  function updateThemeLabelInUI(themeId, newLabel) {
+    const id = String(themeId);
+    
+    // Update in dashboardV2
+    if (dashboardV2?.themes?.byId?.[id]) {
+      dashboardV2.themes.byId[id].label = newLabel;
+    }
+    
+    // Update charts
+    if (themeChartInstance) {
+      const chartData = themeChartInstance.data;
+      const themeIndex = chartData.ids?.indexOf(Number(id));
+      if (themeIndex !== undefined && themeIndex >= 0) {
+        chartData.labels[themeIndex] = newLabel;
+        themeChartInstance.update();
+      }
+    }
+    
+    // Update scatter chart
+    if (scatterChartInstance) {
+      // Scatter chart labels are drawn manually, will update on next render
+      plotScatterChart(coordinatesForScatter());
+    }
+    
+    // Update document table
+    docsArray = docsForTable();
+    renderDocumentTable(docsArray);
+    populateThemeFilter(docsArray);
+    
+    // Update diagnostics table
+    populateThemeDiagnosticsTable(diagnosticsForTable());
+    
+    // Update document detail modal if it's currently open and showing this theme
+    const docDetailModal = document.getElementById("docDetailModal");
+    if (docDetailModal && docDetailModal.classList.contains("show")) {
+      const modalThemeEl = document.getElementById("modalTheme");
+      if (modalThemeEl) {
+        // Check if the current document's theme matches the renamed theme
+        const currentThemeId = modalThemeEl.dataset.themeId;
+        if (currentThemeId && String(currentThemeId) === id) {
+          modalThemeEl.textContent = newLabel;
+        }
+      }
+      
+      // Update the chart in document detail modal - refresh all labels with renamed ones
+      if (window.lastDocInferenceData) {
+        const updatedData = window.lastDocInferenceData.map(theme => ({
+          ...theme,
+          label: theme.theme_id != null ? getThemeLabel(theme.theme_id) : theme.label
+        }));
+        renderDocInformationChart(updatedData, "docInferenceChart");
+      }
+    }
+  }
 
   function themesForChart() {
     const ids = themeIds();
@@ -759,7 +1061,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const color = computeColor(i, dashboardV2.color);
       return {
         id: t.id,
-        label: t.label,
+        label: getThemeLabel(id),
         document_count: t.documentCount,
         color,
         keywords: (t.keywords || []).join(", ")
@@ -776,7 +1078,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const row = {
         id: d.id,
         text: d.text,
-        theme: t?.label || "—",
+        theme: t ? getThemeLabel(t.id) : "—",
         theme_id: t?.id ?? null,
         score: d.score
       };
@@ -790,7 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return themeIds().map(id => {
       const t = themeById(id);
       const d = diagByThemeId(id) || {};
-      return { theme: t.label, ...d };
+      return { theme: getThemeLabel(id), ...d };
     });
   }
 
@@ -798,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return themeIds().map((id) => {
       const t = themeById(id);
       const c = coordByThemeId(id) || { x: 0, y: 0, size: t.documentCount || 1 };
-      return { id: Number(id), label: t.label, x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
+      return { id: Number(id), label: getThemeLabel(id), x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
     });
   }
 
@@ -1010,7 +1312,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ctx = canvas.getContext("2d");
 
     const processed = (similarThemesObjs || [])
-      .map(t => ({ id: t.ID, theme: themeById(t.ID)?.label || `Theme ${t.ID}`, similarity: parseFloat(t.Similarity) }))
+      .map(t => ({ id: t.ID, theme: getThemeLabel(t.ID), similarity: parseFloat(t.Similarity) }))
       .sort((a, b) => Math.abs(b.similarity) - Math.abs(a.similarity));
 
     const labels = processed.map(t => t.theme);
@@ -1329,11 +1631,102 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalContent) modalContent.style.backgroundColor = lightBgFromColor(themeColor);
 
     const modalTitle = document.getElementById("selectedThemeLabel");
+    const themeTitleText = document.getElementById("themeTitleText");
+    const renameBtn = document.getElementById("renameThemeBtn");
+    const renameControls = document.getElementById("renameControls");
+    const renameInput = document.getElementById("renameThemeInput");
+    const saveBtn = document.getElementById("saveRenameBtn");
+    const cancelBtn = document.getElementById("cancelRenameBtn");
+    
+    const currentLabel = getThemeLabel(themeId);
+    
     if (modalTitle) {
       modalTitle.style.color = themeColor;
       modalTitle.style.borderLeft = `6px solid ${themeColor}`;
       modalTitle.style.paddingLeft = "0.5rem";
-      modalTitle.textContent = t.label;
+    }
+    
+    if (themeTitleText) {
+      themeTitleText.textContent = currentLabel;
+    }
+    
+    // Show rename button, hide input controls
+    if (renameBtn) renameBtn.style.display = "inline-flex";
+    if (renameControls) renameControls.style.display = "none";
+    
+    // Setup rename functionality
+    if (renameBtn && renameInput && saveBtn && cancelBtn) {
+      // Remove existing listeners by cloning
+      const newRenameBtn = renameBtn.cloneNode(true);
+      renameBtn.parentNode.replaceChild(newRenameBtn, renameBtn);
+      const newRenameInput = renameInput.cloneNode(true);
+      renameInput.parentNode.replaceChild(newRenameInput, renameInput);
+      const newSaveBtn = saveBtn.cloneNode(true);
+      saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+      const newCancelBtn = cancelBtn.cloneNode(true);
+      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+      
+      const renameControlsDiv = document.getElementById("renameControls");
+      
+      newRenameBtn.addEventListener("click", () => {
+        newRenameBtn.style.display = "none";
+        if (renameControlsDiv) renameControlsDiv.style.display = "flex";
+        newRenameInput.value = currentLabel;
+        newRenameInput.focus();
+        newRenameInput.select();
+      });
+      
+      const saveRename = async () => {
+        const newLabel = newRenameInput.value.trim();
+        if (newLabel && newLabel !== currentLabel) {
+          // Update in-memory immediately for UI responsiveness
+          themeRenames[String(themeId)] = newLabel;
+          updateThemeLabelInUI(themeId, newLabel);
+          
+          // Update modal title text
+          const titleTextEl = document.getElementById("themeTitleText");
+          if (titleTextEl) titleTextEl.textContent = newLabel;
+          
+          // Send to backend API
+          const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+          if (modelId) {
+            try {
+              const response = await fetch(`/api/models/${modelId}/topics/${themeId}/rename`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ new_label: newLabel })
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                console.log("Topic renamed successfully:", result);
+              } else {
+                console.error("Failed to save topic rename to backend:", await response.text());
+                // Optionally revert the in-memory change if backend save fails
+              }
+            } catch (error) {
+              console.error("Error saving topic rename to backend:", error);
+              // Optionally revert the in-memory change if backend save fails
+            }
+          }
+        }
+        newRenameBtn.style.display = "inline-flex";
+        if (renameControlsDiv) renameControlsDiv.style.display = "none";
+      };
+      
+      newSaveBtn.addEventListener("click", saveRename);
+      newRenameInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") saveRename();
+        if (e.key === "Escape") {
+          newRenameBtn.style.display = "inline-flex";
+          if (renameControlsDiv) renameControlsDiv.style.display = "none";
+        }
+      });
+      
+      newCancelBtn.addEventListener("click", () => {
+        newRenameBtn.style.display = "inline-flex";
+        if (renameControlsDiv) renameControlsDiv.style.display = "none";
+      });
     }
 
     document.querySelectorAll("#themeDetailModal .panel").forEach(panel => {
@@ -1383,7 +1776,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // documents for this theme
-    const themedDocs = docsArray.filter(d => d.theme === t.label);
+    const currentThemeLabel = getThemeLabel(themeId);
+    const themedDocs = docsArray.filter(d => d.theme === currentThemeLabel);
     renderFilteredTable(themedDocs);
 
     // similarities
@@ -1468,14 +1862,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const fullTextEl = document.getElementById("modalFullText");
     const themeEl    = document.getElementById("modalTheme");
     if (fullTextEl) fullTextEl.textContent = doc.text || "—";
-    if (themeEl)    themeEl.textContent    = result.theme || "—";
-
+    
     // theme color
     const top = result?.top_themes?.[0];
     const resolvedThemeId = top?.theme_id != null ? Number(top.theme_id) : null;
     const inferredThemeColor = resolvedThemeId != null ? (themeColorMap[resolvedThemeId] || null) : null;
 
+    // Use getThemeLabel to get renamed label if available
     if (themeEl) {
+      const themeLabel = resolvedThemeId != null ? getThemeLabel(resolvedThemeId) : (result.theme || "—");
+      themeEl.textContent = themeLabel;
+      themeEl.dataset.themeId = resolvedThemeId; // Store theme ID for later updates
       themeEl.style.color = inferredThemeColor || "";       
       themeEl.style.fontWeight = inferredThemeColor ? "600" : "";
     }
@@ -1507,7 +1904,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    renderDocInformationChart(result.top_themes);
+    // Update top_themes labels with renamed labels before rendering chart
+    const updatedTopThemes = (result.top_themes || []).map(theme => ({
+      ...theme,
+      label: theme.theme_id != null ? getThemeLabel(theme.theme_id) : theme.label
+    }));
+    // Store the data for potential updates when themes are renamed
+    window.lastDocInferenceData = updatedTopThemes;
+    renderDocInformationChart(updatedTopThemes);
     const docThemeId = resolvedThemeId;
 
     const grid = ensureDocDiagnosticsBlock();
@@ -1638,6 +2042,10 @@ document.addEventListener("DOMContentLoaded", () => {
   (async () => {
     try {
       const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      
+      // Load renames from backend (will reset to backend state on each reload)
+      await loadThemeRenames();
+      
       dashboardV2 = await fetchDashboard(modelId);
 
       const themeArray = themesForChart();
@@ -1652,6 +2060,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       populateThemeDiagnosticsTable(diagnosticsForTable());
       renderThemeMetrics(dashboardV2.metrics || []);
+
+      // Update chat modal with model name after dashboard loads
+      if (window.updateChatModalModelName) {
+        window.updateChatModalModelName();
+      }
+
+      // Update chat modal with model name
+      updateChatModalModelName();
 
       // Bar/Grid toggle
       const barChart = document.getElementById("themeChart");
@@ -1825,7 +2241,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   const t = safeThemeById(tid);
                   return {
                     theme_id: Number(tid),
-                    label: t?.label || `Theme ${tid}`,
+                    label: t ? getThemeLabel(Number(tid)) : `Theme ${tid}`,
                     score: typeof score === "number" ? score : Number(score) || 0,
                     keywords: Array.isArray(t?.keywords) ? t.keywords.join(", ") : (t?.keywords || "")
                   };
@@ -2174,6 +2590,181 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Expose for other inline handlers
   window.openThemeModal = openThemeModal;
+
+  // ---------------------------
+  // Chat Interface Functionality
+  // ---------------------------
+  (function initChatInterface() {
+    const chatModal = document.getElementById("chatModal");
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const chatSendBtn = document.getElementById("chatSendBtn");
+    const chatWidgetBtn = document.getElementById("chatWidgetBtn");
+
+    // Ensure chat widget button is visible
+    if (chatWidgetBtn) {
+      chatWidgetBtn.style.display = "flex";
+      chatWidgetBtn.style.visibility = "visible";
+      chatWidgetBtn.style.opacity = "1";
+      console.log("Chat widget button initialized");
+    } else {
+      console.error("Chat widget button not found!");
+    }
+
+    if (!chatModal || !chatMessages || !chatInput || !chatSendBtn) {
+      console.error("Chat interface elements not found");
+      return;
+    }
+
+    // Function to add a message to the chat
+    function addMessage(text, isUser = false) {
+      const messageDiv = document.createElement("div");
+      messageDiv.className = "chat-message mb-3";
+      
+      if (isUser) {
+        messageDiv.innerHTML = `
+          <div class="d-flex align-items-start justify-content-end">
+            <div class="flex-grow-1 text-end">
+              <div class="bg-primary text-white rounded p-2 shadow-sm d-inline-block" style="max-width: 75%;">
+                <small class="d-block mb-1 opacity-75">You</small>
+                <p class="mb-0">${escapeHtml(text)}</p>
+              </div>
+            </div>
+            <div class="flex-shrink-0 ms-2">
+              <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                   style="width: 36px; height: 36px; font-size: 16px;">
+                👤
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        messageDiv.innerHTML = `
+          <div class="d-flex align-items-start">
+            <div class="flex-shrink-0 me-2">
+              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                   style="width: 36px; height: 36px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                </svg>
+              </div>
+            </div>
+            <div class="flex-grow-1">
+              <div class="bg-white rounded p-3 shadow-sm">
+                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
+                <p class="mb-0">${escapeHtml(text)}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Simple HTML escape function
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Function to send a message
+    function sendMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      // Add user message to chat
+      addMessage(message, true);
+      chatInput.value = "";
+
+      // TODO: Backend integration will go here
+      // This is where you'll send the message to your model chat API
+      // Example: POST /api/chat/model with { model_id, message, context }
+      
+      // For now, show a placeholder response that's more model-focused
+      setTimeout(() => {
+        const responses = [
+          "I understand you're asking about: \"" + message + "\". Once connected to the model backend, I'll provide insights based on your trained topic model.",
+          "That's an interesting question about your topic model. The backend integration will allow me to analyze your model and provide detailed answers.",
+          "I can help with that once connected to the model. Your question: \"" + message + "\" will be processed against your trained model's topics and documents."
+        ];
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        addMessage(randomResponse);
+      }, 800);
+    }
+
+    // Event listeners
+    chatSendBtn.addEventListener("click", sendMessage);
+    chatInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    // Quick action buttons
+    document.querySelectorAll(".quick-action-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const prompt = btn.getAttribute("data-prompt");
+        if (prompt) {
+          chatInput.value = prompt;
+          chatInput.focus();
+          // Optionally auto-send or let user edit first
+        }
+      });
+    });
+
+    // Function to update chat modal model name
+    function updateChatModalModelName() {
+      const modelId = document.getElementById("model_id")?.textContent?.trim();
+      const modelNameEl = document.getElementById("chatModelName");
+      if (!modelNameEl) return;
+      
+      // Get model name from dashboard data
+      let modelName = "Unknown Model";
+      if (dashboardV2) {
+        if (dashboardV2.modelInfo && dashboardV2.modelInfo.model_name) {
+          modelName = dashboardV2.modelInfo.model_name;
+        } else if (dashboardV2.modelInfos && typeof dashboardV2.modelInfos === "object") {
+          const keys = Object.keys(dashboardV2.modelInfos);
+          if (keys.length > 0) {
+            const firstModel = dashboardV2.modelInfos[keys[0]];
+            if (firstModel && firstModel.model_name) {
+              modelName = firstModel.model_name;
+            }
+          }
+        }
+      }
+      
+      if (modelId) {
+        modelNameEl.textContent = `${modelName} (${modelId})`;
+      } else {
+        modelNameEl.textContent = modelName;
+      }
+    }
+    window.updateChatModalModelName = updateChatModalModelName;
+
+    // Update model name in header when modal opens
+    chatModal.addEventListener("shown.bs.modal", () => {
+      chatInput.focus();
+      updateChatModalModelName();
+    });
+
+    // Optional: Add animation to chat widget button
+    if (chatWidgetBtn) {
+      chatWidgetBtn.addEventListener("mouseenter", () => {
+        chatWidgetBtn.style.transform = "scale(1.1)";
+        chatWidgetBtn.style.transition = "transform 0.2s";
+      });
+      chatWidgetBtn.addEventListener("mouseleave", () => {
+        chatWidgetBtn.style.transform = "scale(1)";
+      });
+    }
+  })();
 });
 </script>
 </body>

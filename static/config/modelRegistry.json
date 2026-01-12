@@ -4,6 +4,7 @@
         "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
     },
     "llm_based":{
-        "topicGPT": "tova.topic_models.models.llm_based.topicgpt.topicgpt_tm_model.TopicGPTTMmodel"
+        "lloom": "tova.topic_models.models.llm_based.lloom_tm_model.LLoomTMmodel",
+        "topicGPT": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel"
     }
 }

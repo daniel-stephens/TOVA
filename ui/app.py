@@ -1932,6 +1932,83 @@ def save_settings():
     server.logger.info("Dummy /save-settings received: %s", payload)
     return jsonify({"ok": True, "echo": payload}), 200
 
+
+@server.route("/api/models/<model_id>/topics/<int:topic_id>/rename", methods=["POST"])
+@login_required
+def rename_topic(model_id: str, topic_id: int):
+    """
+    Rename a topic in a model. Proxies the request to the backend API.
+    """
+    payload = request.get_json(silent=True) or {}
+    new_label = payload.get("new_label", "").strip()
+    
+    if not new_label:
+        return jsonify({"error": "new_label is required"}), 400
+    
+    if not model_id:
+        return jsonify({"error": "model_id is required"}), 400
+    
+    # Forward request to backend API
+    try:
+        upstream_url = f"{API}/data/models/{model_id}/topics/{topic_id}/rename"
+        upstream_response = requests.post(
+            upstream_url,
+            json={"new_label": new_label},
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 30),
+        )
+        
+        if upstream_response.status_code == 200:
+            return jsonify(upstream_response.json()), 200
+        else:
+            return Response(
+                upstream_response.content,
+                status=upstream_response.status_code,
+                mimetype=upstream_response.headers.get("Content-Type", "application/json"),
+            )
+    except requests.Timeout:
+        server.logger.exception("rename topic timeout")
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        server.logger.exception("rename topic error: %s", e)
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
+
+
+@server.route("/api/models/<model_id>/topics/renames", methods=["GET"])
+@login_required
+def get_topic_renames(model_id: str):
+    """
+    Get all topic renames for a model from the backend API.
+    """
+    if not model_id:
+        return jsonify({"error": "model_id is required"}), 400
+    
+    try:
+        upstream_url = f"{API}/data/models/{model_id}/topics/renames"
+        upstream_response = requests.get(
+            upstream_url,
+            params={"owner_id": session.get("user_id")},
+            timeout=(3.05, 30),
+        )
+        
+        if upstream_response.status_code == 200:
+            return jsonify(upstream_response.json()), 200
+        elif upstream_response.status_code == 404:
+            # No renames found, return empty object
+            return jsonify({"topic_labels": {}}), 200
+        else:
+            return Response(
+                upstream_response.content,
+                status=upstream_response.status_code,
+                mimetype=upstream_response.headers.get("Content-Type", "application/json"),
+            )
+    except requests.Timeout:
+        server.logger.exception("get topic renames timeout")
+        return jsonify({"error": "Upstream timeout"}), 504
+    except requests.RequestException as e:
+        server.logger.exception("get topic renames error: %s", e)
+        return jsonify({"error": f"Upstream connection error: {e}"}), 502
+
 import yaml
 import os
 

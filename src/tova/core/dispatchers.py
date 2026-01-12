@@ -19,24 +19,23 @@ def load_class_from_path(class_path: str):
     return getattr(module, class_name)
 
 
+
+def flatten_model_registry(nested_dict):
+    """
+    Flattens a two-level dictionary into a single-level dictionary.
+    """
+    return {key: value for sub_dict in nested_dict.values() for key, value in sub_dict.items()}
+
+
 # -------------------- #
 #    MODEL REGISTRY    #
 # -------------------- #
 with open("./static/config/modelRegistry.json", "r") as f:
-    model_classes = json.load(f)
+    model_classes = flatten_model_registry(json.load(f))
 
-# Flatten nested structure: {"traditional": {"tomotopyLDA": "..."}} -> {"tomotopyLDA": "..."}
-flat_model_classes = {}
-for category, models in model_classes.items():
-    if isinstance(models, dict):
-        # Nested structure: add each model with its key
-        flat_model_classes.update(models)
-    else:
-        # Flat structure (backward compatibility): use category as key
-        flat_model_classes[category] = models
 
 MODEL_REGISTRY = {
-    key: load_class_from_path(path) for key, path in flat_model_classes.items()
+    key: load_class_from_path(path) for key, path in model_classes.items()
 }
 
 # -------------------- #
