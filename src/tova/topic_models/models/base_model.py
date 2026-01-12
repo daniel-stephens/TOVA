@@ -84,6 +84,12 @@ class BaseTMModel(ABC):
             "general", {}).get("thetas_thr", 3e-3))
         self.not_include = self.config.get(
             "general", {}).get("not_include", [])
+        
+        # llm params
+        self.llm_provider = self.config.get("general", {}).get("llm_provider")
+        self.llm_model_type = self.config.get("general", {}).get("llm_model_type")
+        self.llm_server = self.config.get("general", {}).get("llm_server")
+
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -97,7 +103,7 @@ class BaseTMModel(ABC):
             k: safe_value(v)
             for k, v in self.__dict__.items()
             if not k.startswith('_') and k not in self.not_include
-            and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM))}
+            and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM, TMmodel))}
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
@@ -153,6 +159,8 @@ class BaseTMModel(ABC):
         )
         tm.create(
             betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
+        
+        self.tm_model = tm
 
         return tm
 

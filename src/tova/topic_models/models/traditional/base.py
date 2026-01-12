@@ -60,8 +60,6 @@ class TradTMmodel(BaseTMModel, ABC):
             "traditional", {}).get("do_labeller", False))
         self.do_summarizer = bool(self.config.get(
             "traditional", {}).get("do_summarizer", False))
-        self.llm_model_type = self.config.get(
-            "traditional", {}).get("llm_model_type", "qwen:32b")
         self.labeller_prompt = self.config.get("traditional", {}).get(
             "labeller_model_path", "./src/prompter/prompts/labelling_dft.txt")
         self.summarizer_prompt = self.config.get("traditional", {}).get(

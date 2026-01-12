@@ -1,0 +1,18 @@
+Analyze these documents and identify the main topics or themes present. 
+Be creative and specific in your topic identification.
+
+Documents:
+{doc_texts}
+
+User Preference: {self.user_preferences}
+
+First, identify ALL potential topics you can find in these documents (be comprehensive).
+Then, select ONE specific topic that:
+1. Appears in multiple documents or is most interesting
+2. Respects the user preference
+3. Is specific enough to be meaningful (not too broad like "life" or "things")
+
+Output format:
+DISCOVERED TOPICS: [List all topics found]
+SELECTED TOPIC: [The one specific topic you choose]
+REASON: [Why you selected this topic]

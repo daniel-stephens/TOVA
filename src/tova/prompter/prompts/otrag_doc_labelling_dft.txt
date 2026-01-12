@@ -1,0 +1,20 @@
+Analyze this document and identify its main topics/themes.
+
+Context: We're exploring documents related to "{topic}"
+User Preference: {user_preferences}
+
+Document: {doc_text}
+
+Provide:
+1. MAIN TOPIC: The primary topic of this document
+2. RELATED THEMES: Other themes present (comma-separated)
+3. RELEVANCE SCORE: How relevant is this to "{topic}" (0-10)
+4. SENTIMENT: The overall sentiment (positive/negative/neutral)
+5. KEY ENTITIES: Important entities mentioned (people, companies, concepts)
+
+Format your response exactly as:
+MAIN TOPIC: [topic]
+RELATED THEMES: [theme1, theme2, ...]
+RELEVANCE SCORE: [0-10]
+SENTIMENT: [positive/negative/neutral]
+KEY ENTITIES: [entity1, entity2, ...]

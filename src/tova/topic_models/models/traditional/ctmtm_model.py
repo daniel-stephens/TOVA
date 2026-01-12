@@ -264,8 +264,7 @@ class CTMTMmodel(TradTMmodel):
             )
 
         obj._logger.info(f"Loading CTM model from {model_pkl.as_posix()}")
-        with model_pkl.open('rb') as f:
-            obj.model = pickle.load(f)
+        with model_pkl.open('rb') as f: obj.model = pickle.load(f)
         obj._logger.info("Model loaded successfully!")
 
         if vocab_txt.exists():

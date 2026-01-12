@@ -1,4 +1,3 @@
-
 import json
 import logging
 import os
@@ -39,7 +38,9 @@ class TopicGPTTMmodel(LLMTModel):
         load_model: bool = False,
         **kwargs
     ) -> None:
+        
         model_name = model_name if model_name else f"{self.__class__.__name__}_{int(time.time())}"
+        
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
@@ -93,6 +94,37 @@ class TopicGPTTMmodel(LLMTModel):
             f"temperature={self.temperature}, top_p={self.top_p}, "
             f"do_second_level={self.do_second_level}."
         )
+        
+    def _prepare_data(self, model_files: pathlib.Path) -> pathlib.Path:
+        """
+        Prepare data files for TopicGPT scripts: full.jsonl (all docs)  and
+        sample_*.jsonl (sampled docs). Returns paths to (sampled, full).
+        """
+        
+        df_full = self.df.copy().rename(columns={"raw_text": "text"})
+        path_full = model_files / "full.jsonl"
+        df_full.to_json(path_full, lines=True, orient="records")
+        
+        df_sample = self.df.copy()
+        # gpt expects 'text' field
+        df_sample = df_sample.rename(columns={"raw_text": "text"})
+        if self.sample:
+            if isinstance(self.sample, float):
+                df_sample = df_sample.sample(frac=self.sample)
+            elif isinstance(self.sample, int):
+                df_sample = df_sample.sample(
+                    n=min(self.sample, len(df_sample)))
+            else:
+                raise ValueError(
+                    f"Invalid sample type: {type(self.sample)} (expected float or int)")
+        path_sample = model_files / \
+            f"sample_{str(self.sample)}.jsonl" if self.sample else model_files / \
+            "sample.jsonl"
+        df_sample.to_json(path_sample, lines=True, orient="records")
+        self._logger.info(
+            f"Sampling done. Using {len(df_sample)} docs. Saved to {path_sample.as_posix()}")
+        
+        return path_sample, path_full
 
     def train_core(
         self,
@@ -122,29 +154,7 @@ class TopicGPTTMmodel(LLMTModel):
         outputs = {k: model_files / v for k, v in self._outputs_save.items()}
 
         # sampling
-        df_full = self.df.copy().rename(columns={"raw_text": "text"})
-        path_full = model_files / "full.jsonl"
-        df_full.to_json(path_full, lines=True, orient="records")
-        
-        df_sample = self.df.copy()
-        # gpt expects 'text' field
-        df_sample = df_sample.rename(columns={"raw_text": "text"})
-        if self.sample:
-            if isinstance(self.sample, float):
-                df_sample = df_sample.sample(frac=self.sample)
-            elif isinstance(self.sample, int):
-                df_sample = df_sample.sample(
-                    n=min(self.sample, len(df_sample)))
-            else:
-                raise ValueError(
-                    f"Invalid sample type: {type(self.sample)} (expected float or int)")
-
-        path_sample = model_files / \
-            f"sample_{str(self.sample)}.jsonl" if self.sample else model_files / \
-            "sample.jsonl"
-        df_sample.to_json(path_sample, lines=True, orient="records")
-        self._logger.info(
-            f"Sampling done. Using {len(df_sample)} docs. Saved to {path_sample.as_posix()}")
+        path_sample, path_full = self._prepare_data(model_files)
 
         prss and prss.report(1.0, "Preparation completed")
 

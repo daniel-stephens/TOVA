@@ -13,26 +13,29 @@ logger:
 # TOPIC MODELING CONFIGURATION #
 ################################
 topic_modeling:
+  # general configuration for any topic model, plus specific configuration for either traditional or llm-based
   general:
     not_include: ['train_data', 'df', 'embeddings', 'ids_corpus', '_logger', '_embedding_model', '_umap_model', '_hdbscan_model', '_vectorizer_model', '_ctfidf_model', '_representation_model', '_model']
     n_similar_tpcs: 5
     similar_tpcs_thr: 1e-3
     n_top_docs_per_topic: 20
+    llm_provider: "ollama"
+    llm_model_type: "gemma3:4b"
+    llm_server: "http://kumo01.tsc.uc3m.es:11434"
   traditional:
     num_topics: 15
     thetas_thr: 3e-3
     topn: 15
     do_labeller: True
     do_summarizer: True
-    llm_model_type: "qwen:32b"
     labeller_prompt: "src/tova/prompter/prompts/labelling_dft.txt"
     summarizer_prompt: "src/tova/prompter/prompts/summarization_dft.txt"
-    llm_server: "http://kumo01.tsc.uc3m.es:11434"
-
-  llm-based:
     llm_provider: "ollama"
     llm_model_type: "gemma3:4b"
     llm_server: "http://kumo01.tsc.uc3m.es:11434"
+  llm-based:
+
+  # per topic model configs
   mallet:
     alpha: 5.0
     optimize_interval: 10
@@ -64,7 +67,7 @@ topic_modeling:
     repr_model_topnwords: 15
     word_min_len: 0
   ctm:
-    num_epochs: 100
+    num_epochs: 2
     sbert_model: all-MiniLM-L6-v2
     sbert_context: 384
     batch_size: 32
@@ -84,7 +87,7 @@ topic_modeling:
     label_size: 0
     loss_weights: null
   topicgpt:
-    sample: 1 #0.001
+    sample: 10 #0.001
     temperature: 0.0
     top_p: 0.0
     max_tokens_gen1: 300
@@ -93,7 +96,16 @@ topic_modeling:
     refined_again: false
     remove: false
     do_second_level: false
-    verbose: true 
+    verbose: true
+  opentopicrag:
+    run_from_web: True # @Daniel, I'm not entirely sure how to display this. This parameter shouldn't be visible to the user in the web interface and should be set to True by default. However, if it's not provided through the web, I need to request the input from the user via stdin.
+    embedding_model: Qwen/Qwen3-Embedding-0.6B
+    tp_generation_prompt_path: src/tova/prompter/prompts/otrag_tp_generation_dft.txt
+    doc_labelling_prompt_path: src/tova/prompter/prompts/otrag_doc_labelling_dft.txt
+    num_docs_in_prompt: 5
+    max_feat_tfidf: 1000
+    user_preferences: 
+    sample: 100
 
 ################################
 #       PREPROCESSING          #
