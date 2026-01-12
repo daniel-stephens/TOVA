@@ -19,3 +19,7 @@ src/tova.egg-info
 .cursor/
 .cursorrules
 .cursorignore
+
+# Ignore duplicate files with " 2" or " 3" suffix (local backups)
+* 2.*
+* 3.*

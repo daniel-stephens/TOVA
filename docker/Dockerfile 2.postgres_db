@@ -1,8 +1,0 @@
-# dockerfile.postgres
-FROM postgres:15-alpine
-
-# Expose default Postgres port
-EXPOSE 5432
-
-# Data directory (still managed via volumes in compose)
-VOLUME ["/var/lib/postgresql/data"]
