@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List
 
 import numpy as np
-import pandas as pd  # type: ignore
+import pandas as pd
 import tomotopy as tp  # type: ignore
 from contextualized_topic_models.models.ctm import CombinedTM  # type: ignore
 from contextualized_topic_models.utils.data_preparation import TopicModelDataPreparation  # type: ignore
@@ -84,12 +84,12 @@ class BaseTMModel(ABC):
             "general", {}).get("thetas_thr", 3e-3))
         self.not_include = self.config.get(
             "general", {}).get("not_include", [])
-        
+
         # llm params
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
-        self.llm_model_type = self.config.get("general", {}).get("llm_model_type")
+        self.llm_model_type = self.config.get(
+            "general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
-
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -100,6 +100,7 @@ class BaseTMModel(ABC):
             return val
 
         return {
+            # TODO: make all the "no_include" as start with "_" to simplify this
             k: safe_value(v)
             for k, v in self.__dict__.items()
             if not k.startswith('_') and k not in self.not_include
@@ -119,7 +120,7 @@ class BaseTMModel(ABC):
 
         with json_path.open('w') as f:
             json.dump(model_info, f, indent=2)
-            
+
     def _createTMmodel(self, thetas, betas, vocab):
         """Creates an object of class TMmodel hosting the topic model
         that has been trained and whose output is available at the
@@ -159,7 +160,7 @@ class BaseTMModel(ABC):
         )
         tm.create(
             betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
-        
+
         self.tm_model = tm
 
         return tm
@@ -174,8 +175,15 @@ class BaseTMModel(ABC):
     def save_model(self, path: str): pass
 
     @classmethod
-    @abstractmethod
-    def from_saved_model(self, path: str): pass
+    def from_saved_model(cls, model_path: str):
+        
+        model_config = pathlib.Path(model_path).joinpath('metadata.json')            
+        with open(model_config, 'r') as f:
+            model_config = json.load(f)
+            
+        obj = cls(model_path=model_path, load_model=True, **model_config["tr_params"])
+        
+        return obj    
 
     @abstractmethod
     def train_model(self, data: List[Dict]): pass

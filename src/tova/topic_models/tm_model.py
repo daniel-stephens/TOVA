@@ -5,22 +5,26 @@ Modified: 02/05/2025 (Updated for TOVA)
 """
 
 
-from collections import defaultdict
 import itertools
 import json
 import logging
 import shutil
 import time
-from typing import List, Optional
 import warnings
+from collections import defaultdict
 from pathlib import Path
-from gensim.corpora import Dictionary # type: ignore
-from gensim.models.coherencemodel import CoherenceModel # type: ignore
+from typing import List, Optional
+
 import numpy as np
 import pandas as pd
-import rbo # type: ignore
+import rbo  # type: ignore
 import scipy.sparse as sparse
+from gensim.corpora import Dictionary  # type: ignore
+from gensim.models.coherencemodel import CoherenceModel  # type: ignore
+from scipy.spatial.distance import jensenshannon
+
 from ..prompter.prompter import Prompter
+
 
 class TMmodel(object):
     # This class represents a Topic Model according to the LDA generative model
@@ -61,7 +65,6 @@ class TMmodel(object):
     _vocab_id2w = None
     _vocab = None
     _size_vocab = None
-    _s3 = None
     _most_representative_docs = None
     _tpc_clusters = None
 
@@ -122,7 +125,7 @@ class TMmodel(object):
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
 
-    def create(self, betas=None, thetas=None, alphas=None, vocab=None):
+    def create(self, betas=None, thetas=None, alphas=None, vocab=None, tpc_labels=None, tpc_summaries=None):
         """Creates the topic model from the relevant matrices that characterize it. In addition to the initialization of the corresponding object's variables, all the associated variables and visualizations which are computationally costly are calculated so they are available for the other methods.
 
         Parameters
@@ -135,6 +138,10 @@ class TMmodel(object):
             Vector of length n_topics containing the importance of each topic
         vocab: list
             List of words sorted according to betas matrix
+        tpc_labels: list
+            List of topic labels sorted according to betas matrix
+        tpc_summaries: list
+            List of topic summaries sorted according to betas matrix
         """
 
         # If folder already exists no further action is needed
@@ -147,6 +154,8 @@ class TMmodel(object):
         self._alphas_orig = alphas
         self._betas_orig = betas
         self._thetas_orig = thetas
+        self._tpc_labels = tpc_labels
+        self._tpc_summaries = tpc_summaries
         self._alphas = alphas
         self._betas = betas
         self._thetas = thetas
@@ -176,7 +185,6 @@ class TMmodel(object):
         self.calculate_topic_coherence()
         
         self._load_vocab_dicts()
-        #self._calculate_s3()
         
         if self._do_labeller:
             try:
@@ -185,7 +193,7 @@ class TMmodel(object):
                 self._logger.warning(
                     f"Error in labeller: {e}")
                 self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
-        else:
+        elif not self._do_labeller and (self._tpc_labels is None):
             self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
             
         
@@ -196,7 +204,7 @@ class TMmodel(object):
                 self._logger.warning(
                     f"Error in summarizer: {e}")
                 self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
-        else:
+        elif not self._do_summarizer and (self._tpc_summaries is None):
             self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
             
         # get most representative documents and topic clusters
@@ -233,7 +241,6 @@ class TMmodel(object):
         np.save(self._TMfolder.joinpath('alphas.npy'), self._alphas)
         np.save(self._TMfolder.joinpath('betas.npy'), self._betas)
         sparse.save_npz(self._TMfolder.joinpath('thetas.npz'), self._thetas)
-        #sparse.save_npz(self._TMfolder.joinpath('s3.npz'), self._s3)
 
         with self._TMfolder.joinpath('edits.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join(self._edits))
@@ -264,7 +271,7 @@ class TMmodel(object):
         # pyLDAvis currently raises some Deprecation warnings
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning)
-            import pyLDAvis # type: ignore
+            import pyLDAvis  # type: ignore
 
         # We will compute the visualization using ndocs random documents
         # In case the model has gone through topic deletion, we may have rows
@@ -348,11 +355,6 @@ class TMmodel(object):
                 self._TMfolder.joinpath('thetas.npz'))
             self._ntopics = self._thetas.shape[1]
             # self._ndocs_active = np.array((self._thetas != 0).sum(0).tolist()[0])
-    
-    def _load_s3(self):
-        if self._s3 is None:
-            self._s3 = sparse.load_npz(
-                self._TMfolder.joinpath('s3.npz'))
             
     def _load_ndocs_active(self):
         if self._ndocs_active is None:
@@ -675,41 +677,6 @@ class TMmodel(object):
         if self._tpc_descriptions is None:
             with self._TMfolder.joinpath('tpc_descriptions.txt').open('r', encoding='utf8') as fin:
                 self._tpc_descriptions = [el.strip() for el in fin.readlines()]
-                
-    def _calculate_s3(self):
-        """Given the path to a TMmodel, it calculates the similarities between documents and saves them in a sparse matrix.
-        """
-        
-        t_start = time.perf_counter()
-        
-        corpusFile = self._TMfolder.parent  / 'corpus.txt'
-        with corpusFile.open("r", encoding="utf-8") as f:
-            lines = f.readlines()  
-            f.seek(0)
-            try:
-                documents_texts = [line.rsplit(" 0 ")[1].strip().split() for line in lines]
-            except:
-                documents_texts = [line.rsplit("\t0\t")[1].strip().split() for line in lines]
-        
-        D = len(self._thetas.toarray())
-        K = len(self._betas)
-        S3 = np.zeros((D, K))
-
-        for doc in range(D):
-            for topic in range(K):
-                wd_ids = [
-                    self._vocab_w2id[word] 
-                    for word in documents_texts[doc] 
-                    if word in self._vocab_w2id
-                ]
-                S3[doc, topic] = np.sum(self._betas[topic, wd_ids])
-                
-        sparse_S3 = sparse.csr_matrix(S3)
-        self._s3  = sparse_S3
-
-        t_end = time.perf_counter()
-        t_total = (t_end - t_start)/60
-        self._logger.info(f"Total computation time: {t_total}")
         
     def get_thetas_representation(self):
         if self._thetas is None:
@@ -811,16 +778,21 @@ class TMmodel(object):
         thetas = self._thetas.toarray()
         n_topics = thetas.shape[1]
 
-        if not hasattr(self, "_df_corpus_train") or len(self._df_corpus_train) != thetas.shape[0]:
+        if not hasattr(self, "_df_corpus_train"):
             self._logger.warning("Document corpus not available or misaligned.")
             return []
-
+        elif len(self._df_corpus_train) != thetas.shape[0] and hasattr(self, "sample") and len(self.df) == thetas.shape[0]:
+            self._logger.warning("Model was training only on a subset of the corpus. Using original corpus for the assignments.")
+            df_corpus = self.df
+        else:
+            df_corpus = self._df_corpus_train
+            
         clusters = [[] for _ in range(n_topics)]
 
         for doc_idx, topic_probs in enumerate(thetas):
             top_topic = topic_probs.argmax()
-            doc_id = self._df_corpus_train.iloc[doc_idx].id
-            raw_text = self._df_corpus_train.iloc[doc_idx].raw_text if get_text else ""
+            doc_id = df_corpus.iloc[doc_idx].id
+            raw_text = df_corpus.iloc[doc_idx].raw_text if get_text else ""
             prob = topic_probs[top_topic]
 
             clusters[top_topic].append((doc_id, raw_text, prob))
@@ -858,7 +830,6 @@ class TMmodel(object):
             filename = "topic_clusters.jsonl"
 
         output_path = Path(output_file) if output_file else self._TMfolder.joinpath(filename)
-
         with output_path.open("w", encoding="utf-8") as fout:
             for tpc_id, docs in enumerate(data):
                 topic_entry = {
@@ -1057,7 +1028,7 @@ class TMmodel(object):
 
             # Calculate new variables
             self._thetas = self._thetas[:, tpc_keep]
-            from sklearn.preprocessing import normalize # type: ignore
+            from sklearn.preprocessing import normalize  # type: ignore
             self._thetas = normalize(self._thetas, axis=1, norm='l1')
             self._alphas = np.asarray(np.mean(self._thetas, axis=0)).ravel()
             self._ntopics = self._thetas.shape[1]
@@ -1113,7 +1084,6 @@ class TMmodel(object):
         # Part 2 - Topics with similar word composition
         # Computes inter-topic distance based on word distributions
         # using scipy implementation of Jensen Shannon distance
-        from scipy.spatial.distance import jensenshannon
 
         # For a more efficient computation with very large vocabularies
         # we implement a threshold for restricting the distance calculation
@@ -1162,12 +1132,11 @@ class TMmodel(object):
                 }
             }
         """
-        from scipy.spatial.distance import jensenshannon
-
         self._load_thetas()
         self._load_betas()
 
-        # --- Co-occurrence-based similarity ---
+        # Part 1 - Coocurring topics
+        # Highly correlated topics co-occure together
         med = np.asarray(np.mean(self._thetas, axis=0)).ravel()
         thetas2 = self._thetas.multiply(self._thetas)
         med2 = np.asarray(np.mean(thetas2, axis=0)).ravel()
@@ -1185,7 +1154,9 @@ class TMmodel(object):
             top_indices = np.argsort(sim_row)[-nsimilar:][::-1]
             coocur_sim[i] = [(int(j), float(sim_row[j])) for j in top_indices]
 
-        # --- Word-distribution-based similarity (Jensen-Shannon) ---
+        # Part 2 - Topics with similar word composition
+        # Computes inter-topic distance based on word distributions
+        # using scipy implementation of Jensen Shannon distance
         vocab_mask = self._betas.max(axis=0) > thr
         betas_aux = self._betas[:, vocab_mask]
 
@@ -1195,8 +1166,6 @@ class TMmodel(object):
             self._logger.warning("No vocab terms passed the threshold for JS computation.")
             worddesc_sim = {i: [] for i in range(self._ntopics)}
         else:
-            betas_aux = betas_aux / betas_aux.sum(axis=1, keepdims=True)
-
             js_mat = np.zeros((self._ntopics, self._ntopics))
             for k in range(self._ntopics):
                 for kk in range(self._ntopics):

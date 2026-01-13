@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import pathlib
+import pickle
 import re
 import time
 from collections import defaultdict
@@ -9,7 +10,7 @@ from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
 import numpy as np
-import topicgpt_python as tg # type: ignore
+import topicgpt_python as tg  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.preprocessing import normalize  # type: ignore
 from tqdm import tqdm
@@ -141,7 +142,7 @@ class TopicGPTTMmodel(LLMTModel):
 
     def _norm(self, s: str) -> str:
         return " ".join((s or "").strip().lower().split())
-    
+
     def _run_cmd(self, cmd: str, banner: str):
         """
         Run a shell command with logging; raise on failure.
@@ -167,9 +168,9 @@ class TopicGPTTMmodel(LLMTModel):
             lines = [ln.strip() for ln in fin.readlines() if ln.strip()]
         topics = {i: ln for i, ln in enumerate(lines)}
         self._logger.info(f"Loaded {len(topics)} topics from {path.name}")
-        return topics    
-   
-    def _approximate_thetas_from_assignments(self, assign_path: pathlib.Path) -> np.ndarray:
+        return topics
+
+    def _approximate_thetas(self, assign_path: pathlib.Path) -> np.ndarray:
         """Approximates document-topic distribution matrix (thetas) from
         assignment_corrected.jsonl file.
 
@@ -280,20 +281,16 @@ class TopicGPTTMmodel(LLMTModel):
             min_df = 1
 
         vectorizer = TfidfVectorizer(
-            max_features=5000,
+            max_features=2000,
             min_df=min_df,
             max_df=max_df,
+            stop_words='english'
         )
 
         X = vectorizer.fit_transform(topic_texts)
-        vocab = list(vectorizer.get_feature_names_out())
-
         betas = X.toarray().astype(np.float32)
-
-        # normalize rows
-        beta_sums = betas.sum(axis=1, keepdims=True)
-        nz = beta_sums.squeeze() > 0
-        betas[nz] /= beta_sums[nz]
+        vocab = list(vectorizer.get_feature_names_out())
+        betas = normalize(betas, norm='l1', axis=1)
 
         self._logger.info(
             f"Synthetic betas built: beta={betas.shape}"
@@ -331,7 +328,7 @@ class TopicGPTTMmodel(LLMTModel):
         }
         self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
 
-        thetas = self._approximate_thetas_from_assignments(assign_path)
+        thetas = self._approximate_thetas(assign_path)
 
         # pseudo-betas via TF-IDF on topic documents
         betas, vocab = self._approximate_betas(thetas)
@@ -501,52 +498,51 @@ class TopicGPTTMmodel(LLMTModel):
             verbose=self.verbose_scripts
         )
         # parse assignments to build thetas
-        thetas = self._approximate_thetas_from_assignments(assign_out_path)
+        thetas = self._approximate_thetas(assign_out_path)
         return thetas, time.time() - 0
 
     def save_model(self):
         """
-        Save TopicGPT artifacts: topics, second-level topics (if any), and config.
+        Save TopicGPT model topics, metadata and the object itself.
         """
         model_p = self.model_path
+        model_p.mkdir(parents=True, exist_ok=True)
+
+        model_pkl = model_p.joinpath('model.pkl')
         topics_txt = model_p.joinpath('topics.txt')
         topics2_txt = model_p.joinpath('topics_level2.txt')
-        meta_json = model_p.joinpath('topicgpt_meta.json')
 
-        self._logger.info(f"Saving TopicGPT topics to {topics_txt.as_posix()}")
+        self._logger.info(f"Saving model to {model_p.as_posix()}")
+
+        # remove heavy attributes before pickling
+        temp_df = getattr(self, 'df', None)
+        temp_logger = getattr(self, 'logger', None)
+
+        try:
+            self.df = None
+            self.logger = None
+
+            with model_pkl.open('wb') as f:
+                pickle.dump(self, f)
+
+        finally:
+            if temp_df is not None:
+                self.df = temp_df
+            if temp_logger is not None:
+                self.logger = temp_logger
+
         if self.topics:
             with topics_txt.open('w', encoding='utf8') as f:
                 for k in sorted(self.topics.keys()):
                     f.write(self.topics[k].rstrip('\n') + '\n')
 
         if self.second_topics:
-            self._logger.info(
-                f"Saving 2nd-level topics to {topics2_txt.as_posix()}")
             with topics2_txt.open('w', encoding='utf8') as f:
                 for k in sorted(self.second_topics.keys()):
                     f.write(self.second_topics[k].rstrip('\n') + '\n')
 
-        meta = dict(
-            num_topics=self.num_topics,
-            sample=self.sample,
-            llm_provider=self.llm_server,
-            llm_model_type=self.llm_model_type,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            max_tokens_gen1=self.max_tokens_gen1,
-            max_tokens_gen2=self.max_tokens_gen2,
-            max_tokens_assign=self.max_tokens_assign,
-            refined_again=self.refined_again,
-            remove=self.remove,
-            do_second_level=self.do_second_level,
-            verbose=self.verbose_scripts,
-        )
-        self._logger.info(
-            f"Saving TopicGPT metadata to {meta_json.as_posix()}")
-        with meta_json.open('w', encoding='utf8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-
-        self._logger.info("TopicGPT artifacts saved successfully!")
+        if self._logger:
+            self._logger.info("TopicGPT model saved successfully!")
 
     @classmethod
     def from_saved_model(cls, model_path: str):
@@ -558,7 +554,6 @@ class TopicGPTTMmodel(LLMTModel):
 
         topics_txt = model_p.joinpath('topics.txt')
         topics2_txt = model_p.joinpath('topics_level2.txt')
-        meta_json = model_p.joinpath('topicgpt_meta.json')
 
         # Load topics
         if topics_txt.exists():
@@ -578,14 +573,6 @@ class TopicGPTTMmodel(LLMTModel):
                 f"Loaded {len(lines)} 2nd-level topics from topics_level2.txt")
         else:
             obj.second_topics = None
-
-        # Load metadata (optional)
-        if meta_json.exists():
-            with meta_json.open('r', encoding='utf8') as f:
-                meta = json.load(f)
-            for k, v in meta.items():
-                setattr(obj, k, v)
-            obj._logger.info("Loaded TopicGPT metadata.")
 
         return obj
 

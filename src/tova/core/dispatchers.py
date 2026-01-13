@@ -18,20 +18,11 @@ def load_class_from_path(class_path: str):
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
-
-
-def flatten_model_registry(nested_dict):
-    """
-    Flattens a two-level dictionary into a single-level dictionary.
-    """
-    return {key: value for sub_dict in nested_dict.values() for key, value in sub_dict.items()}
-
-
 # -------------------- #
 #    MODEL REGISTRY    #
 # -------------------- #
 with open("./static/config/modelRegistry.json", "r") as f:
-    model_classes = flatten_model_registry(json.load(f))
+    model_classes = json.load(f)
 
 
 MODEL_REGISTRY = {

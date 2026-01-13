@@ -24,3 +24,4 @@ spacy
 sentence-transformers
 contextualized_topic_models
 topicgpt-python
+colorama

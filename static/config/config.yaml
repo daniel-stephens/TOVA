@@ -15,7 +15,7 @@ logger:
 topic_modeling:
   # general configuration for any topic model, plus specific configuration for either traditional or llm-based
   general:
-    not_include: ['train_data', 'df', 'embeddings', 'ids_corpus', '_logger', '_embedding_model', '_umap_model', '_hdbscan_model', '_vectorizer_model', '_ctfidf_model', '_representation_model', '_model']
+    not_include: ['train_data', 'df', 'embeddings', 'ids_corpus', '_logger', '_prompter', '_embedding_model', '_vectorizer', '_tokenizer', '_device', '_umap_model', '_hdbscan_model', '_vectorizer_model', '_ctfidf_model', '_representation_model', '_model']
     n_similar_tpcs: 5
     similar_tpcs_thr: 1e-3
     n_top_docs_per_topic: 20
@@ -100,8 +100,9 @@ topic_modeling:
   opentopicrag:
     run_from_web: True # @Daniel, I'm not entirely sure how to display this. This parameter shouldn't be visible to the user in the web interface and should be set to True by default. However, if it's not provided through the web, I need to request the input from the user via stdin.
     embedding_model: Qwen/Qwen3-Embedding-0.6B
-    tp_generation_prompt_path: src/tova/prompter/prompts/otrag_tp_generation_dft.txt
-    doc_labelling_prompt_path: src/tova/prompter/prompts/otrag_doc_labelling_dft.txt
+    tp_generation_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/tp_generation_dft.txt
+    doc_labelling_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/doc_labelling_dft.txt
+    inference_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/inference_dft.txt
     num_docs_in_prompt: 5
     max_feat_tfidf: 1000
     user_preferences: 

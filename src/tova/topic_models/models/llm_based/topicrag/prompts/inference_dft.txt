@@ -1,0 +1,17 @@
+Act as an expert text classifier. Your goal is to categorize the document below into one of the pre-defined valid topics.
+
+Context:
+Valid Topics List:
+{formatted_topics}
+
+Document:
+{doc_text}
+
+Rules:
+1. PRECISION: If the document clearly fits a topic, return the topic name exactly as listed.
+2. PRIORITY: If multiple topics apply, select the single most dominant one.
+3. EXCLUSION: If the document does not fit any topic significantly, return exactly 'Outlier'.
+4. SILENCE: Return ONLY the topic name or 'Outlier'. Do not include labels, explanations, punctuation, or introductory text.
+
+Format your response exactly as:
+[Topic Name OR 'Outlier']
