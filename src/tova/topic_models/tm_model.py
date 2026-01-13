@@ -61,6 +61,7 @@ class TMmodel(object):
     _tpc_descriptions = None
     _tpc_labels = None
     _tpc_summaries = None
+    _tpc_add_info = None
     _vocab_w2id = None
     _vocab_id2w = None
     _vocab = None
@@ -125,7 +126,7 @@ class TMmodel(object):
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
 
-    def create(self, betas=None, thetas=None, alphas=None, vocab=None, tpc_labels=None, tpc_summaries=None):
+    def create(self, betas=None, thetas=None, alphas=None, vocab=None, tpc_labels=None, tpc_summaries=None, add_info=None):
         """Creates the topic model from the relevant matrices that characterize it. In addition to the initialization of the corresponding object's variables, all the associated variables and visualizations which are computationally costly are calculated so they are available for the other methods.
 
         Parameters
@@ -142,6 +143,8 @@ class TMmodel(object):
             List of topic labels sorted according to betas matrix
         tpc_summaries: list
             List of topic summaries sorted according to betas matrix
+        add_info: dict
+            Dictionary containing additional information per topic
         """
 
         # If folder already exists no further action is needed
@@ -206,6 +209,8 @@ class TMmodel(object):
                 self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
         elif not self._do_summarizer and (self._tpc_summaries is None):
             self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
+                        
+        self._tpc_add_info = add_info
             
         # get most representative documents and topic clusters
         self.get_most_representative_per_tpc(self._thetas)    
@@ -748,10 +753,10 @@ class TMmodel(object):
                 ]
                 most_representative_docs.append(reps)
         
-        self._logger.info("Most representative documents for each topic:")
-        for i, topic_docs in enumerate(most_representative_docs):
-            ids = [doc[0] for doc in topic_docs]
-            self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
+        #self._logger.info("Most representative documents for each topic:")
+        #for i, topic_docs in enumerate(most_representative_docs):
+        #    ids = [doc[0] for doc in topic_docs]
+        #    self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
 
         self._most_representative_docs = most_representative_docs
     
@@ -797,55 +802,76 @@ class TMmodel(object):
 
             clusters[top_topic].append((doc_id, raw_text, prob))
 
-        self._logger.info("Documents assigned to topic clusters based on max probability:")
-        for i, topic_docs in enumerate(clusters):
-            ids = [doc[0] for doc in topic_docs]
-            self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
+        #self._logger.info("Documents assigned to topic clusters based on max probability:")
+        #for i, topic_docs in enumerate(clusters):
+        #    ids = [doc[0] for doc in topic_docs]
+        #     self._logger.info(f"Topic {i} -> Doc IDs: {ids}")
 
         self._tpc_clusters = clusters
 
     def save_topic_documents(self, mode: str = "most_representative", output_file: str = None):
-        """
-        Saves topic-related document assignments in JSONL format.
+            """
+            Saves topic-related document assignments in JSONL format, enriching them 
+            with additional info (sentiment, entities) from self._tpc_add_info if available.
+            """
+            if mode not in {"most_representative", "clusters"}:
+                raise ValueError("Mode must be 'most_representative' or 'clusters'.")
 
-        Parameters
-        ----------
-        mode : str
-            Either 'most_representative' to save top-N documents per topic
-            or 'clusters' to save topic clusters (documents assigned by argmax).
-        output_file : str, optional
-            Override the default file name.
-        """
-        if mode not in {"most_representative", "clusters"}:
-            raise ValueError("Mode must be 'most_representative' or 'clusters'.")
+            if mode == "most_representative":
+                if self._most_representative_docs is None:
+                    self._logger.warning("Most representative documents not calculated yet.")
+                    return
+                data = self._most_representative_docs
+                filename = "most_representative_docs.jsonl"
+            else:
+                data = self._tpc_clusters
+                filename = "topic_clusters.jsonl"
 
-        if mode == "most_representative":
-            if self._most_representative_docs is None:
-                self._logger.warning("Most representative documents not calculated yet.")
-                return
-            data = self._most_representative_docs
-            filename = "most_representative_docs.jsonl"
-        else:
-            data = self._tpc_clusters
-            filename = "topic_clusters.jsonl"
+            doc_meta_map = {}
+            extra_keys = set()
 
-        output_path = Path(output_file) if output_file else self._TMfolder.joinpath(filename)
-        with output_path.open("w", encoding="utf-8") as fout:
-            for tpc_id, docs in enumerate(data):
-                topic_entry = {
-                    "topic_id": tpc_id,
-                    "docs": [
-                        {
+            if self._tpc_add_info:
+                for topic_info in self._tpc_add_info:
+                    for doc in topic_info.get("docs", []):
+                        d_id = doc.get("doc_id")
+                        if d_id is not None:
+                            meta = {k: v for k, v in doc.items() if k not in ['doc_id', 'prob']}
+                            doc_meta_map[d_id] = meta
+                            extra_keys.update(meta.keys())
+            
+            sorted_extra_keys = sorted(list(extra_keys))
+
+            output_path = Path(output_file) if output_file else self._TMfolder.joinpath(filename)
+            
+            with output_path.open("w", encoding="utf-8") as fout:
+                for tpc_id, docs in enumerate(data):
+                    
+                    enriched_docs = []
+                    for doc_id, _, prob in docs:
+                        # 1. Base del documento
+                        doc_obj = {
                             "doc_id": doc_id,
                             "prob": float(prob)
                         }
-                        for doc_id, _, prob in docs
-                    ]
-                }
-                fout.write(json.dumps(topic_entry) + "\n")
 
-        self._logger.info(f"{mode.replace('_', ' ').title()} documents saved to {output_path}")
+                        # inject additional metadata if available or fill with empty strings
+                        if self._tpc_add_info:
 
+                            meta_data = doc_meta_map.get(doc_id, {})
+                            
+                            for key in sorted_extra_keys:
+                                val = meta_data.get(key, "")
+                                doc_obj[key] = val
+
+                        enriched_docs.append(doc_obj)
+
+                    topic_entry = {
+                        "topic_id": tpc_id,
+                        "docs": enriched_docs
+                    }
+                    fout.write(json.dumps(topic_entry) + "\n")
+
+            self._logger.info(f"{mode.replace('_', ' ').title()} documents saved to {output_path}")
             
     def load_topic_documents(self, mode: str = "most_representative", n_most: int = None, store: bool = True):
         """

@@ -6,7 +6,7 @@ import re
 import time
 from collections import defaultdict
 from subprocess import CalledProcessError, check_output
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -342,6 +342,42 @@ class TopicGPTTMmodel(LLMTModel):
         )
 
         return thetas, betas, vocab
+    
+    def _format_results_by_topic(self) -> Tuple[List[str], List[str], List[Dict]]:
+        """
+        Formats topic labels, summaries, and additional info from the
+        trained TopicGPT model.
+
+        Returns
+        -------
+        labels : List[str]
+            List of topic labels.
+        summaries : List[str]
+            List of topic summaries.
+        add_info : List[Dict]
+            List of additional information per topic.
+        """
+        if not hasattr(self, "topics") or self.topics is None:
+            raise RuntimeError("Topics not available. Run training first.")
+
+        labels = []
+        summaries = []
+        add_info = None # Additional info is None for TopicGPT; placeholder for compatibility
+
+        for k in sorted(self.topics.keys()):
+            topic_line = self.topics[k]
+            label = self._topic_label_from_topic_line(topic_line)
+            labels.append(label)
+
+            # the summary is the full topic line without the label and removing the [1] part
+            summary = topic_line
+            summary = re.sub(r"^\s*\[\d+\]\s*", "", summary)
+            summary = re.sub(rf"^{re.escape(label)}\s*[:\-–]\s*", "", summary)
+            summaries.append(summary.strip())
+            
+            import pdb; pdb.set_trace()
+
+        return labels, summaries, add_info
 
     def train_core(
         self,

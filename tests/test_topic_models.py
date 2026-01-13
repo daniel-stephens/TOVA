@@ -51,6 +51,9 @@ class TestTopicModels(unittest.TestCase):
                     config_path=pathlib.Path("./static/config/config.yaml"),
                     load_model=False,
                     preprocess_text=True,
+                    do_labeller=True,
+                    do_summarize=True,
+                    num_topics=2
                 )
 
                 # train

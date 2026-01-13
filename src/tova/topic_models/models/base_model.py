@@ -121,15 +121,25 @@ class BaseTMModel(ABC):
         with json_path.open('w') as f:
             json.dump(model_info, f, indent=2)
 
-    def _createTMmodel(self, thetas, betas, vocab):
+    def _createTMmodel(self, thetas, betas, vocab, tpc_labels=None, tpc_summaries=None, add_info=None):
         """Creates an object of class TMmodel hosting the topic model
         that has been trained and whose output is available at the
         provided folder
 
         Parameters
         ----------
-        modelFolder: Path
-            the folder with the mallet output files
+        thetas: np.ndarray
+            Document-topic distributions matrix
+        betas: np.ndarray
+            Topic-word distributions matrix
+        vocab: List[str]
+            Vocabulary list
+        tpc_labels: List[str], optional
+            List of topic labels
+        tpc_summaries: List[str], optional
+            List of topic summaries
+        add_info: dict, optional
+            Dictionary containing additional information per topic
 
         Returns
         -------
@@ -159,7 +169,7 @@ class BaseTMModel(ABC):
             summarizer_prompt=self.summarizer_prompt,
         )
         tm.create(
-            betas=betas, thetas=thetas, alphas=alphas, vocab=vocab)
+            betas=betas, thetas=thetas, alphas=alphas, vocab=vocab, tpc_labels=tpc_labels, tpc_summaries=tpc_summaries, add_info=add_info)
 
         self.tm_model = tm
 

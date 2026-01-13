@@ -201,8 +201,8 @@ class OpenTopicRAGModel(LLMTModel):
 
         # Initialize documents topics tracker
         self.documents = [
-            {'text': text, 'id': i, 'discovered_topic': None}
-            for i, text in enumerate(df_sample["raw_text"])
+            {'text': text, 'id': i, 'orig_id': orig_id, 'discovered_topic': None}
+            for i, (text, orig_id) in enumerate(zip(df_sample["raw_text"], df_sample["id"]))
         ]
 
         # Create embeddings for all documents
@@ -408,6 +408,42 @@ class OpenTopicRAGModel(LLMTModel):
         docs_to_analyze = retrieved_docs[:self.num_docs_in_prompt]
 
         results = []
+        
+        def _parse_analysis(response: str) -> Dict:
+            """Parse the LLM's analysis response."""
+            analysis = {
+                'main_topic': 'unclassified',
+                'related_themes': [],
+                'relevance_score': 0,
+                'sentiment': 'neutral',
+                'key_entities': []
+            }
+
+            lines = response.split('\n')
+            for line in lines:
+                line = line.strip()
+                if 'MAIN TOPIC:' in line:
+                    analysis['main_topic'] = line.split('MAIN TOPIC:')[
+                        1].strip()
+                elif 'RELATED THEMES:' in line:
+                    themes = line.split('RELATED THEMES:')[1].strip()
+                    analysis['related_themes'] = [t.strip()
+                                                    for t in themes.split(',')]
+                elif 'RELEVANCE SCORE:' in line:
+                    try:
+                        score = line.split('RELEVANCE SCORE:')[1].strip()
+                        analysis['relevance_score'] = float(score)
+                    except:
+                        analysis['relevance_score'] = 5
+                elif 'SENTIMENT:' in line:
+                    analysis['sentiment'] = line.split(
+                        'SENTIMENT:')[1].strip().lower()
+                elif 'KEY ENTITIES:' in line:
+                    entities = line.split('KEY ENTITIES:')[1].strip()
+                    analysis['key_entities'] = [e.strip()
+                                                for e in entities.split(',')]
+
+            return analysis
 
         with tqdm(total=len(docs_to_analyze), desc="Analyzing documents",
                   bar_format='{l_bar}{bar:30}{r_bar}') as pbar:
@@ -428,57 +464,21 @@ class OpenTopicRAGModel(LLMTModel):
                     system_prompt_template_path=None
                 )
 
-            def _parse_analysis(response: str) -> Dict:
-                """Parse the LLM's analysis response."""
-                analysis = {
-                    'main_topic': 'unclassified',
-                    'related_themes': [],
-                    'relevance_score': 0,
-                    'sentiment': 'neutral',
-                    'key_entities': []
-                }
+                analysis = _parse_analysis(out.strip())
 
-                lines = response.split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if 'MAIN TOPIC:' in line:
-                        analysis['main_topic'] = line.split('MAIN TOPIC:')[
-                            1].strip()
-                    elif 'RELATED THEMES:' in line:
-                        themes = line.split('RELATED THEMES:')[1].strip()
-                        analysis['related_themes'] = [t.strip()
-                                                      for t in themes.split(',')]
-                    elif 'RELEVANCE SCORE:' in line:
-                        try:
-                            score = line.split('RELEVANCE SCORE:')[1].strip()
-                            analysis['relevance_score'] = float(score)
-                        except:
-                            analysis['relevance_score'] = 5
-                    elif 'SENTIMENT:' in line:
-                        analysis['sentiment'] = line.split(
-                            'SENTIMENT:')[1].strip().lower()
-                    elif 'KEY ENTITIES:' in line:
-                        entities = line.split('KEY ENTITIES:')[1].strip()
-                        analysis['key_entities'] = [e.strip()
-                                                    for e in entities.split(',')]
+                results.append({
+                    'id': doc['id'],
+                    'text': doc['text'][:200] + "...",
+                    'discovered_topic': analysis.get('main_topic', 'unclassified'),
+                    'related_themes': analysis.get('related_themes', []),
+                    'relevance_score': analysis.get('relevance_score', 0),
+                    'sentiment': analysis.get('sentiment', 'neutral'),
+                    'key_entities': analysis.get('key_entities', []),
+                    'similarity_score': doc.get('similarity_score', 0),
+                    'is_selected': doc['id'] in {d['id'] for d in selected_docs}
+                })
 
-                return analysis
-
-            analysis = _parse_analysis(out.strip())
-
-            results.append({
-                'id': doc['id'],
-                'text': doc['text'][:200] + "...",
-                'discovered_topic': analysis.get('main_topic', 'unclassified'),
-                'related_themes': analysis.get('related_themes', []),
-                'relevance_score': analysis.get('relevance_score', 0),
-                'sentiment': analysis.get('sentiment', 'neutral'),
-                'key_entities': analysis.get('key_entities', []),
-                'similarity_score': doc.get('similarity_score', 0),
-                'is_selected': doc['id'] in {d['id'] for d in selected_docs}
-            })
-
-            pbar.update(1)
+                pbar.update(1)
 
             pbar.set_description("Analysis complete")
 
@@ -667,12 +667,132 @@ class OpenTopicRAGModel(LLMTModel):
             return thetas_final, np.zeros((self.num_topics + 1, 1)), ["empty"]
 
         return thetas_final, betas_final, vocab
+    
+    def _format_results_by_topic(
+        self,
+        thetas: np.ndarray,
+        all_docs_backup: List[Dict],
+        all_results: List[Dict]
+    ) -> Tuple[List[str], List[str], List[Dict]]:
+        """
+        Transforms the raw results into a structured format organized by topics, enriching each document with metadata from the LLM analysis.
+        
+        Parameters
+        ----------
+        thetas : np.ndarray
+            Document-topic distribution matrix (D x K+1)
+        all_docs_backup : List[Dict]
+            Original list of all documents used during training.
+        all_results : List[Dict]
+            Detailed results from each iteration of topic generation and analysis.
+        
+        Returns
+        -------
+        List[str], List[str], List[Dict]
+            labels: List of topic labels.
+            summaries: List of topic summaries. 
+            formatted_output: List of topics with their associated documents and enriched metadata.
+        """
+        
+        doc_metadata_map = {}
+        for iteration in all_results:
+            for doc in iteration['results']:
+                meta = {k: v for k, v in doc.items() if k not in ['id', 'relevance_score', 'similarity_score']}
+                doc_metadata_map[doc['id']] = meta
+
+        formatted_output = []
+
+        labels = []
+        for t_id in sorted(self.topics.keys()):
+            topic_name = self.topics[t_id]
+            
+            topic_entry = {
+                "topic_id": t_id,
+                "topic_label": topic_name,
+                "docs": []
+            }
+
+            doc_indices = np.where(thetas[:, t_id] > 0)[0]
+            
+            temp_docs = []
+
+            for row_idx in doc_indices:
+                prob = float(thetas[row_idx, t_id]) # prob only for ordering
+                
+                original_doc = all_docs_backup[row_idx]
+                doc_id = original_doc['id']
+                orig_doc_id = original_doc['orig_id']
+                
+                doc_data = {
+                    "doc_id": orig_doc_id,
+                }
+
+                # enrich with metadata if available
+                if doc_id in doc_metadata_map:
+                    doc_data.update(doc_metadata_map[doc_id])
+                    # remove "text" if present to avoid redundancy
+                    if "text" in doc_data:
+                        del doc_data["text"]
+                import pdb; pdb.set_trace()
+                temp_docs.append((prob, doc_data))
+
+            # Sort by prob descending and keep only the dictionary
+            temp_docs.sort(key=lambda x: x[0], reverse=True)
+            topic_entry["docs"] = [d[1] for d in temp_docs]
+            
+            formatted_output.append(topic_entry)
+            labels.append(topic_name)
+
+        return labels, None, formatted_output
 
     def train_core(
         self,
         prs: Optional[ProgressCallback] = None,
         cancel: Optional[CancellationToken] = None
     ) -> Tuple[float, np.ndarray, np.ndarray, List[str]]:
+        """
+        OpenTopicRAG training consists of multiple iterations of topic generation, document retrieval, analysis, and cleanup.
+        After all iterations, the model approximates traditional topic model distributions (thetas, betas) and vocabulary.
+        
+        all_results has the following format: 
+        all_results = [
+            iteracion_1_dict,
+            iteracion_2_dict,
+            ...
+            iteracion_N_dict
+        ]
+        where each dict contains:
+        * 'primary_topic': str
+        * 'user_preferences': str
+        * 'results': List of per-document analysis dicts with keys:
+            - 'id': original id of the document
+            - 'text': excerpt of the document text
+            - 'discovered_topic': how the LLM labeled the document (can be different from primary_topic)
+            - 'related_themes': List of related themes discovered
+            - 'relevance_score': float score assigned by LLM
+            - 'sentiment': sentiment assigned by LLM
+            - 'key_entities': List of key entities extracted by LLM
+            - 'similarity_score': similarity score from RAG retrieval
+            - 'is_selected': whether the document was part of the initial selected set for topic generation or was after retrieved via RAG
+            
+        Parameters
+        ----------
+        prs : Optional[ProgressCallback], optional
+            Progress reporting callback, by default None
+        cancel : Optional[CancellationToken], optional
+            Cancellation token to allow stopping the process, by default None
+        
+        Returns
+        -------
+        Tuple[float, np.ndarray, np.ndarray, List[str], List[str], List[Dict]]
+            training_time: Time taken for training in seconds.
+            thetas: Document-topic distribution matrix (D x K+1)
+            betas: Topic-word distribution matrix (K+1 x V)
+            vocab: List of V words (the vocabulary)
+            labels: List of topic labels.
+            summaries: List of topic summaries. 
+            all_results: Detailed results from each iteration.
+        """
 
         if not hasattr(self, "df"):
             raise RuntimeError(
@@ -761,10 +881,17 @@ class OpenTopicRAGModel(LLMTModel):
 
         thetas, betas, vocab = self._approximate_distributions(
             all_results, all_docs_backup)
+        labels, summaries, add_info = self._format_results_by_topic(
+            thetas=thetas,
+            all_docs_backup=all_docs_backup,
+            all_results=all_results
+        )
 
         prss and prss.report(1.0, "Training completed")
+        
+        import pdb; pdb.set_trace()
 
-        return time.time() - t_start, thetas, betas, vocab
+        return time.time() - t_start, thetas, betas, vocab, labels, summaries, add_info
 
     def infer_core(self, df_infer) -> Tuple[np.ndarray, float]:
         """
@@ -852,8 +979,8 @@ class OpenTopicRAGModel(LLMTModel):
         Save OpenTopicRAG model info to disk.
         """
         model_p = self.model_path
-        topics_txt = model_p.joinpath('topics.json')
-        topics_add_info = model_p.joinpath('topics_additional_info.json')
+        topics_txt = model_p.joinpath('modelFiles/topics.json')
+        topics_add_info = model_p.joinpath('modelFiles/topics_additional_info.json')
 
         self._logger.info(
             f"Saving topics to {topics_txt.as_posix()}, complete info to {topics_add_info.as_posix()}")
@@ -889,7 +1016,7 @@ class OpenTopicRAGModel(LLMTModel):
 
         # load full all_results and topics which are stored separately
         topics_add_info = pathlib.Path(
-            model_path) / 'topics_additional_info.json'
+            model_path) / 'modelFiles/topics_additional_info.json'
         if topics_add_info.exists():
             try:
                 with open(topics_add_info, 'r', encoding='utf-8') as f:
@@ -900,7 +1027,7 @@ class OpenTopicRAGModel(LLMTModel):
         else:
             obj.all_results = []
 
-        topics_info = pathlib.Path(model_path) / 'topics.json'
+        topics_info = pathlib.Path(model_path) / 'modelFiles/topics.json'
         if topics_info.exists():
             try:
                 with open(topics_info, 'r', encoding='utf-8') as f:

@@ -58,10 +58,11 @@ class TomotopyLDATMmodel(TradTMmodel):
         # Allow overriding parameters from kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
+        do_labeller = "True" if getattr(self, "do_labeller", False) else "False"
         
         # Log initialization
         self._logger.info(
-            f"{self.__class__.__name__} initialized with num_topics={self.num_topics}, num_iters={self.num_iters}, alpha={self.alpha}, eta={self.eta}.")
+            f"{self.__class__.__name__} initialized with num_topics={self.num_topics}, num_iters={self.num_iters}, alpha={self.alpha}, eta={self.eta}, do_labeller={do_labeller}")
         
 
     def train_core(self, prs: Optional[ProgressCallback] = None, cancel: Optional[CancellationToken] = None) -> float:

@@ -88,7 +88,7 @@ class LLMTModel(BaseTMModel, ABC):
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.2, 0.7)
         prs.report(0.0, "Training core")
-        tr_core, thetas, betas, vocab = self.train_core(
+        tr_core, thetas, betas, vocab, tpc_labels, tpc_summaries, add_info = self.train_core(
             prs=prs,
             cancel=cancel
         )
@@ -100,7 +100,7 @@ class LLMTModel(BaseTMModel, ABC):
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.7, 0.9)
         prs.report(0.0, "Creating TMmodel object")
-        self._createTMmodel(thetas, betas, vocab)
+        self._createTMmodel(thetas, betas, vocab, tpc_labels, tpc_summaries, add_info)
         prs.report(1.0, "TMmodel object created")
 
         # 4. SAVE MODEL

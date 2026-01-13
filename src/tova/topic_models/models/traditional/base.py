@@ -61,9 +61,9 @@ class TradTMmodel(BaseTMModel, ABC):
         self.do_summarizer = bool(self.config.get(
             "traditional", {}).get("do_summarizer", False))
         self.labeller_prompt = self.config.get("traditional", {}).get(
-            "labeller_model_path", "./src/prompter/prompts/labelling_dft.txt")
+            "labeller_prompt", "src/tova/prompter/prompts/labelling_dft.txt")
         self.summarizer_prompt = self.config.get("traditional", {}).get(
-            "summarizer_prompt", "./src/prompter/prompts/summarization_dft.txt")
+            "summarizer_prompt", "src/tova/prompter/prompts/summarization_dft.txt")
         self._config_path = config_path
 
     def set_training_data(self, data: List[Dict]):
