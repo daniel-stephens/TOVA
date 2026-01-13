@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import pathlib
-import pickle
 import re
 import time
 from collections import defaultdict
@@ -10,10 +9,10 @@ from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 import topicgpt_python as tg  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.preprocessing import normalize  # type: ignore
-from tqdm import tqdm
 
 from tova.topic_models.models.llm_based.base import LLMTModel
 from tova.utils.cancel import CancellationToken, check_cancel
@@ -170,7 +169,7 @@ class TopicGPTTMmodel(LLMTModel):
         self._logger.info(f"Loaded {len(topics)} topics from {path.name}")
         return topics
 
-    def _approximate_thetas(self, assign_path: pathlib.Path) -> np.ndarray:
+    def _approximate_thetas(self, assign_path: pathlib.Path, df: pd.DataFrame) -> np.ndarray:
         """Approximates document-topic distribution matrix (thetas) from
         assignment_corrected.jsonl file.
 
@@ -196,7 +195,7 @@ class TopicGPTTMmodel(LLMTModel):
         }
         self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
 
-        doc_ids = self.df.id.values.tolist()
+        doc_ids = df.id.values.tolist()
 
         D = len(doc_ids)
         df_ids = set(doc_ids)
@@ -239,7 +238,7 @@ class TopicGPTTMmodel(LLMTModel):
 
         return thetas
 
-    def _approximate_betas(self, thetas: np.ndarray) -> Tuple[np.ndarray, List[str]]:
+    def _approximate_betas(self, thetas: np.ndarray, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
         """Approximates topic-word distribution matrix (betas) and vocabulary
         from TF-IDF on 'pseudo-documents' formed by concatenating texts of
         documents assigned to each topic.
@@ -258,7 +257,7 @@ class TopicGPTTMmodel(LLMTModel):
         """
 
         K = thetas.shape[1]
-        doc_texts = self.df.raw_text.values.tolist()
+        doc_texts = df.raw_text.values.tolist()
 
         # pseudo-betas via TF-IDF on topic documents
         topic_docs = defaultdict(list)
@@ -298,13 +297,20 @@ class TopicGPTTMmodel(LLMTModel):
 
         return betas, vocab
 
-    def _approximate_distributions(self) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    def _approximate_distributions(self, assign_path: pathlib.Path, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, List[str]]:
         """Approximates 'traditional' topic model distributions (thetas, betas) and vocabulary as follows:
 
         1) thetas (from assignment_corrected.jsonl after correction step). After parsing [1] topics, each document d has a set of assigned topics. We then define theta[d, k] = 1/|T_d| if k in T_d, else 0, and row-normalize.
         2) betas. We treat each topic as a 'pseudo-document' formed by concatenating the texts of all documents assigned to that topic. We then fit a TF-IDF vectorizer on these pseudo-documents to get a topic-term matrix, which we L1-normalize row-wise to get betas.
         3) vocab is simply the feature list learned by the TF-IDF vectorizer, aligned with the columns of betas.
 
+        Parameters
+        ----------
+        assign_path : Path
+            Path to assignment_corrected.jsonl file.
+        df : pd.DataFrame
+            The training dataframe with 'raw_text' and 'id' columns.
+        
         Returns
         -------
         thetas : np.ndarray
@@ -318,8 +324,6 @@ class TopicGPTTMmodel(LLMTModel):
         if self.topics is None:
             raise RuntimeError("Topics not available. Run training first.")
 
-        assign_path = self.model_path / "modelFiles" / "assignment_corrected.jsonl"
-
         K = len(self.topics)
         # map normalized topic name -> index (level 1)
         topic_name_to_idx = {
@@ -328,10 +332,10 @@ class TopicGPTTMmodel(LLMTModel):
         }
         self._logger.info(f"Topic name to index mapping: {topic_name_to_idx}")
 
-        thetas = self._approximate_thetas(assign_path)
+        thetas = self._approximate_thetas(assign_path, df)
 
         # pseudo-betas via TF-IDF on topic documents
-        betas, vocab = self._approximate_betas(thetas)
+        betas, vocab = self._approximate_betas(thetas, df)
 
         self._logger.info(
             f"Synthetic distributions built: theta={thetas.shape}, beta={betas.shape}"
@@ -469,7 +473,7 @@ class TopicGPTTMmodel(LLMTModel):
         with self.model_path.joinpath('orig_tpc_descriptions.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join([topics[k] for k in sorted(topics.keys())]))
 
-        thetas, betas, vocab = self._approximate_distributions()
+        thetas, betas, vocab = self._approximate_distributions(assign_path=outputs['correction_out'], df=self.df)
         prss and prss.report(1.0, "Topics & synthetic distributions ready")
 
         return time.time() - t_start, thetas, betas, vocab
@@ -480,12 +484,12 @@ class TopicGPTTMmodel(LLMTModel):
         """
 
         # save infer data to temp file
-        infer_path = self.model_path / "modelFiles" / "infer_data.jsonl"
+        infer_path = pathlib.Path("topicgpt_infer_data.jsonl")
         df_infer_renamed = df_infer.rename(columns={"raw_text": "text"})
         df_infer_renamed.to_json(infer_path, lines=True, orient="records")
 
         # new topics should be saved in a different file
-        assign_out_path = self.model_path / "modelFiles" / "infer_assignment.jsonl"
+        assign_out_path = pathlib.Path("infer_assignment.jsonl")
 
         tg.assign_topics(
             api=self.llm_provider,
@@ -497,8 +501,17 @@ class TopicGPTTMmodel(LLMTModel):
             out_file=assign_out_path.as_posix(),
             verbose=self.verbose_scripts
         )
+
         # parse assignments to build thetas
-        thetas = self._approximate_thetas(assign_out_path)
+        thetas = self._approximate_thetas(assign_out_path, df_infer)
+        
+        # remove temp files
+        try:
+            os.remove(infer_path)
+            os.remove(assign_out_path)
+        except Exception:
+            pass
+        
         return thetas, time.time() - 0
 
     def save_model(self):
@@ -508,28 +521,10 @@ class TopicGPTTMmodel(LLMTModel):
         model_p = self.model_path
         model_p.mkdir(parents=True, exist_ok=True)
 
-        model_pkl = model_p.joinpath('model.pkl')
         topics_txt = model_p.joinpath('topics.txt')
         topics2_txt = model_p.joinpath('topics_level2.txt')
 
-        self._logger.info(f"Saving model to {model_p.as_posix()}")
-
-        # remove heavy attributes before pickling
-        temp_df = getattr(self, 'df', None)
-        temp_logger = getattr(self, 'logger', None)
-
-        try:
-            self.df = None
-            self.logger = None
-
-            with model_pkl.open('wb') as f:
-                pickle.dump(self, f)
-
-        finally:
-            if temp_df is not None:
-                self.df = temp_df
-            if temp_logger is not None:
-                self.logger = temp_logger
+        self._logger.info(f"Saving 1st-level topics to {topics_txt.as_posix()} and second-level topics to {topics2_txt.as_posix()}")
 
         if self.topics:
             with topics_txt.open('w', encoding='utf8') as f:
@@ -541,15 +536,25 @@ class TopicGPTTMmodel(LLMTModel):
                 for k in sorted(self.second_topics.keys()):
                     f.write(self.second_topics[k].rstrip('\n') + '\n')
 
-        if self._logger:
-            self._logger.info("TopicGPT model saved successfully!")
+        self._logger.info("Model saved successfully!")
+
 
     @classmethod
     def from_saved_model(cls, model_path: str):
         """
-        Restore TopicGPTTMmodel from saved topics & metadata.
+        Loads a previously saved TopicGPTTMmodel model from disk.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to the saved model directory.
+        Returns
+        -------
+        cls
+            An instance of TopicGPTTMmodel with loaded topics and metadata.
         """
-        obj = cls(model_path=model_path, load_model=True)
+        
+        obj = super().from_saved_model(model_path)
         model_p = pathlib.Path(model_path)
 
         topics_txt = model_p.joinpath('topics.txt')

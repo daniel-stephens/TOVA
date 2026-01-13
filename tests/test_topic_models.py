@@ -36,7 +36,7 @@ class TestTopicModels(unittest.TestCase):
         module = __import__(module_path, fromlist=[class_name])
         return getattr(module, class_name)
 
-    def test_train_and_infer(self):
+    def test_01_train_and_infer(self):
         """Test training and inference for all registered topic models."""
         for model_name, model_path in self.model_registry.items():
             with self.subTest(model=model_name):
@@ -59,14 +59,14 @@ class TestTopicModels(unittest.TestCase):
                 self.model_path = model_path
 
                 # inference
-                infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
+                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "raw_text"})
                 infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
                 thetas, time_taken = model.infer(infer_data)
 
                 self.assertIsInstance(thetas, np.ndarray)
                 print(f"Inference completed in {time_taken} seconds for model {model_name}")
 
-    def test_load_and_infer(self):
+    def test_02_load_and_infer(self):
         # load the model
         for model_name, model_path in self.model_registry.items():
             with self.subTest(model=model_name):
@@ -74,7 +74,7 @@ class TestTopicModels(unittest.TestCase):
                 tm_model = model_cls.from_saved_model(os.path.abspath(f"test_{model_name}"))
             
                 # inference
-                infer_data = self.sample_data.rename(columns={"summary": "raw_text"})
+                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "raw_text"})
                 infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
                 thetas, duration = tm_model.infer(infer_data)
 

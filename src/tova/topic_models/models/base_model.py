@@ -182,6 +182,7 @@ class BaseTMModel(ABC):
             model_config = json.load(f)
             
         obj = cls(model_path=model_path, load_model=True, **model_config["tr_params"])
+        obj.model_path = pathlib.Path(model_path)
         
         return obj    
 

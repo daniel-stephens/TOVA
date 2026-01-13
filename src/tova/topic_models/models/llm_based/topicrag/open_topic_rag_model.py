@@ -693,6 +693,9 @@ class OpenTopicRAGModel(LLMTModel):
         # copy is needed since we will modify self.documents during training (cleanup)
         all_docs_backup = copy.deepcopy(self.documents)
         prss and prss.report(1.0, "Preparation completed")
+        
+        if not self.run_from_web:
+            self.get_user_preferences()
 
         all_results = []
         for _ in tqdm(range(self.nr_iterations), desc="OpenTopicRAG Iterations", bar_format='{l_bar}{bar:30}{r_bar}'):
@@ -759,11 +762,6 @@ class OpenTopicRAGModel(LLMTModel):
         thetas, betas, vocab = self._approximate_distributions(
             all_results, all_docs_backup)
 
-        topics_txt = self.model_path / "topics.txt"
-        with open(topics_txt, "w") as f:
-            for idx, topic_name in self.topics.items():
-                f.write(f"Topic {idx}: {topic_name}\n")
-
         prss and prss.report(1.0, "Training completed")
 
         return time.time() - t_start, thetas, betas, vocab
@@ -800,7 +798,7 @@ class OpenTopicRAGModel(LLMTModel):
 
         for idx, name in self.topics.items():
             if "Outlier" in name and "Unclassified" in name:
-                outlier_idx = idx
+                outlier_idx = int(idx)
             else:
                 real_topics_list.append(name)
 
@@ -819,22 +817,18 @@ class OpenTopicRAGModel(LLMTModel):
             snippet = text[:1500]
 
             try:
-                inf_prompt = self._inference_prompt.format(
-                    topics_list=formatted_topics,
-                    doc_text=snippet
-                )
+                inf_prompt = self._inference_prompt.format(formatted_topics=formatted_topics,doc_text=snippet)
 
                 out, _ = self._prompter.prompt(
                     question=inf_prompt,
                     system_prompt_template_path=None
                 )
                 predicted_topic = out.strip().strip('".')
-
                 if predicted_topic in topic_to_idx:
                     # llm predics a valid topic
                     col_idx = topic_to_idx[predicted_topic]
                     thetas[idx, col_idx] = 1.0
-
+                
                 elif "Outlier" in predicted_topic or "outlier" in predicted_topic.lower():
                     # llm predicts outlier
                     if outlier_idx < K_total:
@@ -917,6 +911,7 @@ class OpenTopicRAGModel(LLMTModel):
                 obj._logger.warning(f"Could not load topics: {e}")
         else:
             obj.topics = {}
+        obj.num_topics = len(obj.topics)
 
         return obj
 
