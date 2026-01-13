@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*
 
 COPY --from=static /static /app/static
 
+COPY --from=wheel /app/src /app/src
+
 RUN mkdir -p /data/drafts
 
 EXPOSE 8000
