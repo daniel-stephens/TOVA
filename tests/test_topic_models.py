@@ -25,7 +25,7 @@ class TestTopicModels(unittest.TestCase):
             key: path for key, path in model_classes.items() if isinstance(path, str)
         }
         cls.sample_file = "data_test/bills_sample_100.csv"
-        cls.sample_data = pd.read_csv(cls.sample_file)
+        cls.sample_data = pd.read_csv(cls.sample_file)#.sample(10, random_state=42)
         cls.train_data = cls.sample_data.rename(columns={"summary": "raw_text"})
         cls.train_data = cls.train_data[["id", "raw_text"]].to_dict(orient="records")
 

@@ -733,7 +733,6 @@ class OpenTopicRAGModel(LLMTModel):
                     # remove "text" if present to avoid redundancy
                     if "text" in doc_data:
                         del doc_data["text"]
-                import pdb; pdb.set_trace()
                 temp_docs.append((prob, doc_data))
 
             # Sort by prob descending and keep only the dictionary
@@ -803,7 +802,7 @@ class OpenTopicRAGModel(LLMTModel):
         # 0–10%: Prepare output folder & sample
         check_cancel(cancel, self._logger)
         prss = prs.report_subrange(0.0, 0.1) if prs else None
-        prss and prss.report(0.0, "Preparing TopicGPT workspace")
+        prss and prss.report(0.0, "Preparing OpenTopicRAG workspace")
 
         model_files = self.model_path.joinpath("modelFiles")
         model_files.mkdir(exist_ok=True, parents=True)
@@ -889,8 +888,6 @@ class OpenTopicRAGModel(LLMTModel):
 
         prss and prss.report(1.0, "Training completed")
         
-        import pdb; pdb.set_trace()
-
         return time.time() - t_start, thetas, betas, vocab, labels, summaries, add_info
 
     def infer_core(self, df_infer) -> Tuple[np.ndarray, float]:

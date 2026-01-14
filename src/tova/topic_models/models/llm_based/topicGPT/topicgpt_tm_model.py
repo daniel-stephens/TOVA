@@ -366,17 +366,13 @@ class TopicGPTTMmodel(LLMTModel):
 
         for k in sorted(self.topics.keys()):
             topic_line = self.topics[k]
-            label = self._topic_label_from_topic_line(topic_line)
+            label = self._topic_label_from_topic_line(topic_line).capitalize()
             labels.append(label)
 
-            # the summary is the full topic line without the label and removing the [1] part
-            summary = topic_line
-            summary = re.sub(r"^\s*\[\d+\]\s*", "", summary)
-            summary = re.sub(rf"^{re.escape(label)}\s*[:\-–]\s*", "", summary)
-            summaries.append(summary.strip())
+            # the summary is the full topic line after the ":"
+            summary = topic_line.split(":")[-1].strip()
+            summaries.append(summary)
             
-            import pdb; pdb.set_trace()
-
         return labels, summaries, add_info
 
     def train_core(
@@ -510,9 +506,12 @@ class TopicGPTTMmodel(LLMTModel):
             fout.write('\n'.join([topics[k] for k in sorted(topics.keys())]))
 
         thetas, betas, vocab = self._approximate_distributions(assign_path=outputs['correction_out'], df=self.df)
+        
+        labels, summaries, add_info = self._format_results_by_topic()
+        
         prss and prss.report(1.0, "Topics & synthetic distributions ready")
 
-        return time.time() - t_start, thetas, betas, vocab
+        return time.time() - t_start, thetas, betas, vocab, labels, summaries, add_info
 
     def infer_core(self, df_infer):
         """
