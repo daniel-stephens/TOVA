@@ -6,9 +6,9 @@
 2. Explore trained models via the dashboard: topic lists, top documents, coherence metrics, and similar-topic suggestions.
 3. Run inference on new corpora and download topic assignments/theta matrices.
 
-<p align="center" style="display: flex; align-items: left; justify-content: center; gap: 10px; font-size: 2em;">
-  <img src=".static/img/tova_class_diagram_basic.png" alt="tova_class_diagram_basic" width="200" height="200" style="display: inline-block;">
-</p>
+<div align="center">
+  <img src="static/img/tova_class_diagram_basic.png" alt="tova_class_diagram_basic" style="width: 90%; max-width: 900px; height: auto;">
+</div>
 
 ## Deployment options
 
