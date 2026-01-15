@@ -14,6 +14,10 @@ from tova.utils.progress import ProgressCallback
 # AUXILIARY FUNCTIONS  #
 # -------------------- #
 def load_class_from_path(class_path: str):
+    if not isinstance(class_path, str):
+        raise ValueError(f"Expected string class path, got {type(class_path).__name__}: {class_path}")
+    if "." not in class_path:
+        raise ValueError(f"Invalid class path format: '{class_path}'. Expected format: 'module.path.ClassName'")
     module_path, class_name = class_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
@@ -24,9 +28,17 @@ def load_class_from_path(class_path: str):
 with open("./static/config/modelRegistry.json", "r") as f:
     model_classes = json.load(f)
 
+# Flatten nested structure: {"category": {"model_name": "path"}} -> {"model_name": "path"}
+flattened_model_classes = {}
+for category, models in model_classes.items():
+    if isinstance(models, dict):
+        flattened_model_classes.update(models)
+    else:
+        # Handle flat structure if it exists
+        flattened_model_classes[category] = models
 
 MODEL_REGISTRY = {
-    key: load_class_from_path(path) for key, path in model_classes.items()
+    key: load_class_from_path(path) for key, path in flattened_model_classes.items()
 }
 
 # -------------------- #

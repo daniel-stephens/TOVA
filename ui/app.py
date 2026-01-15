@@ -1814,7 +1814,7 @@ def text_info():
         (
             {
                 "theme_id": int(k),
-                "label": f"Topic {k}",
+                "label": (topics_info.get(str(k), {}) or {}).get("Label", f"Topic {k}"),
                 "score": float(v),
                 "keywords": (topics_info.get(str(k), {}) or {}).get("Keywords", ""),
             }
@@ -1932,6 +1932,76 @@ def save_settings():
     server.logger.info("Dummy /save-settings received: %s", payload)
     return jsonify({"ok": True, "echo": payload}), 200
 
+
+@server.route("/api/chat", methods=["POST"])
+@login_required
+def chat():
+    """
+    Chat interface endpoint for topic modeling assistance.
+    Provides contextual help about themes, documents, and dashboard usage.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        message = payload.get("message", "").strip()
+        model_id = payload.get("model_id", "")
+        context = payload.get("context", {})
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        server.logger.info("Chat request: model_id=%s, message_length=%d", model_id, len(message))
+        
+        # Get dashboard context if available
+        themes = context.get("themes", [])
+        document_count = context.get("document_count", 0)
+        
+        # Simple rule-based responses (can be enhanced with LLM later)
+        message_lower = message.lower()
+        response = ""
+        
+        if any(word in message_lower for word in ["theme", "topic", "themes", "topics"]):
+            if themes:
+                theme_list = ", ".join([t.get("label", f"Theme {t.get('id')}") for t in themes[:5]])
+                response = f"I found {len(themes)} themes in your model. Here are some: {theme_list}."
+                if len(themes) > 5:
+                    response += f" And {len(themes) - 5} more. Click on any theme in the chart to see details."
+            else:
+                response = "I don't have information about themes yet. Please make sure your dashboard is loaded."
+        
+        elif any(word in message_lower for word in ["document", "documents", "text", "data"]):
+            if document_count > 0:
+                response = f"Your model contains {document_count} documents. You can search and filter them using the search bar and filters in the Documents panel. Click on any document row to see full details and theme probabilities."
+            else:
+                response = "I don't have document information yet. Please make sure your dashboard is loaded."
+        
+        elif any(word in message_lower for word in ["help", "how", "what", "explain"]):
+            response = """I can help you with:
+• Understanding themes and topics - Ask about specific themes or how they're organized
+• Exploring documents - Ask about document counts, searching, or filtering
+• Using the dashboard - Ask how to interact with charts, tables, or modals
+• Interpreting results - Ask about scores, probabilities, or diagnostics
+
+Try asking: "What themes do I have?" or "How do I search documents?" """
+        
+        elif any(word in message_lower for word in ["search", "filter", "find"]):
+            response = "You can search documents using the search bar in the Documents panel. You can also filter by theme using the Theme dropdown, or by score range using the Min/Max Score inputs. Click 'Apply Filters' to update the results."
+        
+        elif any(word in message_lower for word in ["chart", "graph", "visualization"]):
+            response = "The dashboard shows two views: a bar chart and a scatter plot grid. Click on any bar or point to open detailed information about that theme. You can switch between views using the toggle button."
+        
+        elif any(word in message_lower for word in ["diagnostic", "metric", "coherence", "entropy"]):
+            response = "Theme diagnostics include metrics like coherence (how semantically consistent keywords are), prevalence (percentage of documents), and entropy (balance across topics). View these in the Theme Details modal by clicking on any theme."
+        
+        else:
+            response = f"I understand you're asking about '{message}'. I can help with questions about themes, documents, dashboard usage, and interpreting results. Try asking: 'What themes do I have?' or 'How do I search documents?'"
+        
+        server.logger.info("Chat response generated: length=%d", len(response))
+        return jsonify({"response": response}), 200
+        
+    except Exception as e:
+        server.logger.exception("Chat error: %s", e)
+        return jsonify({"error": f"Chat service error: {str(e)}"}), 500
+
 import yaml
 import os
 
@@ -1959,9 +2029,11 @@ def load_config(filepath=CONFIG_PATH):
 def rename_topic(model_id: str, topic_id: int):
     """
     Rename a topic in a model. Proxies the request to the backend API.
+    If backend is unavailable, returns None.
     """
     payload = request.get_json(silent=True) or {}
     new_label = payload.get("new_label", "").strip()
+    owner_id = session.get("user_id")
     
     if not new_label:
         return jsonify({"error": "new_label is required"}), 400
@@ -1969,13 +2041,16 @@ def rename_topic(model_id: str, topic_id: int):
     if not model_id:
         return jsonify({"error": "model_id is required"}), 400
     
+    if not owner_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    
     # Forward request to backend API
     try:
         upstream_url = f"{API}/data/models/{model_id}/topics/{topic_id}/rename"
         upstream_response = requests.post(
             upstream_url,
             json={"new_label": new_label},
-            params={"owner_id": session.get("user_id")},
+            params={"owner_id": owner_id},
             timeout=(3.05, 30),
         )
         
@@ -1987,6 +2062,12 @@ def rename_topic(model_id: str, topic_id: int):
                 status=upstream_response.status_code,
                 mimetype=upstream_response.headers.get("Content-Type", "application/json"),
             )
+    except requests.exceptions.ConnectionError:
+        # Backend is not available - return None
+        server.logger.warning(
+            f"Backend unavailable for topic rename: model_id={model_id}, topic_id={topic_id}"
+        )
+        return jsonify(None), 200
     except requests.Timeout:
         server.logger.exception("rename topic timeout")
         return jsonify({"error": "Upstream timeout"}), 504
@@ -2000,15 +2081,21 @@ def rename_topic(model_id: str, topic_id: int):
 def get_topic_renames(model_id: str):
     """
     Get all topic renames for a model from the backend API.
+    If backend is unavailable, returns None.
     """
+    owner_id = session.get("user_id")
+    
     if not model_id:
         return jsonify({"error": "model_id is required"}), 400
+    
+    if not owner_id:
+        return jsonify({"error": "User not authenticated"}), 401
     
     try:
         upstream_url = f"{API}/data/models/{model_id}/topics/renames"
         upstream_response = requests.get(
             upstream_url,
-            params={"owner_id": session.get("user_id")},
+            params={"owner_id": owner_id},
             timeout=(3.05, 30),
         )
         
@@ -2023,6 +2110,12 @@ def get_topic_renames(model_id: str):
                 status=upstream_response.status_code,
                 mimetype=upstream_response.headers.get("Content-Type", "application/json"),
             )
+    except requests.exceptions.ConnectionError:
+        # Backend is not available - return None
+        server.logger.warning(
+            f"Backend unavailable for getting topic renames: model_id={model_id}"
+        )
+        return jsonify(None), 200
     except requests.Timeout:
         server.logger.exception("get topic renames timeout")
         return jsonify({"error": "Upstream timeout"}), 504

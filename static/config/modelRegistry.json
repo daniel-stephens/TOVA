@@ -1,6 +1,11 @@
-{   
-    "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
-    "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel",
-    "topicGPT": "tova.topic_models.models.llm_based.topicgpt.topicgpt_tm_model.TopicGPTTMmodel",
-    "OpenTopicRAGModel": "tova.topic_models.models.llm_based.topicrag.open_topic_rag_model.OpenTopicRAGModel"
+{
+    "traditional": {
+        "tomotopyLDA": "tova.topic_models.models.traditional.tomotopy_lda_tm_model.TomotopyLDATMmodel",
+        "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
+    },
+    "llm_based": {
+        "topicGPT": "tova.topic_models.models.llm_based.topicGPT.topicgpt_tm_model.TopicGPTTMmodel",
+        "OpenTopicRAG": "tova.topic_models.models.llm_based.topicrag.open_topic_rag_model.OpenTopicRAGModel",
+        "LLoom": "tova.topic_models.models.llm_based.lloom_tm_model.LLoomTMmodel"
+    }
 }

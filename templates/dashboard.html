@@ -48,6 +48,8 @@ main {
   padding: 1rem;
   background-color: #f8f9fa;
   height: calc(100vh - 100px); /* Adjust based on your nav + footer */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  box-sizing: border-box;
 }
 
 .panel {
@@ -122,7 +124,498 @@ footer {
     transition: none !important;
   }
 
+  /* Rename Topic Button Styles */
+  #renameThemeBtn {
+    transition: opacity 0.2s ease, color 0.2s ease;
+    color: #212529 !important;
+    line-height: 1;
+    opacity: 0.85;
+  }
 
+  #renameThemeBtn:hover {
+    opacity: 1 !important;
+    color: #0d6efd !important;
+    transform: scale(1.1);
+  }
+
+  /* Show edit icon on hover of title */
+  #selectedThemeLabel:hover #renameThemeBtn {
+    opacity: 1;
+    color: #212529 !important;
+  }
+
+  /* Theme Detail Modal Visual Enhancements */
+  #themeDetailModal .modal-content {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    border: none;
+  }
+
+  #themeDetailModal .modal-header {
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+    border-bottom: 2px solid #e9ecef;
+    padding: 1.25rem 1.5rem;
+  }
+
+  #themeDetailModal .modal-title {
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  #themeDetailModal #leftPanel {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.2s ease;
+  }
+
+  #themeDetailModal #leftPanel:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Section Headers */
+  #themeDetailModal .section-header {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+  /* Summary Section */
+  #selectedThemeSummary {
+    background: #f8f9fa;
+    border-left: 3px solid;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    line-height: 1.6;
+    font-size: 0.9rem;
+  }
+
+  /* Keywords Styling */
+  #selectedThemeKeywords .badge {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 1.5px solid;
+  }
+
+  #selectedThemeKeywords .badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Diagnostics Cards */
+  #themeDiagnosticsGrid .col > div {
+    transition: all 0.2s ease;
+    border: 1.5px solid #e9ecef;
+  }
+
+  #themeDiagnosticsGrid .col > div:hover {
+    border-color: currentColor;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  #themeDiagnosticsGrid .col strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #495057;
+    font-size: 0.8rem;
+  }
+
+  #themeDiagnosticsGrid .col .text-muted {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  /* Similarity Chart Container */
+  #themeDetailModal .similarity-section {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  #themeDetailModal .similarity-section p {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Documents Section */
+  #themeDetailModal .panel {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Theme Detail Modal - Optimized Layout */
+  #themeDetailModal .modal-dialog {
+    max-width: 90vw;
+    height: 90vh;
+    margin: 5vh auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #themeDetailModal .modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 90vh;
+  }
+
+  /* Modal Header - Fixed */
+  #themeDetailModal .modal-header {
+    flex: 0 0 auto;
+  }
+
+  /* Modal Body - Flexible, scrollable */
+  #themeDetailModal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Row container - fills available space */
+  #themeDetailModal .modal-body > .row {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+  }
+
+  /* Columns - equal height, flexible */
+  #themeDetailModal .col-lg-6 {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* Panels - fill column height */
+  #themeDetailModal .panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Left Panel - scrollable if content overflows */
+  #themeDetailModal #leftPanel {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Right Panel - documents section (already has flex from .panel rule above) */
+
+  /* Table wrapper - fills remaining space, scrollable */
+  #themeDetailModal #filteredTableWrapper {
+    border-radius: 0.375rem;
+    border: 1px solid #e9ecef;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: auto;
+    position: relative;
+  }
+
+  /* Modal Footer - Fixed at bottom */
+  #themeDetailModal .modal-footer {
+    flex: 0 0 auto;
+    margin-top: auto;
+  }
+
+  #filteredTableBody tr {
+    transition: all 0.15s ease;
+  }
+
+  #filteredTableBody tr:hover {
+    background-color: #f8f9fa !important;
+    transform: scale(1.01);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  #filteredTableHead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #fff;
+  }
+
+  #filteredTableHead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: #6c757d;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 11;
+  }
+
+  /* Search Input */
+  #filteredSearchInput {
+    border-radius: 0.5rem;
+    border: 1.5px solid #dee2e6;
+    transition: all 0.2s ease;
+  }
+
+  #filteredSearchInput:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.1);
+  }
+
+  /* Rename Controls */
+  #renameControls {
+    background: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid #dee2e6;
+  }
+
+  #renameThemeInput {
+    border-radius: 0.375rem;
+    border: 1.5px solid #dee2e6;
+  }
+
+  #renameThemeInput:focus {
+    border-color: #198754;
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.1);
+  }
+
+  /* Modal Footer */
+  #themeDetailModal .modal-footer {
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 1rem 1.5rem;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 991.98px) {
+    #themeDetailModal .modal-dialog {
+      max-width: 95vw;
+      height: 95vh;
+      margin: 2.5vh auto;
+    }
+    
+    #themeDetailModal .modal-content {
+      max-height: 95vh;
+    }
+    
+    #themeDetailModal .row {
+      flex-direction: column;
+    }
+    
+    #themeDetailModal .col-lg-6 {
+      min-height: 300px;
+    }
+
+    /* Chat sidebar responsive */
+    #chatSidebar {
+      width: 100%;
+    }
+    
+    #chatWidgetBtn.sidebar-open {
+      right: 20px !important;
+    }
+    
+    #leftMainPanel,
+    #documentsPanel {
+      margin-right: 0 !important;
+    }
+  }
+
+  /* Ensure table is always scrollable */
+  @media (min-width: 992px) {
+    #themeDetailModal #filteredTableWrapper {
+      min-height: 400px;
+    }
+  }
+
+  /* Loading state for charts */
+  #similarityDotPlot {
+    background: #f8f9fa;
+    border-radius: 0.375rem;
+  }
+
+  /* Scrollbar styling */
+  #filteredTableWrapper::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  #filteredTableWrapper::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+
+  #filteredTableWrapper::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+
+  #filteredTableWrapper::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+
+  /* Chat Sidebar Styles */
+  #chatSidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow: hidden;
+  }
+
+  #chatSidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Main content adjustment handled via JavaScript */
+
+  /* Chat Sidebar Backdrop - only show on mobile */
+  #chatSidebarBackdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 1039;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    display: none; /* Hidden on desktop */
+  }
+
+  #chatSidebarBackdrop.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  @media (max-width: 991.98px) {
+    #chatSidebarBackdrop {
+      display: block; /* Show backdrop on mobile */
+    }
+    
+    body:has(#chatSidebar.open) #mainContent {
+      padding-right: 0; /* No padding adjustment on mobile */
+    }
+  }
+
+  #chatSidebar .sidebar-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    color: white;
+    padding: 1rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  #chatSidebar .sidebar-header h5 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  #chatSidebar .sidebar-header .btn-close {
+    filter: invert(1);
+    opacity: 0.8;
+  }
+
+  #chatSidebar .sidebar-header .btn-close:hover {
+    opacity: 1;
+  }
+
+  #chatSidebar .sidebar-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    min-height: 0;
+  }
+
+  #chatSidebar .sidebar-footer {
+    flex-shrink: 0;
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid #e9ecef;
+  }
+
+  /* Chat Widget Button */
+  #chatWidgetBtn {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border: none !important;
+    cursor: pointer !important;
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 1039 !important;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  }
+
+  #chatWidgetBtn:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+    transform: scale(1.1) !important;
+  }
+
+  #chatWidgetBtn.sidebar-open {
+    right: 420px !important;
+  }
+
+  #chatMessages {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f8f9fa;
+  }
+
+  #chatMessages::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #chatMessages::-webkit-scrollbar-track {
+    background: #f8f9fa;
+  }
+
+  #chatMessages::-webkit-scrollbar-thumb {
+    background-color: #cbd5e0;
+    border-radius: 3px;
+  }
+
+  #chatMessages::-webkit-scrollbar-thumb:hover {
+    background-color: #a0aec0;
+  }
+
+  .chat-message {
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
   </style>
 </head>
@@ -227,11 +720,11 @@ footer {
   <div hidden id="model_id">{{model_id}}</div>
   
   <!-- Full Workspace -->
-  <main class="flex-grow-1 px-4 py-3">
-    <div class="d-flex flex-grow-1 gap-3 h-100">
+  <main class="flex-grow-1 px-4 py-3" id="mainContent" style="transition: padding-right 0.3s ease;">
+    <div class="d-flex flex-grow-1 gap-3 h-100" style="position: relative; width: 100%;">
       
       <!-- LEFT PANEL -->
-      <div class="d-flex flex-column gap-3" style="width: 50%; height: 100%; min-height: 0;">
+      <div class="d-flex flex-column gap-3" id="leftMainPanel" style="flex: 1 1 0; min-width: 0; height: 100%; min-height: 0;">
   
         <!-- Theme Overview Panel -->
         <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;">
@@ -287,7 +780,7 @@ footer {
       
   
       <!-- RIGHT PANEL (Documents Table) -->
-      <div class="panel d-flex flex-column flex-grow-1" style="width: 50%; overflow: hidden;">
+      <div class="panel d-flex flex-column flex-grow-1" id="documentsPanel" style="flex: 1 1 0; min-width: 0; overflow: hidden;">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="fw-bold mb-0">Documents</h6>
           <input type="text" id="docSearchInput" class="form-control form-control-sm w-50" placeholder="Search documents...">
@@ -344,6 +837,102 @@ footer {
   <footer>
     &copy; 2025 TOVA | AI-powered Topic Visualizer
   </footer>
+
+  <!-- Chat Sidebar Backdrop -->
+  <div id="chatSidebarBackdrop"></div>
+
+  <!-- Chat Sidebar -->
+  <div id="chatSidebar">
+    <div class="sidebar-header">
+      <div class="d-flex align-items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="me-2">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+          <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+          <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+        </svg>
+        <div>
+          <h5 class="mb-0">Chat with Model</h5>
+          <small class="opacity-75" id="chatModelName">Ask questions about topics and documents</small>
+        </div>
+      </div>
+      <button type="button" class="btn-close btn-close-white" id="chatSidebarClose" aria-label="Close"></button>
+    </div>
+    <div class="sidebar-body">
+      <div id="chatMessages">
+        <div class="chat-message mb-3">
+          <div class="d-flex align-items-start">
+            <div class="flex-shrink-0 me-2">
+              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                   style="width: 36px; height: 36px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                </svg>
+              </div>
+            </div>
+            <div class="flex-grow-1">
+              <div class="bg-white rounded p-3 shadow-sm">
+                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
+                <p class="mb-2">Hello! I can help you explore your topic model. You can ask me:</p>
+                <ul class="mb-0 small text-muted" style="padding-left: 20px;">
+                  <li>Questions about specific topics or themes</li>
+                  <li>To explain document classifications</li>
+                  <li>About relationships between topics</li>
+                  <li>To analyze document patterns</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <!-- Quick Action Buttons -->
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="What are the main topics in this model?">
+          📊 Main Topics
+        </button>
+        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Explain the most common theme">
+          💡 Top Theme
+        </button>
+        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Show me documents related to">
+          📄 Find Documents
+        </button>
+      </div>
+      <div class="input-group">
+        <input type="text" 
+               id="chatInput" 
+               class="form-control" 
+               placeholder="Ask about topics, documents, or themes..." 
+               autocomplete="off">
+        <button class="btn btn-primary" type="button" id="chatSendBtn" title="Send message">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-7.617L4.69 12.48l-1.655-2.597 9.782-1.91Z"/>
+          </svg>
+        </button>
+      </div>
+      <small class="text-muted d-block mt-2">
+        <span class="badge bg-info">Model Chat</span> Backend integration active
+      </small>
+    </div>
+  </div>
+
+  <!-- Model Chat Widget Button (Fixed Position) -->
+  <button id="chatWidgetBtn" 
+          class="btn btn-primary rounded-circle shadow-lg" 
+          style="position: fixed !important; bottom: 20px !important; right: 20px !important; width: 64px !important; height: 64px !important; z-index: 1039 !important; display: flex !important; align-items: center !important; justify-content: center !important; background-color: #0d6efd !important; border: none !important; padding: 0 !important;"
+          title="Chat with Model - Ask questions about topics and documents">
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="white" viewBox="0 0 24 24" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
+      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+      <circle cx="8" cy="10" r="1.5" fill="white"/>
+      <circle cx="12" cy="10" r="1.5" fill="white"/>
+      <circle cx="16" cy="10" r="1.5" fill="white"/>
+      <path d="M12 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="white" opacity="0.8"/>
+    </svg>
+  </button>
 
 
   <!-- Modal -->
@@ -523,10 +1112,40 @@ footer {
 
 <div class="modal-content" id="themeModalContent">
   <div class="modal fade" id="themeDetailModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title fw-bold" id="selectedThemeLabel">Theme Details</h5>
+          <div class="d-flex align-items-center flex-grow-1">
+            <h5 class="modal-title fw-bold mb-0 d-flex align-items-center" id="selectedThemeLabel">
+              <span id="themeTitleText">Theme Details</span>
+              <button type="button" 
+                      class="btn btn-link p-0 ms-2" 
+                      id="renameThemeBtn" 
+                      title="Rename this topic"
+                      style="display: inline-flex; align-items: center; text-decoration: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .146-.354l6-6z"/>
+                </svg>
+              </button>
+            </h5>
+            <div id="renameControls" style="display: none; align-items: center; gap: 0.5rem;">
+              <input type="text" 
+                     class="form-control form-control-sm" 
+                     id="renameThemeInput" 
+                     style="max-width: 250px;"
+                     placeholder="Enter new topic name...">
+              <button type="button" 
+                      class="btn btn-sm btn-success" 
+                      id="saveRenameBtn">
+                Save
+              </button>
+              <button type="button" 
+                      class="btn btn-sm btn-secondary" 
+                      id="cancelRenameBtn">
+                Cancel
+              </button>
+            </div>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
   
@@ -535,24 +1154,32 @@ footer {
             
             <!-- Left Column: Summary + Diagnostics + Similarity -->
             <div class="col-lg-6 d-flex">
-              <div id="leftPanel" class="panel d-flex flex-column p-3 bg-white border rounded w-100">
-                <p><strong>Summary:</strong></p>
-                <p id="selectedThemeSummary" class="small text-muted fst-italic">-</p>
+              <div id="leftPanel" class="panel d-flex flex-column p-4 bg-white border rounded w-100">
+                <!-- Summary Section -->
+                <div class="mb-4">
+                  <div class="section-header">Summary</div>
+                  <p id="selectedThemeSummary" class="small text-muted fst-italic mb-0">-</p>
+                </div>
         
-                <p><strong>Top Keywords:</strong></p>
-                <div id="selectedThemeKeywords" class="d-flex flex-wrap gap-1 small mb-3"></div>
+                <!-- Keywords Section -->
+                <div class="mb-4">
+                  <div class="section-header">Top Keywords</div>
+                  <div id="selectedThemeKeywords" class="d-flex flex-wrap gap-2 small"></div>
+                </div>
         
-                <div class="mt-3 small">
-                  <h6 class="fw-semibold">Theme Diagnostics</h6>
-                  <div id="themeDiagnosticsGrid" class="row row-cols-2 g-2">
+                <!-- Diagnostics Section -->
+                <div class="mb-4">
+                  <div class="section-header">Theme Diagnostics</div>
+                  <div id="themeDiagnosticsGrid" class="row row-cols-2 g-3">
                     <!-- JS will inject diagnostics here -->
                   </div>
                 </div>
         
-                <div class="mt-4">
-                  <p class="fw-semibold small text-muted">Similar Themes to Selected Theme</p>
+                <!-- Similarity Section -->
+                <div class="similarity-section">
+                  <div class="section-header">Similar Themes</div>
                   <canvas id="similarityDotPlot" height="150"></canvas>
-                  <p class="small text-muted mt-2">
+                  <p class="small text-muted mt-3 mb-0" style="font-size: 0.75rem; line-height: 1.5;">
                     <strong>Note:</strong> Higher similarity scores (closer to +1) indicate stronger co-occurrence and greater similarity between topics. Values near 0 suggest little or no relationship, while negative values indicate that the topics rarely appear together (less similar).
                   </p>
                 </div>
@@ -561,13 +1188,15 @@ footer {
         
             <!-- Right Column: Document Table -->
             <div class="col-lg-6 d-flex">
-              <div class="panel d-flex flex-column p-3 bg-white border rounded w-100">
-                <h6 class="fw-bold">Documents</h6>
-                <p class="small text-muted mb-2">Click on text to view full text information</p>
-                <input type="text" id="filteredSearchInput" class="form-control form-control-sm mb-2" placeholder="Search filtered documents..." />
+              <div class="panel d-flex flex-column p-4 bg-white border rounded w-100">
+                <div class="mb-3 flex-shrink-0">
+                  <div class="section-header">Documents</div>
+                  <p class="small text-muted mb-3" style="font-size: 0.8rem;">Click on any row to view full document details</p>
+                  <input type="text" id="filteredSearchInput" class="form-control form-control-sm mb-0" placeholder="🔍 Search documents..." />
+                </div>
         
-                <!-- Table wrapper with scroll height matched to left -->
-                <div id="filteredTableWrapper" style="max-height: 550px; overflow-y: auto;">
+                <!-- Table wrapper - flexible height, scrollable -->
+                <div id="filteredTableWrapper" class="flex-grow-1" style="min-height: 200px;">
                   <table class="table table-sm table-hover align-middle mb-0">
                     <thead id="filteredTableHead"></thead>
                     <tbody id="filteredTableBody"></tbody>
@@ -759,7 +1388,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const color = computeColor(i, dashboardV2.color);
       return {
         id: t.id,
-        label: t.label,
+        label: getThemeLabel(id),
         document_count: t.documentCount,
         color,
         keywords: (t.keywords || []).join(", ")
@@ -776,7 +1405,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const row = {
         id: d.id,
         text: d.text,
-        theme: t?.label || "—",
+        theme: t ? getThemeLabel(t.id) : "—",
         theme_id: t?.id ?? null,
         score: d.score
       };
@@ -790,7 +1419,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return themeIds().map(id => {
       const t = themeById(id);
       const d = diagByThemeId(id) || {};
-      return { theme: t.label, ...d };
+      return { theme: getThemeLabel(id), ...d };
     });
   }
 
@@ -798,7 +1427,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return themeIds().map((id) => {
       const t = themeById(id);
       const c = coordByThemeId(id) || { x: 0, y: 0, size: t.documentCount || 1 };
-      return { id: Number(id), label: t.label, x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
+      return { id: Number(id), label: getThemeLabel(id), x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
     });
   }
 
@@ -1319,84 +1948,324 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ---------------------------
-  // Theme modal
+  // Theme Rename Functionality
   // ---------------------------
+  let themeRenames = {}; // Store renamed themes in memory only: { themeId: newLabel }
+  
+  // Load saved renames from backend API (called on page load)
+  async function loadThemeRenames() {
+    const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+    if (!modelId) {
+      themeRenames = {};
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/models/${modelId}/topics/renames`);
+      if (response.ok) {
+        const data = await response.json();
+        // Backend returns { topic_labels: { "1": "New Name", "2": "Another Name" } }
+        themeRenames = data.topic_labels || {};
+        console.log("Loaded topic renames from backend:", themeRenames);
+      } else {
+        // No renames found or error - use empty object
+        themeRenames = {};
+      }
+    } catch (e) {
+      console.error("Failed to load theme renames from backend:", e);
+      themeRenames = {};
+    }
+  }
+  
+  // Get theme label (with rename if exists)
+  function getThemeLabel(themeId) {
+    const id = String(themeId);
+    if (themeRenames[id]) {
+      return themeRenames[id];
+    }
+    const t = themeById(themeId);
+    return t?.label || `Theme ${themeId}`;
+  }
+  
+  // Update theme label everywhere
+  function updateThemeLabelInUI(themeId, newLabel) {
+    const id = String(themeId);
+    
+    // Update in dashboardV2
+    if (dashboardV2?.themes?.byId?.[id]) {
+      dashboardV2.themes.byId[id].label = newLabel;
+    }
+    
+    // Update charts
+    if (themeChartInstance) {
+      const chartData = themeChartInstance.data;
+      const themeIndex = chartData.ids?.indexOf(Number(id));
+      if (themeIndex !== undefined && themeIndex >= 0) {
+        chartData.labels[themeIndex] = newLabel;
+        themeChartInstance.update();
+      }
+    }
+    
+    // Update scatter chart
+    if (scatterChartInstance) {
+      // Scatter chart labels are drawn manually, will update on next render
+      plotScatterChart(coordinatesForScatter());
+    }
+    
+    // Update document table
+    docsArray = docsForTable();
+    renderDocumentTable(docsArray);
+    populateThemeFilter(docsArray);
+    // Clear theme docs cache when documents change
+    themeDocsCache.clear();
+    
+    // Update diagnostics table
+    populateThemeDiagnosticsTable(diagnosticsForTable());
+    
+    // Update document detail modal if it's currently open and showing this theme
+    const docDetailModal = document.getElementById("docDetailModal");
+    if (docDetailModal && docDetailModal.classList.contains("show")) {
+      const modalThemeEl = document.getElementById("modalTheme");
+      if (modalThemeEl) {
+        // Check if the current document's theme matches the renamed theme
+        const currentThemeId = modalThemeEl.dataset.themeId;
+        if (currentThemeId && String(currentThemeId) === id) {
+          modalThemeEl.textContent = newLabel;
+        }
+      }
+      
+      // Update the chart in document detail modal - refresh all labels with renamed ones
+      if (window.lastDocInferenceData) {
+        const updatedData = window.lastDocInferenceData.map(theme => ({
+          ...theme,
+          label: theme.theme_id != null ? getThemeLabel(theme.theme_id) : theme.label
+        }));
+        renderDocInformationChart(updatedData, "docInferenceChart");
+      }
+    }
+  }
+
+
+  // ---------------------------
+  // Theme modal - Optimized
+  // ---------------------------
+  // Cache for filtered documents by theme
+  const themeDocsCache = new Map();
+  
+  // Cache DOM element references
+  let modalElementsCache = null;
+  function getModalElements() {
+    if (!modalElementsCache) {
+      modalElementsCache = {
+        modalContent: document.getElementById("themeModalContent"),
+        modalTitle: document.getElementById("selectedThemeLabel"),
+        themeTitleText: document.getElementById("themeTitleText"),
+        renameBtn: document.getElementById("renameThemeBtn"),
+        renameControls: document.getElementById("renameControls"),
+        renameInput: document.getElementById("renameThemeInput"),
+        saveBtn: document.getElementById("saveRenameBtn"),
+        cancelBtn: document.getElementById("cancelRenameBtn"),
+        summaryEl: document.getElementById("selectedThemeSummary"),
+        diagContainer: document.getElementById("themeDiagnosticsGrid"),
+        kwContainer: document.getElementById("selectedThemeKeywords"),
+        modalEl: document.getElementById("themeDetailModal"),
+        panels: document.querySelectorAll("#themeDetailModal .panel")
+      };
+    }
+    return modalElementsCache;
+  }
+
+  // Setup rename handlers once (using event delegation)
+  let renameHandlersSetup = false;
+  let currentThemeContext = { themeId: null, currentLabel: null };
+  
+  function setupRenameHandlers() {
+    if (renameHandlersSetup) return;
+    renameHandlersSetup = true;
+    
+    const els = getModalElements();
+    if (!els.renameBtn || !els.renameInput || !els.saveBtn || !els.cancelBtn) return;
+    
+    els.renameBtn.addEventListener("click", () => {
+      els.renameBtn.style.display = "none";
+      els.renameControls.style.display = "flex";
+      els.renameInput.value = currentThemeContext.currentLabel;
+      els.renameInput.focus();
+      els.renameInput.select();
+    });
+    
+    const saveRename = async () => {
+      const newLabel = els.renameInput.value.trim();
+      const { themeId, currentLabel } = currentThemeContext;
+      if (newLabel && newLabel !== currentLabel && themeId !== null) {
+        // Update in-memory immediately for UI responsiveness
+        themeRenames[String(themeId)] = newLabel;
+        updateThemeLabelInUI(themeId, newLabel);
+        
+        // Update modal title text and context
+        if (els.themeTitleText) els.themeTitleText.textContent = newLabel;
+        currentThemeContext.currentLabel = newLabel;
+        
+        // Send to backend API
+        const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+        if (modelId) {
+          try {
+            const response = await fetch(`/api/models/${modelId}/topics/${themeId}/rename`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ new_label: newLabel })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              console.log("Topic renamed successfully:", result);
+            } else {
+              console.error("Failed to save topic rename to backend:", await response.text());
+            }
+          } catch (error) {
+            console.error("Error saving topic rename to backend:", error);
+          }
+        }
+      }
+      els.renameBtn.style.display = "inline-flex";
+      els.renameControls.style.display = "none";
+    };
+    
+    els.saveBtn.addEventListener("click", saveRename);
+    els.renameInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") saveRename();
+      if (e.key === "Escape") {
+        els.renameBtn.style.display = "inline-flex";
+        els.renameControls.style.display = "none";
+      }
+    });
+    
+    els.cancelBtn.addEventListener("click", () => {
+      els.renameBtn.style.display = "inline-flex";
+      els.renameControls.style.display = "none";
+    });
+  }
+
   function openThemeModal(themeId, themeColor) {
     const t = themeById(themeId);
     if (!t) return;
 
-    const modalContent = document.getElementById("themeModalContent");
-    if (modalContent) modalContent.style.backgroundColor = lightBgFromColor(themeColor);
+    const els = getModalElements();
+    setupRenameHandlers();
+    
+    const currentLabel = getThemeLabel(themeId);
+    
+    // Update cached theme context for rename handlers
+    currentThemeContext.themeId = themeId;
+    currentThemeContext.currentLabel = currentLabel;
+    
+    if (els.modalContent) {
+      els.modalContent.style.backgroundColor = lightBgFromColor(themeColor);
+    }
+    
+    if (els.modalTitle) {
+      els.modalTitle.style.color = themeColor;
+      els.modalTitle.style.borderLeft = `6px solid ${themeColor}`;
+      els.modalTitle.style.paddingLeft = "0.5rem";
+    }
+    
+    if (els.themeTitleText) {
+      els.themeTitleText.textContent = currentLabel;
+    }
+    
+    // Show rename button, hide input controls
+    if (els.renameBtn) els.renameBtn.style.display = "inline-flex";
+    if (els.renameControls) els.renameControls.style.display = "none";
 
-    const modalTitle = document.getElementById("selectedThemeLabel");
-    if (modalTitle) {
-      modalTitle.style.color = themeColor;
-      modalTitle.style.borderLeft = `6px solid ${themeColor}`;
-      modalTitle.style.paddingLeft = "0.5rem";
-      modalTitle.textContent = t.label;
+    // Update panel borders (batch operation)
+    if (els.panels) {
+      els.panels.forEach(panel => {
+        panel.style.borderColor = themeColor;
+        panel.style.boxShadow = `0 0 0 1px ${themeColor}`;
+      });
     }
 
-    document.querySelectorAll("#themeDetailModal .panel").forEach(panel => {
-      panel.style.borderColor = themeColor;
-      panel.style.boxShadow = `0 0 0 1px ${themeColor}`;
-    });
+    // Summary
+    if (els.summaryEl) {
+      els.summaryEl.textContent = t.summary || "—";
+    }
 
-    const summaryEl = document.getElementById("selectedThemeSummary");
-    if (summaryEl) summaryEl.textContent = t.summary || "—";
-
-    // dynamic diagnostics grid
+    // Diagnostics grid - optimized with DocumentFragment
     const d = diagByThemeId(themeId) || {};
-    const diagContainer = document.getElementById("themeDiagnosticsGrid");
-    if (diagContainer) {
-      diagContainer.classList.add("row", "row-cols-2", "g-2");
-      diagContainer.innerHTML = "";
-
+    if (els.diagContainer) {
+      els.diagContainer.classList.add("row", "row-cols-2", "g-2");
+      
+      const fragment = document.createDocumentFragment();
       const keys = getActiveDiagnosticKeys();
+      let hasItems = false;
+      
       keys.forEach(k => {
         const v = d[k];
         if (v == null || (typeof v === "number" && Number.isNaN(v))) return;
+        hasItems = true;
         const div = document.createElement("div");
         div.className = "col";
-        div.innerHTML = `
-          <div class="border rounded p-2 bg-light-subtle h-100 small">
-            <strong>${prettyLabel(k)}:</strong>
-            <span class="text-muted">${fmtValue(k, v)}</span>
-          </div>`;
-        diagContainer.appendChild(div);
+        const cardDiv = document.createElement("div");
+        cardDiv.className = "border rounded p-3 bg-light-subtle h-100 small";
+        cardDiv.style.borderColor = themeColor;
+        cardDiv.style.backgroundColor = lightBgFromColor(themeColor);
+        cardDiv.innerHTML = `
+          <strong>${prettyLabel(k)}</strong>
+          <div class="text-muted mt-1" style="font-size: 1rem; font-weight: 600;">${fmtValue(k, v)}</div>`;
+        div.appendChild(cardDiv);
+        fragment.appendChild(div);
       });
 
-      if (!diagContainer.children.length) {
-        diagContainer.innerHTML = `<div class="col-12"><div class="border rounded p-2 bg-light-subtle small">No diagnostics available.</div></div>`;
+      els.diagContainer.innerHTML = "";
+      if (hasItems) {
+        els.diagContainer.appendChild(fragment);
+      } else {
+        els.diagContainer.innerHTML = `<div class="col-12"><div class="border rounded p-2 bg-light-subtle small">No diagnostics available.</div></div>`;
       }
     }
 
-    // keywords
-    const kwContainer = document.getElementById("selectedThemeKeywords");
-    if (kwContainer) {
-      kwContainer.innerHTML = "";
+    // Keywords - optimized with DocumentFragment and enhanced styling
+    if (els.kwContainer) {
+      const fragment = document.createDocumentFragment();
       (t.keywords || []).forEach(k => {
         const badge = document.createElement("span");
-        badge.className = "badge bg-light text-dark border me-1 mb-1";
+        badge.className = "badge bg-light text-dark border";
+        badge.style.borderColor = themeColor;
+        badge.style.color = themeColor;
+        badge.style.backgroundColor = lightBgFromColor(themeColor);
         badge.textContent = k;
-        kwContainer.appendChild(badge);
+        fragment.appendChild(badge);
       });
+      els.kwContainer.innerHTML = "";
+      els.kwContainer.appendChild(fragment);
+    }
+    
+    // Update summary border color
+    if (els.summaryEl) {
+      els.summaryEl.style.borderLeftColor = themeColor;
     }
 
-    // documents for this theme
-    const themedDocs = docsArray.filter(d => d.theme === t.label);
+    // Documents for this theme - use cache
+    const themeLabel = t.label;
+    let themedDocs = themeDocsCache.get(themeLabel);
+    if (!themedDocs) {
+      themedDocs = docsArray.filter(d => d.theme === themeLabel);
+      themeDocsCache.set(themeLabel, themedDocs);
+    }
     renderFilteredTable(themedDocs);
 
-    // similarities
+    // Similarities
     renderThemeSimilarityChart(similaritiesForTheme(themeId));
 
-    const modalEl = document.getElementById("themeDetailModal");
-    if (modalEl) bringModalToFront(modalEl);
+    if (els.modalEl) bringModalToFront(els.modalEl);
   }
 
   function renderFilteredTable(filters = []) {
     const thead = document.getElementById("filteredTableHead");
     const tbody = document.getElementById("filteredTableBody");
     if (!thead || !tbody) return;
+    
+    // Clear existing content
     thead.innerHTML = "";
     tbody.innerHTML = "";
 
@@ -1410,6 +2279,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasRationale = filters.some(f => f.hasOwnProperty("rationale"));
     const columns = hasRationale ? [...baseColumns, "rationale"] : baseColumns;
 
+    // Build header
     const headerRow = document.createElement("tr");
     headerRow.classList.add("small");
     columns.forEach(col => {
@@ -1420,27 +2290,33 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     thead.appendChild(headerRow);
 
-    filters
-      .slice()
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-      .forEach(filter => {
-        const row = document.createElement("tr");
-        row.classList.add("small");
-        row.dataset.search = [filter.id, filter.text, String(filter.score ?? ""), filter.rationale ?? ""].join(" ").toLowerCase();
-        row.addEventListener("click", () => showDocumentInfoModal?.(filter));
+    // Sort once before rendering
+    const sortedFilters = filters.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    
+    // Use DocumentFragment for batch DOM operations
+    const fragment = document.createDocumentFragment();
+    
+    sortedFilters.forEach(filter => {
+      const row = document.createElement("tr");
+      row.classList.add("small");
+      row.dataset.search = [filter.id, filter.text, String(filter.score ?? ""), filter.rationale ?? ""].join(" ").toLowerCase();
+      row.addEventListener("click", () => showDocumentInfoModal?.(filter));
 
-        columns.forEach(col => {
-          const td = document.createElement("td");
-          td.classList.add("small", "truncate-cell");
-          let value = filter[col];
-          if (col === "score" && typeof value === "number") value = value.toFixed(3);
-          td.textContent = value ?? "—";
-          td.title = td.textContent;
-          row.appendChild(td);
-        });
-
-        tbody.appendChild(row);
+      columns.forEach(col => {
+        const td = document.createElement("td");
+        td.classList.add("small", "truncate-cell");
+        let value = filter[col];
+        if (col === "score" && typeof value === "number") value = value.toFixed(3);
+        td.textContent = value ?? "—";
+        td.title = td.textContent;
+        row.appendChild(td);
       });
+
+      fragment.appendChild(row);
+    });
+    
+    // Single DOM operation
+    tbody.appendChild(fragment);
   }
 
 
@@ -1467,7 +2343,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const fullTextEl = document.getElementById("modalFullText");
     const themeEl    = document.getElementById("modalTheme");
-    if (fullTextEl) fullTextEl.textContent = doc.text || "—";
+    if (fullTextEl) fullTextEl.textContent = result.text || doc.text || "—";
     if (themeEl)    themeEl.textContent    = result.theme || "—";
 
     // theme color
@@ -1638,6 +2514,10 @@ document.addEventListener("DOMContentLoaded", () => {
   (async () => {
     try {
       const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      
+      // Load renames from backend (will reset to backend state on each reload)
+      await loadThemeRenames();
+      
       dashboardV2 = await fetchDashboard(modelId);
 
       const themeArray = themesForChart();
@@ -1825,7 +2705,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   const t = safeThemeById(tid);
                   return {
                     theme_id: Number(tid),
-                    label: t?.label || `Theme ${tid}`,
+                    label: getThemeLabel(tid),
                     score: typeof score === "number" ? score : Number(score) || 0,
                     keywords: Array.isArray(t?.keywords) ? t.keywords.join(", ") : (t?.keywords || "")
                   };
@@ -2174,7 +3054,252 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Expose for other inline handlers
   window.openThemeModal = openThemeModal;
+
+  // ---------------------------
+  // Chat Interface Functionality
+  // ---------------------------
+  (function initChatInterface() {
+    const chatSidebar = document.getElementById("chatSidebar");
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const chatSendBtn = document.getElementById("chatSendBtn");
+    const chatWidgetBtn = document.getElementById("chatWidgetBtn");
+    const chatSidebarClose = document.getElementById("chatSidebarClose");
+
+    // Ensure chat widget button is visible
+    if (chatWidgetBtn) {
+      chatWidgetBtn.style.display = "flex";
+      chatWidgetBtn.style.visibility = "visible";
+      chatWidgetBtn.style.opacity = "1";
+    }
+
+    if (!chatSidebar || !chatMessages || !chatInput || !chatSendBtn) {
+      console.error("Chat interface elements not found");
+      return;
+    }
+
+    // Toggle sidebar
+    const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+    const mainContent = document.getElementById("mainContent");
+    
+    function toggleSidebar() {
+      const isOpen = chatSidebar.classList.contains("open");
+      if (isOpen) {
+        chatSidebar.classList.remove("open");
+        if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove("show");
+        chatWidgetBtn.classList.remove("sidebar-open");
+        // Reset main content padding
+        if (mainContent) {
+          mainContent.style.paddingRight = "";
+        }
+      } else {
+        chatSidebar.classList.add("open");
+        // Show backdrop only on mobile
+        if (window.innerWidth <= 991.98 && chatSidebarBackdrop) {
+          chatSidebarBackdrop.classList.add("show");
+        }
+        chatWidgetBtn.classList.add("sidebar-open");
+        // Adjust main content padding to make room for sidebar (desktop only)
+        if (window.innerWidth > 991.98 && mainContent) {
+          mainContent.style.paddingRight = "400px";
+        }
+        chatInput.focus();
+        updateChatModelName();
+      }
+    }
+
+    // Handle window resize
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const isOpen = chatSidebar.classList.contains("open");
+        if (isOpen) {
+          if (window.innerWidth <= 991.98) {
+            // Mobile: show backdrop, no padding
+            if (chatSidebarBackdrop) chatSidebarBackdrop.classList.add("show");
+            if (mainContent) mainContent.style.paddingRight = "";
+          } else {
+            // Desktop: hide backdrop, add padding
+            if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove("show");
+            if (mainContent) mainContent.style.paddingRight = "400px";
+          }
+        }
+      }, 250);
+    });
+
+    // Event listeners for toggle
+    if (chatWidgetBtn) {
+      chatWidgetBtn.addEventListener("click", toggleSidebar);
+    }
+    if (chatSidebarClose) {
+      chatSidebarClose.addEventListener("click", toggleSidebar);
+    }
+    // Close sidebar when clicking backdrop
+    if (chatSidebarBackdrop) {
+      chatSidebarBackdrop.addEventListener("click", toggleSidebar);
+    }
+
+    // Function to add a message to the chat
+    function addMessage(text, isUser = false) {
+      const messageDiv = document.createElement("div");
+      messageDiv.className = "chat-message mb-3";
+      
+      if (isUser) {
+        messageDiv.innerHTML = `
+          <div class="d-flex align-items-start justify-content-end">
+            <div class="flex-grow-1 text-end">
+              <div class="bg-primary text-white rounded p-2 shadow-sm d-inline-block" style="max-width: 75%;">
+                <small class="d-block mb-1 opacity-75">You</small>
+                <p class="mb-0">${escapeHtml(text)}</p>
+              </div>
+            </div>
+            <div class="flex-shrink-0 ms-2">
+              <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                   style="width: 36px; height: 36px; font-size: 16px;">
+                👤
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        messageDiv.innerHTML = `
+          <div class="d-flex align-items-start">
+            <div class="flex-shrink-0 me-2">
+              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                   style="width: 36px; height: 36px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                </svg>
+              </div>
+            </div>
+            <div class="flex-grow-1">
+              <div class="bg-white rounded p-3 shadow-sm">
+                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
+                <p class="mb-0">${escapeHtml(text)}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Simple HTML escape function
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Function to send a message
+    async function sendMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      // Add user message to chat
+      addMessage(message, true);
+      chatInput.value = "";
+
+      try {
+        const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: message,
+            model_id: modelId,
+            context: {
+              themes: dashboardV2?.themes?.allIds?.map(id => {
+                const t = themeById(id);
+                return { id: t?.id, label: getThemeLabel(id), keywords: t?.keywords || [] };
+              }) || [],
+              document_count: dashboardV2?.documents?.allIds?.length || 0
+            }
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Chat API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        addMessage(data.response || "I'm sorry, I couldn't generate a response.");
+      } catch (error) {
+        console.error("Chat error:", error);
+        addMessage("Sorry, I encountered an error. Please try again.");
+      }
+    }
+
+    // Event listeners
+    chatSendBtn.addEventListener("click", sendMessage);
+    chatInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    // Quick action buttons
+    document.querySelectorAll(".quick-action-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const prompt = btn.getAttribute("data-prompt");
+        if (prompt) {
+          chatInput.value = prompt;
+          chatInput.focus();
+          // Optionally auto-send or let user edit first
+        }
+      });
+    });
+
+    // Function to update chat sidebar model name
+    function updateChatModelName() {
+      const modelId = document.getElementById("model_id")?.textContent?.trim();
+      const modelNameEl = document.getElementById("chatModelName");
+      if (!modelNameEl) return;
+      
+      // Get model name from dashboard data
+      let modelName = "Unknown Model";
+      if (dashboardV2) {
+        if (dashboardV2.modelInfo && dashboardV2.modelInfo.model_name) {
+          modelName = dashboardV2.modelInfo.model_name;
+        } else if (dashboardV2.modelInfos && typeof dashboardV2.modelInfos === "object") {
+          const keys = Object.keys(dashboardV2.modelInfos);
+          if (keys.length > 0) {
+            const firstModel = dashboardV2.modelInfos[keys[0]];
+            if (firstModel && firstModel.model_name) {
+              modelName = firstModel.model_name;
+            }
+          }
+        }
+      }
+      
+      if (modelId) {
+        modelNameEl.textContent = `${modelName} (${modelId})`;
+      } else {
+        modelNameEl.textContent = modelName;
+      }
+    }
+    window.updateChatModelName = updateChatModelName;
+
+    // Update model name when sidebar opens
+    const observer = new MutationObserver(() => {
+      if (chatSidebar.classList.contains("open")) {
+        chatInput.focus();
+        updateChatModelName();
+      }
+    });
+    observer.observe(chatSidebar, { attributes: true, attributeFilter: ["class"] });
+
+    // Initial model name update
+    updateChatModelName();
+  })();
 });
 </script>
+
 </body>
 </html>

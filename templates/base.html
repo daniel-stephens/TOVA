@@ -223,10 +223,52 @@
               <div class="tab-pane fade show active" id="tm-general" role="tabpanel" aria-labelledby="tm-general-tab" tabindex="0">
                 <h6 class="border-bottom pb-2 mb-3">Model Output Filters</h6>
                 <div class="row">
-                  <div class="col-md-4 mb-3"><label for="tm-general-n_similar_tpcs" class="form-label">n_similar_tpcs</label><input type="number" class="form-control" id="tm-general-n_similar_tpcs" name="topic_modeling.general.n_similar_tpcs" value="5"></div>
-                  <div class="col-md-4 mb-3"><label for="tm-general-similar_tpcs_thr" class="form-label">similar_tpcs_thr (Threshold)</label><input type="text" class="form-control" id="tm-general-similar_tpcs_thr" name="topic_modeling.general.similar_tpcs_thr" value="1e-3"></div>
-                  <div class="col-md-4 mb-3"><label for="tm-general-n_top_docs_per_topic" class="form-label">n_top_docs_per_topic</label><input type="number" class="form-control" id="tm-general-n_top_docs_per_topic" name="topic_modeling.general.n_top_docs_per_topic" value="20"></div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-n_similar_tpcs" class="form-label">n_similar_tpcs</label>
+                    <input type="number" class="form-control" id="tm-general-n_similar_tpcs" name="topic_modeling.general.n_similar_tpcs" value="5">
+                    <div class="form-text small">Number of similar topics to find.</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-similar_tpcs_thr" class="form-label">similar_tpcs_thr (Threshold)</label>
+                    <input type="text" class="form-control" id="tm-general-similar_tpcs_thr" name="topic_modeling.general.similar_tpcs_thr" value="1e-3">
+                    <div class="form-text small">Similarity threshold for topic comparison.</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-n_top_docs_per_topic" class="form-label">n_top_docs_per_topic</label>
+                    <input type="number" class="form-control" id="tm-general-n_top_docs_per_topic" name="topic_modeling.general.n_top_docs_per_topic" value="20">
+                    <div class="form-text small">Top documents to show per topic.</div>
+                  </div>
                 </div>
+                <hr class="my-3">
+                <h6 class="mb-3">Default LLM Provider Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+                <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-info-circle mt-1"></i>
+                  <div class="small">
+                    These are default LLM settings used when no provider is specified. Configure the provider details in the <strong>LLM/Prompter</strong> tab above.
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-llm_provider" class="form-label">LLM Provider</label>
+                    <select class="form-select" id="tm-general-llm_provider" name="topic_modeling.general.llm_provider">
+                      <option value="ollama">Ollama</option>
+                      <option value="gpt">GPT (OpenAI)</option>
+                      <option value="llama_cpp">Llama.cpp</option>
+                    </select>
+                    <div class="form-text small">Default provider for LLM operations.</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-llm_model_type" class="form-label">LLM Model</label>
+                    <input type="text" class="form-control" id="tm-general-llm_model_type" name="topic_modeling.general.llm_model_type" value="gemma3:4b" placeholder="e.g., qwen:32b, gpt-4o">
+                    <div class="form-text small">Model name (must match available models for selected provider).</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-general-llm_server" class="form-label">LLM Server URL</label>
+                    <input type="url" class="form-control" id="tm-general-llm_server" name="topic_modeling.general.llm_server" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
+                    <div class="form-text small">Server URL (only needed for Ollama/Llama.cpp).</div>
+                  </div>
+                </div>
+                <hr class="my-3">
                 <div class="mb-3">
                   <label for="tm-general-not_include" class="form-label">not_include (Variables to exclude from saving)</label>
                   <textarea class="form-control form-control-sm" id="tm-general-not_include" name="topic_modeling.general.not_include" rows="3" placeholder="Comma-separated list (e.g., train_data, df, embeddings, ...)">train_data, df, embeddings, ids_corpus, _logger, _embedding_model, _umap_model, _hdbscan_model, _vectorizer_model, _ctfidf_model, _representation_model, _model</textarea>
@@ -237,30 +279,90 @@
               <div class="tab-pane fade" id="tm-traditional" role="tabpanel" aria-labelledby="tm-traditional-tab" tabindex="0">
                 <h6 class="border-bottom pb-2 mb-3">Traditional Topic Modeling (LDA, NMF, etc.)</h6>
                 <div class="row">
-                  <div class="col-md-4 mb-3"><label for="tm-trad-num_topics" class="form-label">num_topics</label><input type="number" class="form-control" id="tm-trad-num_topics" name="topic_modeling.traditional.num_topics" value="15"></div>
-                  <div class="col-md-4 mb-3"><label for="tm-trad-thetas_thr" class="form-label">thetas_thr</label><input type="text" class="form-control" id="tm-trad-thetas_thr" name="topic_modeling.traditional.thetas_thr" value="3e-3"></div>
-                  <div class="col-md-4 mb-3"><label for="tm-trad-topn" class="form-label">Top N Words</label><input type="number" class="form-control" id="tm-trad-topn" name="topic_modeling.traditional.topn" value="15"></div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-trad-num_topics" class="form-label">num_topics</label>
+                    <input type="number" class="form-control" id="tm-trad-num_topics" name="topic_modeling.traditional.num_topics" value="15" min="2">
+                    <div class="form-text small">Number of topics to extract.</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-trad-thetas_thr" class="form-label">thetas_thr</label>
+                    <input type="text" class="form-control" id="tm-trad-thetas_thr" name="topic_modeling.traditional.thetas_thr" value="3e-3">
+                    <div class="form-text small">Threshold for document-topic probabilities.</div>
+                  </div>
+                  <div class="col-md-4 mb-3">
+                    <label for="tm-trad-topn" class="form-label">Top N Words</label>
+                    <input type="number" class="form-control" id="tm-trad-topn" name="topic_modeling.traditional.topn" value="15" min="1">
+                    <div class="form-text small">Number of top words per topic.</div>
+                  </div>
                 </div>
                 <hr class="my-3">
-                <h6 class="mb-3">LLM Post-Processing</h6>
-                <div class="row">
-                  <div class="col-md-6 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_labeller" name="topic_modeling.traditional.do_labeller" checked><label class="form-check-label ms-2" for="tm-trad-do_labeller">Enable LLM Labeller</label></div>
-                  <div class="col-md-6 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_summarizer" name="topic_modeling.traditional.do_summarizer" checked><label class="form-check-label ms-2" for="tm-trad-do_summarizer">Enable LLM Summarizer</label></div>
+                <h6 class="mb-3">LLM Post-Processing <span class="badge bg-secondary ms-2">Optional</span></h6>
+                <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-info-circle mt-1"></i>
+                  <div class="small">
+                    <strong>Optional Enhancement:</strong> You can use LLMs to automatically label and summarize topics after training. This requires LLM configuration in the <strong>LLM/Prompter</strong> tab. If disabled, topics will use word-based labels.
+                  </div>
                 </div>
                 <div class="row">
-                  <div class="col-md-6 mb-3"><label for="tm-trad-llm_model_type" class="form-label">LLM Model</label><input type="text" class="form-control" id="tm-trad-llm_model_type" name="topic_modeling.traditional.llm_model_type" value="qwen:32b"></div>
-                  <div class="col-md-6 mb-3"><label for="tm-trad-llm_server" class="form-label">LLM Server URL</label><input type="url" class="form-control" id="tm-trad-llm_server" name="topic_modeling.traditional.llm_server" value="http://kumo01.tsc.uc3m.es:11434"></div>
+                  <div class="col-md-6 mb-3 form-check form-switch p-3 bg-white rounded border">
+                    <input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_labeller" name="topic_modeling.traditional.do_labeller" checked>
+                    <label class="form-check-label ms-2" for="tm-trad-do_labeller">
+                      <strong>Enable LLM Labeller</strong>
+                      <div class="form-text small">Generate descriptive labels for topics using LLM.</div>
+                    </label>
+                  </div>
+                  <div class="col-md-6 mb-3 form-check form-switch p-3 bg-white rounded border">
+                    <input class="form-check-input" type="checkbox" role="switch" id="tm-trad-do_summarizer" name="topic_modeling.traditional.do_summarizer" checked>
+                    <label class="form-check-label ms-2" for="tm-trad-do_summarizer">
+                      <strong>Enable LLM Summarizer</strong>
+                      <div class="form-text small">Generate summaries for each topic using LLM.</div>
+                    </label>
+                  </div>
                 </div>
-                <div class="row">
-                  <div class="col-md-6 mb-3"><label for="tm-trad-labeller_prompt" class="form-label">Labeller Prompt Path</label><input type="text" class="form-control" id="tm-trad-labeller_prompt" name="topic_modeling.traditional.labeller_model_path" value="src/prompter/prompts/labelling_dft.txt"></div>
-                  <div class="col-md-6 mb-3"><label for="tm-trad-summarizer_prompt" class="form-label">Summarizer Prompt Path</label><input type="text" class="form-control" id="tm-trad-summarizer_prompt" name="topic_modeling.traditional.summarizer_prompt" value="src/prompter/prompts/summarization_dft.txt"></div>
+                <div class="row" id="tm-trad-llm-settings">
+                  <div class="col-md-6 mb-3">
+                    <label for="tm-trad-llm_model_type" class="form-label">LLM Model</label>
+                    <input type="text" class="form-control" id="tm-trad-llm_model_type" name="topic_modeling.traditional.llm_model_type" value="qwen:32b" placeholder="e.g., qwen:32b, gpt-4o">
+                    <div class="form-text small">Model name (must be available in your LLM provider).</div>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="tm-trad-llm_server" class="form-label">LLM Server URL</label>
+                    <input type="url" class="form-control" id="tm-trad-llm_server" name="topic_modeling.traditional.llm_server" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
+                    <div class="form-text small">Server URL (only needed for Ollama/Llama.cpp providers).</div>
+                  </div>
+                </div>
+                <div class="row" id="tm-trad-prompt-settings">
+                  <div class="col-md-6 mb-3">
+                    <label for="tm-trad-labeller_prompt" class="form-label">Labeller Prompt Path</label>
+                    <input type="text" class="form-control" id="tm-trad-labeller_prompt" name="topic_modeling.traditional.labeller_prompt" value="src/tova/prompter/prompts/labelling_dft.txt">
+                    <div class="form-text small">Path to prompt template for topic labeling.</div>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="tm-trad-summarizer_prompt" class="form-label">Summarizer Prompt Path</label>
+                    <input type="text" class="form-control" id="tm-trad-summarizer_prompt" name="topic_modeling.traditional.summarizer_prompt" value="src/tova/prompter/prompts/summarization_dft.txt">
+                    <div class="form-text small">Path to prompt template for topic summarization.</div>
+                  </div>
                 </div>
               </div>
 
               <div class="tab-pane fade" id="tm-llm-based" role="tabpanel" aria-labelledby="tm-llm-based-tab" tabindex="0">
                 <h6 class="border-bottom pb-2 mb-3">Settings for LLM-Based Topic Modeling</h6>
-                <div class="mb-3"><label for="tm-llm-based-llm" class="form-label">Default LLM Model</label><input type="text" class="form-control" id="tm-llm-based-llm" name="topic_modeling.llm-based.llm" value="qwen:32b"></div>
-                <div class="mb-3"><label for="tm-llm-based-llm_server" class="form-label">LLM Server URL</label><input type="url" class="form-control" id="tm-llm-based-llm_server" name="topic_modeling.llm-based.llm_server" value="http://kumo01.tsc.uc3m.es:11434"></div>
+                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-exclamation-triangle mt-1"></i>
+                  <div class="small">
+                    <strong>LLM Required:</strong> LLM-based topic modeling requires a fully configured LLM provider. Make sure you've set up your LLM provider in the <strong>LLM/Prompter</strong> tab before using these models.
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="tm-llm-based-llm" class="form-label">Default LLM Model <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="tm-llm-based-llm" name="topic_modeling.llm-based.llm" value="qwen:32b" placeholder="e.g., qwen:32b, gpt-4o">
+                  <div class="form-text">Model name that matches your configured LLM provider.</div>
+                </div>
+                <div class="mb-3">
+                  <label for="tm-llm-based-llm_server" class="form-label">LLM Server URL</label>
+                  <input type="url" class="form-control" id="tm-llm-based-llm_server" name="topic_modeling.llm-based.llm_server" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
+                  <div class="form-text">Server URL (only needed for Ollama/Llama.cpp providers). Not needed for OpenAI GPT.</div>
+                </div>
               </div>
               
               <div class="tab-pane fade" id="tm-bertopic" role="tabpanel" aria-labelledby="tm-bertopic-tab" tabindex="0">
@@ -361,6 +463,14 @@
           </div>
 
           <div class="tab-pane fade" id="llm-pane" role="tabpanel" aria-labelledby="llm-tab" tabindex="0">
+            <div class="alert alert-info d-flex align-items-start gap-2 mb-4" role="alert">
+              <i class="bi bi-info-circle mt-1"></i>
+              <div class="flex-grow-1">
+                <strong>LLM Configuration is Optional</strong>
+                <p class="mb-0 small">You only need to configure LLM settings if you plan to use LLM-based features like topic labeling, summarization, or LLM-based topic modeling. If you're using traditional topic models without LLM post-processing, you can skip this section.</p>
+              </div>
+            </div>
+
             <h4 class="mb-3">LLM Generation Parameters & Providers</h4>
             
             <ul class="nav nav-tabs nav-justified mb-3" id="llmSubTabs" role="tablist">
@@ -373,35 +483,84 @@
             <div class="tab-content card card-body bg-light">
               <div class="tab-pane fade show active" id="llm-params" role="tabpanel" aria-labelledby="llm-params-tab" tabindex="0">
                 <h6 class="border-bottom pb-2 mb-3">Model Generation Controls</h6>
+                <p class="text-muted small mb-3">These parameters control how the LLM generates text. Default values work well for most use cases.</p>
                 <div class="row">
-                  <div class="col-md-3 mb-3"><label for="llm-params-temperature" class="form-label">Temperature</label><input type="number" step="0.01" class="form-control" id="llm-params-temperature" name="llm.parameters.temperature" value="0"></div>
-                  <div class="col-md-3 mb-3"><label for="llm-params-top_p" class="form-label">Top P</label><input type="number" step="0.01" class="form-control" id="llm-params-top_p" name="llm.parameters.top_p" value="0.1"></div>
-                  <div class="col-md-3 mb-3"><label for="llm-params-frequency_penalty" class="form-label">Frequency Penalty</label><input type="number" step="0.01" class="form-control" id="llm-params-frequency_penalty" name="llm.parameters.frequency_penalty" value="0.0"></div>
-                  <div class="col-md-3 mb-3"><label for="llm-params-random_seed" class="form-label">Seed</label><input type="number" class="form-control" id="llm-params-random_seed" name="llm.parameters.random_seed" value="1234"></div>
+                  <div class="col-md-3 mb-3">
+                    <label for="llm-params-temperature" class="form-label">Temperature <span class="text-muted small">(0-2)</span></label>
+                    <input type="number" step="0.01" min="0" max="2" class="form-control" id="llm-params-temperature" name="llm.parameters.temperature" value="0">
+                    <div class="form-text small">Controls randomness. Lower = more deterministic.</div>
+                  </div>
+                  <div class="col-md-3 mb-3">
+                    <label for="llm-params-top_p" class="form-label">Top P <span class="text-muted small">(0-1)</span></label>
+                    <input type="number" step="0.01" min="0" max="1" class="form-control" id="llm-params-top_p" name="llm.parameters.top_p" value="0.1">
+                    <div class="form-text small">Nucleus sampling threshold.</div>
+                  </div>
+                  <div class="col-md-3 mb-3">
+                    <label for="llm-params-frequency_penalty" class="form-label">Frequency Penalty</label>
+                    <input type="number" step="0.01" class="form-control" id="llm-params-frequency_penalty" name="llm.parameters.frequency_penalty" value="0.0">
+                    <div class="form-text small">Reduces repetition. Range: -2.0 to 2.0</div>
+                  </div>
+                  <div class="col-md-3 mb-3">
+                    <label for="llm-params-random_seed" class="form-label">Random Seed</label>
+                    <input type="number" class="form-control" id="llm-params-random_seed" name="llm.parameters.random_seed" value="1234">
+                    <div class="form-text small">For reproducible outputs.</div>
+                  </div>
                 </div>
               </div>
 
               <div class="tab-pane fade" id="llm-gpt" role="tabpanel" aria-labelledby="llm-gpt-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">OpenAI (GPT) Settings</h6>
-                <div class="mb-3"><label for="llm-gpt-path_api_key" class="form-label">API Key Path</label><input type="text" class="form-control" id="llm-gpt-path_api_key" name="llm.gpt.path_api_key" value=".env"></div>
+                <h6 class="border-bottom pb-2 mb-3">OpenAI (GPT) Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-exclamation-triangle mt-1"></i>
+                  <div class="small">
+                    <strong>API Key Required:</strong> You need an OpenAI API key to use GPT models. Store it in a <code>.env</code> file or the path specified below.
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-gpt-path_api_key" class="form-label">API Key Path <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="llm-gpt-path_api_key" name="llm.gpt.path_api_key" value=".env" placeholder=".env">
+                  <div class="form-text">Path to file containing your OpenAI API key (e.g., <code>.env</code>). The file should contain: <code>OPENAI_API_KEY=your-key-here</code></div>
+                </div>
                 <div class="mb-3">
                   <label class="form-label">Available Models (Read-Only)</label>
-                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll;">{ "gpt-4o-2024-08-06", "gpt-4o-mini-2024-07-18", "chatgpt-4o-latest", "gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4", "gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", "gpt-4-32k", "gpt-4-0125-preview", "gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-3.5-turbo-0125", "gpt-3.5-turbo-instruct", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613", "gpt-3.5-turbo-0301" }</textarea>
+                  <textarea class="form-control form-control-sm" rows="4" readonly style="resize:none; overflow-y: scroll; font-family: monospace; font-size: 0.85em;">gpt-4o-2024-08-06, gpt-4o-mini-2024-07-18, chatgpt-4o-latest, gpt-4-turbo, gpt-4-turbo-2024-04-09, gpt-4, gpt-3.5-turbo, gpt-4o-mini, gpt-4o, gpt-4-32k, gpt-4-0125-preview, gpt-4-1106-preview, gpt-4-vision-preview, gpt-3.5-turbo-0125, gpt-3.5-turbo-instruct, gpt-3.5-turbo-1106, gpt-3.5-turbo-0613, gpt-3.5-turbo-16k-0613, gpt-3.5-turbo-0301</textarea>
+                  <div class="form-text small">These models are available when using OpenAI. Select one when configuring topic models.</div>
                 </div>
               </div>
 
               <div class="tab-pane fade" id="llm-ollama" role="tabpanel" aria-labelledby="llm-ollama-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Ollama Settings</h6>
-                <div class="mb-3"><label for="llm-ollama-host" class="form-label">Host URL</label><input type="url" class="form-control" id="llm-ollama-host" name="llm.ollama.host" value="http://kumo01.tsc.uc3m.es:11434"></div>
+                <h6 class="border-bottom pb-2 mb-3">Ollama Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+                <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-info-circle mt-1"></i>
+                  <div class="small">
+                    <strong>Local/Remote Ollama Server:</strong> Ollama allows you to run LLMs locally or on a remote server. Make sure your Ollama server is running and accessible at the URL below.
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-ollama-host" class="form-label">Host URL <span class="text-danger">*</span></label>
+                  <input type="url" class="form-control" id="llm-ollama-host" name="llm.ollama.host" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
+                  <div class="form-text">URL of your Ollama server. Default: <code>http://localhost:11434</code> for local installations.</div>
+                </div>
                 <div class="mb-3">
                   <label class="form-label">Available Models (Read-Only)</label>
-                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll;">{ "llama3.2", "llama3.1:8b-instruct-q8_0", "qwen:32b", "llama3.3:70b", "qwen2.5:32b" }</textarea>
+                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll; font-family: monospace; font-size: 0.85em;">llama3.2, llama3.1:8b-instruct-q8_0, qwen:32b, llama3.3:70b, qwen2.5:32b</textarea>
+                  <div class="form-text small">These models are available when using Ollama. Make sure they are installed on your Ollama server: <code>ollama pull &lt;model-name&gt;</code></div>
                 </div>
               </div>
 
               <div class="tab-pane fade" id="llm-llama-cpp" role="tabpanel" aria-labelledby="llm-llama-cpp-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Llama.cpp Settings</h6>
-                <div class="mb-3"><label for="llm-llama-cpp-host" class="form-label">Host URL</label><input type="url" class="form-control" id="llm-llama-cpp-host" name="llm.llama_cpp.host" value="http://kumo01:11435/v1/chat/completions"></div>
+                <h6 class="border-bottom pb-2 mb-3">Llama.cpp Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+                <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
+                  <i class="bi bi-info-circle mt-1"></i>
+                  <div class="small">
+                    <strong>Llama.cpp Server:</strong> Configure this if you're using a llama.cpp compatible server. This is typically for advanced users running custom LLM servers.
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-llama-cpp-host" class="form-label">Host URL <span class="text-danger">*</span></label>
+                  <input type="url" class="form-control" id="llm-llama-cpp-host" name="llm.llama_cpp.host" value="http://kumo01:11435/v1/chat/completions" placeholder="http://localhost:11435/v1/chat/completions">
+                  <div class="form-text">URL endpoint for your llama.cpp server. Must support OpenAI-compatible API format.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -507,6 +666,14 @@
           const llmSection = el.closest(".llm-provider-section");
           if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
 
+          // Skip hidden LLM settings in traditional topic modeling if LLM features are disabled
+          const llmSettingsRow = document.getElementById('tm-trad-llm-settings');
+          const promptSettingsRow = document.getElementById('tm-trad-prompt-settings');
+          if ((llmSettingsRow && llmSettingsRow.contains(el) && llmSettingsRow.style.display === 'none') ||
+              (promptSettingsRow && promptSettingsRow.contains(el) && promptSettingsRow.style.display === 'none')) {
+            return;
+          }
+
           // Get config path from cache (uses name attribute)
           const path = getIdToPath(id);
           if (!path || path === id) return; // Skip if no valid path found
@@ -540,7 +707,12 @@
           }
 
           // Skip empty text fields (but allow empty strings for textareas if needed)
-          if (!trimmed && el.tagName !== "TEXTAREA") return;
+          // Exception: Don't skip LLM fields that are marked as optional - let them be empty
+          if (!trimmed && el.tagName !== "TEXTAREA") {
+            // Only skip if it's not an LLM-related field (these can be empty)
+            const isLLMField = path.includes('llm.') || path.includes('llm_provider') || path.includes('llm_model') || path.includes('llm_server');
+            if (!isLLMField) return;
+          }
 
           // Handle text/textarea/select
           setNestedValue(path, trimmed, out);
@@ -722,6 +894,41 @@
 
       // Ensure spinner is hidden if modal is closed while a request is in flight
       configModalEl?.addEventListener('hidden.bs.modal', () => setLoading(false));
+
+      // Handle conditional LLM settings visibility in traditional topic modeling
+      const labellerCheckbox = document.getElementById('tm-trad-do_labeller');
+      const summarizerCheckbox = document.getElementById('tm-trad-do_summarizer');
+      const llmSettingsRow = document.getElementById('tm-trad-llm-settings');
+      const promptSettingsRow = document.getElementById('tm-trad-prompt-settings');
+
+      const updateLLMSettingsVisibility = () => {
+        const showLLM = labellerCheckbox?.checked || summarizerCheckbox?.checked;
+        if (llmSettingsRow) {
+          llmSettingsRow.style.display = showLLM ? 'flex' : 'none';
+          // Make fields optional when hidden
+          llmSettingsRow.querySelectorAll('input').forEach(input => {
+            if (!showLLM) {
+              input.removeAttribute('required');
+              input.setAttribute('data-was-optional', 'true');
+            }
+          });
+        }
+        if (promptSettingsRow) {
+          promptSettingsRow.style.display = showLLM ? 'flex' : 'none';
+          promptSettingsRow.querySelectorAll('input').forEach(input => {
+            if (!showLLM) {
+              input.removeAttribute('required');
+              input.setAttribute('data-was-optional', 'true');
+            }
+          });
+        }
+      };
+
+      labellerCheckbox?.addEventListener('change', updateLLMSettingsVisibility);
+      summarizerCheckbox?.addEventListener('change', updateLLMSettingsVisibility);
+      
+      // Initialize visibility on load
+      updateLLMSettingsVisibility();
     });
   </script>
 {% endif %}
