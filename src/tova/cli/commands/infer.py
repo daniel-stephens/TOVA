@@ -29,7 +29,8 @@ def run(
         normalized_data = normalize_json_data(
             raw_data=data,
             text_col=text_col,
-            id_col=id_col
+            id_col=id_col,
+            logger=logger
         )
 
     thetas, duration = infer_model_dispatch(model_path, normalized_data)
