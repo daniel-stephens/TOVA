@@ -1,3 +1,6 @@
+networks:
+  tova-net:
+    name: tova_my_network
 services:
   api:
     build:
@@ -28,6 +31,8 @@ services:
     volumes:
       - ./data:/data
       - ./static/config:/app/static/config
+    networks:
+      - tova-net
 
   web:
     build:
@@ -47,10 +52,11 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
-      
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config
+    networks:
+      - tova-net
 
   postgres:
     image: postgres:15-alpine
@@ -69,7 +75,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    
+    networks:
+      - tova-net
+  
   solr-api:
     build:
       context: .
@@ -92,6 +100,8 @@ services:
     volumes:
       - ./data:/data
       - ./dashbaord:/dashboard
+    networks:
+      - tova-net
 
   solr-initializer:
     image: alpine
@@ -100,6 +110,8 @@ services:
       /bin/sh -c "chown 8983:8983 /solr"
     volumes:
       - ./db/data/solr:/solr
+    networks:
+      - tova-net
 
   zoo:
     image: zookeeper:3.9
@@ -110,6 +122,8 @@ services:
     volumes:
       - ./db/data/zoo/data:/data
       - ./db/data/zoo/logs:/datalog
+    networks:
+      - tova-net
 
   solr:
     build:
@@ -125,6 +139,8 @@ services:
       - ./db/data/solr:/var/solr
     command: ["solr", "-f", "-c", "-z", "zoo:2181", "-a",
       "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=1044 -Djute.maxbuffer=0x5000000"]
+    networks:
+      - tova-net
 
   solr_config:
     build: ./solr/config
@@ -134,6 +150,8 @@ services:
       - ./solr/config/bash_scripts:/bash_scripts
       - ./db/data/solr:/db/data/solr
     command: ["sh","-c","chmod +x /bash_scripts/init_config.sh && ls /bash_scripts && bash_scripts/init_config.sh /db/data/solr/data"]
+    networks:
+      - tova-net
 
 volumes:
   data:
