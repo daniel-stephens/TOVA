@@ -2,7 +2,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy.dialects.postgresql import JSON
+# JSON type will use db.JSON from Flask-SQLAlchemy
 
 db = SQLAlchemy()
 
@@ -31,7 +31,7 @@ class UserConfig(db.Model):
     __tablename__ = "user_configs"
 
     user_id = db.Column(db.String(36), db.ForeignKey("users.id"), primary_key=True)
-    config = db.Column(JSON, nullable=False, default=dict)
+    config = db.Column(db.JSON, nullable=False, default=dict)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     user = db.relationship("User", backref=db.backref("config", uselist=False, cascade="all, delete-orphan"))

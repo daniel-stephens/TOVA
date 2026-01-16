@@ -466,7 +466,7 @@ footer {
     position: fixed;
     top: 0;
     right: 0;
-    width: 400px;
+    width: 550px;
     height: 100vh;
     background: white;
     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
@@ -517,7 +517,7 @@ footer {
   #chatSidebar .sidebar-header {
     background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
     color: white;
-    padding: 1rem 1.25rem;
+    padding: 0.875rem 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -527,8 +527,12 @@ footer {
 
   #chatSidebar .sidebar-header h5 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
+  }
+
+  #chatSidebar .sidebar-header small {
+    font-size: 0.8rem;
   }
 
   #chatSidebar .sidebar-header .btn-close {
@@ -545,7 +549,7 @@ footer {
     overflow-y: auto;
     overflow-x: hidden;
     padding: 1rem;
-    background-color: #f8f9fa;
+    background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
     min-height: 0;
   }
 
@@ -554,6 +558,7 @@ footer {
     padding: 1rem;
     background: white;
     border-top: 1px solid #e9ecef;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
   }
 
   /* Chat Widget Button */
@@ -577,7 +582,7 @@ footer {
   }
 
   #chatWidgetBtn.sidebar-open {
-    right: 420px !important;
+    right: 570px !important;
   }
 
   #chatMessages {
@@ -604,6 +609,192 @@ footer {
 
   .chat-message {
     animation: fadeIn 0.3s ease-in;
+    margin-bottom: 0.75rem;
+  }
+
+  .chat-message:last-child {
+    margin-bottom: 0;
+  }
+
+  /* User message styling */
+  .chat-message .user-message-bubble {
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    color: white;
+    border-radius: 16px 16px 4px 16px;
+    padding: 0.6rem 0.9rem;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.2);
+    max-width: 80%;
+    word-wrap: break-word;
+    line-height: 1.4;
+  }
+
+  .chat-message .user-message-bubble p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .chat-message .user-avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+  }
+
+  /* Assistant message styling */
+  .chat-message .assistant-message-bubble {
+    background: white;
+    color: #212529;
+    border-radius: 16px 16px 16px 4px;
+    padding: 0.75rem 0.9rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e9ecef;
+    max-width: 80%;
+    word-wrap: break-word;
+    line-height: 1.5;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .chat-message .assistant-message-bubble:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  .chat-message .assistant-message-bubble .message-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  .chat-message .assistant-message-bubble p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #212529;
+  }
+
+  .chat-message .assistant-avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.25);
+    flex-shrink: 0;
+  }
+
+  .chat-message .assistant-avatar svg {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+  }
+
+  /* Quick action buttons styling */
+  .quick-action-btn {
+    border-radius: 20px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+    border: 1.5px solid #dee2e6;
+    background: white;
+    color: #495057;
+  }
+
+  .quick-action-btn:hover {
+    background: #f8f9fa;
+    border-color: #0d6efd;
+    color: #0d6efd;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.15);
+  }
+
+  .quick-action-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Input styling */
+  #chatInput {
+    border-radius: 24px;
+    border: 1.5px solid #dee2e6;
+    padding: 0.65rem 1.1rem;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  #chatInput:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    outline: none;
+  }
+
+  #chatSendBtn {
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.2);
+  }
+
+  #chatSendBtn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  #chatSendBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+  }
+
+  #chatSendBtn:active {
+    transform: scale(0.95);
+  }
+
+  /* Welcome message styling */
+  .chat-message .welcome-message {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid #e9ecef;
+    border-left: 4px solid #0d6efd;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .chat-message .welcome-message .message-label {
+    color: #0d6efd;
+    font-weight: 600;
+    font-size: 0.8rem;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chat-message .welcome-message ul {
+    margin: 0.6rem 0 0 0;
+    padding-left: 1.5rem;
+    color: #6c757d;
+    font-size: 0.85rem;
+  }
+
+  .chat-message .welcome-message ul li {
+    margin-bottom: 0.4rem;
+    line-height: 1.4;
+  }
+
+  .chat-message .welcome-message p {
+    font-size: 0.875rem;
+    margin-bottom: 0.6rem;
   }
 
   @keyframes fadeIn {
@@ -860,24 +1051,28 @@ footer {
     </div>
     <div class="sidebar-body">
       <div id="chatMessages">
-        <div class="chat-message mb-3">
+        <div class="chat-message">
           <div class="d-flex align-items-start">
-            <div class="flex-shrink-0 me-2">
-              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+            <div class="flex-shrink-0 me-3">
+              <div class="assistant-avatar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="white" viewBox="0 0 24 24">
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="8" cy="10" r="1.5" fill="white"/>
+                  <circle cx="12" cy="10" r="1.5" fill="white"/>
+                  <circle cx="16" cy="10" r="1.5" fill="white"/>
                 </svg>
               </div>
             </div>
             <div class="flex-grow-1">
-              <div class="bg-white rounded p-3 shadow-sm">
-                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
-                <p class="mb-2">Hello! I can help you explore your topic model. You can ask me:</p>
-                <ul class="mb-0 small text-muted" style="padding-left: 20px;">
+              <div class="welcome-message">
+                <span class="message-label">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="display: inline-block;">
+                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+                  </svg>
+                  Model Assistant
+                </span>
+                <p style="margin-bottom: 0.6rem; color: #212529; font-weight: 500; font-size: 0.875rem;">Hello! I can help you explore your topic model. You can ask me:</p>
+                <ul>
                   <li>Questions about specific topics or themes</li>
                   <li>To explain document classifications</li>
                   <li>About relationships between topics</li>
@@ -891,15 +1086,24 @@ footer {
     </div>
     <div class="sidebar-footer">
       <!-- Quick Action Buttons -->
-      <div class="d-flex flex-wrap gap-2 mb-2">
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="What are the main topics in this model?">
-          📊 Main Topics
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <button class="btn btn-sm quick-action-btn" data-prompt="What are the main topics in this model?">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M1 2a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v.5a.5.5 0 0 0 .5.5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5a.5.5 0 0 0-.5.5v.5A1 1 0 0 1 13 14H2a1 1 0 0 1-1-1V2Zm13-1a2 2 0 0 1 2 2v.5a.5.5 0 0 1-.5.5a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5a.5.5 0 0 1 .5.5v.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-.5a.5.5 0 0 1 .5-.5a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5A.5.5 0 0 1 0 4.5V2a2 2 0 0 1 2-2h12Z"/>
+          </svg>
+          Main Topics
         </button>
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Explain the most common theme">
-          💡 Top Theme
+        <button class="btn btn-sm quick-action-btn" data-prompt="Explain the most common theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+          </svg>
+          Top Theme
         </button>
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Show me documents related to">
-          📄 Find Documents
+        <button class="btn btn-sm quick-action-btn" data-prompt="Show me documents related to">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+          </svg>
+          Find Documents
         </button>
       </div>
       <div class="input-group">
@@ -914,9 +1118,17 @@ footer {
           </svg>
         </button>
       </div>
-      <small class="text-muted d-block mt-2">
-        <span class="badge bg-info">Model Chat</span> Backend integration active
-      </small>
+      <div class="d-flex align-items-center justify-content-between mt-2">
+        <small class="text-muted">
+          <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">Model Chat</span>
+        </small>
+        <small class="text-muted" style="font-size: 0.75rem;">
+          <span class="d-inline-flex align-items-center">
+            <span class="badge bg-success bg-opacity-10 text-success me-1" style="width: 8px; height: 8px; border-radius: 50%; padding: 0;"></span>
+            Active
+          </span>
+        </small>
+      </div>
     </div>
   </div>
 
@@ -3101,7 +3313,7 @@ document.addEventListener("DOMContentLoaded", () => {
         chatWidgetBtn.classList.add("sidebar-open");
         // Adjust main content padding to make room for sidebar (desktop only)
         if (window.innerWidth > 991.98 && mainContent) {
-          mainContent.style.paddingRight = "400px";
+          mainContent.style.paddingRight = "550px";
         }
         chatInput.focus();
         updateChatModelName();
@@ -3122,7 +3334,7 @@ document.addEventListener("DOMContentLoaded", () => {
           } else {
             // Desktop: hide backdrop, add padding
             if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove("show");
-            if (mainContent) mainContent.style.paddingRight = "400px";
+            if (mainContent) mainContent.style.paddingRight = "550px";
           }
         }
       }, 250);
@@ -3149,15 +3361,15 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.innerHTML = `
           <div class="d-flex align-items-start justify-content-end">
             <div class="flex-grow-1 text-end">
-              <div class="bg-primary text-white rounded p-2 shadow-sm d-inline-block" style="max-width: 75%;">
-                <small class="d-block mb-1 opacity-75">You</small>
-                <p class="mb-0">${escapeHtml(text)}</p>
+              <div class="user-message-bubble d-inline-block">
+                <p>${escapeHtml(text)}</p>
               </div>
             </div>
             <div class="flex-shrink-0 ms-2">
-              <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px; font-size: 16px;">
-                👤
+              <div class="user-avatar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                </svg>
               </div>
             </div>
           </div>
@@ -3166,20 +3378,19 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.innerHTML = `
           <div class="d-flex align-items-start">
             <div class="flex-shrink-0 me-2">
-              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+              <div class="assistant-avatar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 24 24">
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="8" cy="10" r="1.5" fill="white"/>
+                  <circle cx="12" cy="10" r="1.5" fill="white"/>
+                  <circle cx="16" cy="10" r="1.5" fill="white"/>
                 </svg>
               </div>
             </div>
             <div class="flex-grow-1">
-              <div class="bg-white rounded p-3 shadow-sm">
-                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
-                <p class="mb-0">${escapeHtml(text)}</p>
+              <div class="assistant-message-bubble">
+                <span class="message-label">Model Assistant</span>
+                <p>${escapeHtml(text)}</p>
               </div>
             </div>
           </div>
