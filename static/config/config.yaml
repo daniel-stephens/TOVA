@@ -63,7 +63,7 @@ topic_modeling:
     repr_model_diversity: 0.3
     repr_model_topnwords: 15
     word_min_len: 0
-  ctm:
+  CTM:
     num_epochs: 2
     sbert_model: all-MiniLM-L6-v2
     sbert_context: 384
@@ -83,7 +83,7 @@ topic_modeling:
     num_data_loader_workers: 4
     label_size: 0
     loss_weights: null
-  topicgpt:
+  topicGPT:
     sample: 10 #0.001
     temperature: 0.0
     top_p: 0.0
@@ -94,7 +94,7 @@ topic_modeling:
     remove: false
     do_second_level: false
     verbose: true
-  opentopicrag:
+  OpenTopicRAG:
     run_from_web: True # @Daniel, I'm not entirely sure how to display this. This parameter shouldn't be visible to the user in the web interface and should be set to True by default. However, if it's not provided through the web, I need to request the input from the user via stdin.
     embedding_model: Qwen/Qwen3-Embedding-0.6B
     tp_generation_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/tp_generation_dft.txt

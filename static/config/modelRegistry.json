@@ -5,7 +5,6 @@
     },
     "llm_based": {
         "topicGPT": "tova.topic_models.models.llm_based.topicGPT.topicgpt_tm_model.TopicGPTTMmodel",
-        "OpenTopicRAG": "tova.topic_models.models.llm_based.topicrag.open_topic_rag_model.OpenTopicRAGModel",
-        "LLoom": "tova.topic_models.models.llm_based.lloom_tm_model.LLoomTMmodel"
+        "OpenTopicRAG": "tova.topic_models.models.llm_based.topicrag.open_topic_rag_model.OpenTopicRAGModel"
     }
 }
