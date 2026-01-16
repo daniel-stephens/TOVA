@@ -4,7 +4,7 @@
         "CTM": "tova.topic_models.models.traditional.ctmtm_model.CTMTMmodel"
     },
     "llm_based": {
-        "topicGPT": "tova.topic_models.models.llm_based.topicGPT.topicgpt_tm_model.TopicGPTTMmodel",
+        "topicGPT": "tova.topic_models.models.llm_based.topicgpt.topicgpt_tm_model.TopicGPTTMmodel",
         "OpenTopicRAG": "tova.topic_models.models.llm_based.topicrag.open_topic_rag_model.OpenTopicRAGModel"
     }
 }
