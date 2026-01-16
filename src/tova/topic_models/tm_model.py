@@ -925,7 +925,7 @@ class TMmodel(object):
         else:
             return topic_docs_list
 
-    def generate_topic_outputs(self, task: str = "label", topn: int = 3):
+    def generate_topic_outputs(self, task: str = "label", topn: int = 3, max_tokens:int=None):
         """
         Generates LLM-based labels or summaries for topics in the model.
 
@@ -953,7 +953,8 @@ class TMmodel(object):
 
         prompter = Prompter(
             config_path=self._config_path,
-            model_type=self.llm_model_type
+            model_type=self.llm_model_type,
+            max_tokens=max_tokens
         )
 
         outputs = []
@@ -971,8 +972,8 @@ class TMmodel(object):
             outputs.append((tpc_id, output_text))
         return outputs
     
-    def get_tpc_labels(self, topn=3):
-        return self.generate_topic_outputs(task="label", topn=topn)
+    def get_tpc_labels(self, topn=3, max_tokens=7):
+        return self.generate_topic_outputs(task="label", topn=topn, max_tokens=max_tokens)
 
     def get_tpc_summaries(self, topn=3):
         return self.generate_topic_outputs(task="summary", topn=topn)

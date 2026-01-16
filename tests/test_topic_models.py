@@ -16,13 +16,20 @@ class TestTopicModels(unittest.TestCase):
         """Load model registry and prepare common resources."""
         with open("./static/config/modelRegistry.json", "r") as f:
             model_classes = json.load(f)
+            
+        flattened_model_classes = {}
+        for category, models in model_classes.items():
+            if isinstance(models, dict):
+                flattened_model_classes.update(models)
+            else:
+                # Handle flat structure if it exists
+                flattened_model_classes[category] = models
         
-        # Debugging: Print the loaded model registry
-        print("Loaded model registry:", model_classes)
+        print("Loaded model registry:", flattened_model_classes)
 
         # Ensure model_classes contains string paths
         cls.model_registry = {
-            key: path for key, path in model_classes.items() if isinstance(path, str)
+            key: path for key, path in flattened_model_classes.items() if isinstance(path, str)
         }
         cls.sample_file = "data_test/bills_sample_100.csv"
         cls.sample_data = pd.read_csv(cls.sample_file)#.sample(10, random_state=42)
