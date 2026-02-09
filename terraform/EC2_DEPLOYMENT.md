@@ -83,7 +83,7 @@ ec2_create_key_pair  = true  # Set to true to create automatically, false to use
 ec2_key_pair_name    = ""  # Only needed if ec2_create_key_pair = false
 ec2_allowed_ssh_cidrs = ["YOUR_IP/32"]  # e.g., ["203.0.113.0/32"]
 ec2_use_rds          = true  # Use RDS (recommended)
-ec2_repo_url         = "https://github.com/your-org/TOVA.git"  # Optional
+ec2_repo_url         = "https://github.com/daniel-stephens/TOVA.git"  # Git repository URL
 ec2_repo_branch      = "deployed"  # Git branch to clone (default: "deployed")
 ec2_enable_solr      = true
 ```
