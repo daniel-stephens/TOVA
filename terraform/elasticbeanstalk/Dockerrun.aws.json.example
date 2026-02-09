@@ -1,0 +1,71 @@
+{
+  "AWSEBDockerrunVersion": 2,
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "YOUR_ECR_REPO_URL/api:latest",
+      "essential": true,
+      "memory": 1024,
+      "portMappings": [
+        {
+          "hostPort": 8000,
+          "containerPort": 8000
+        }
+      ],
+      "environment": [
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://user:password@rds-endpoint:5432/mydb"
+        },
+        {
+          "name": "DRAFTS_SAVE",
+          "value": "/data/drafts"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "awseb-logs-api",
+          "containerPath": "/var/log"
+        }
+      ]
+    },
+    {
+      "name": "web",
+      "image": "YOUR_ECR_REPO_URL/web:latest",
+      "essential": true,
+      "memory": 1024,
+      "portMappings": [
+        {
+          "hostPort": 8080,
+          "containerPort": 8080
+        }
+      ],
+      "environment": [
+        {
+          "name": "FLASK_DEBUG",
+          "value": "0"
+        },
+        {
+          "name": "API_BASE_URL",
+          "value": "http://localhost:8000"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql+psycopg2://user:password@rds-endpoint:5432/mydb"
+        }
+      ],
+      "links": ["api"],
+      "mountPoints": [
+        {
+          "sourceVolume": "awseb-logs-web",
+          "containerPath": "/var/log"
+        }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,38 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is in .gitignore and should not be committed
+
+aws_region   = "us-east-1"
+project_name = "tova"
+environment  = "dev"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# Database Configuration
+db_instance_class   = "db.t3.micro"
+db_allocated_storage = 20
+db_name             = "mydb"
+db_username         = "tova_admin"  # Cannot be 'admin', 'root', 'postgres' (reserved)
+db_password         = "CHANGE_ME_STRONG_PASSWORD"  # Use a strong password!
+
+# Application Configuration
+openai_api_key = ""  # Optional: Your OpenAI API key
+
+# Domain and SSL (optional)
+domain_name         = ""  # e.g., "tova.example.com"
+alb_certificate_arn = ""  # ARN of ACM certificate if using custom domain
+
+# Deployment Type
+# Choose "ecs" for ECS Fargate or "ec2" for EC2 with Docker
+deployment_type = "ec2"  # Options: "ecs" or "ec2"
+
+# EC2 Configuration (only used if deployment_type = "ec2")
+ec2_instance_type    = "t3.medium"  # Instance type (t3.medium, t3.large, etc.)
+ec2_create_key_pair  = true  # Set to true to create key pair automatically, false to use existing
+ec2_key_pair_name    = ""  # Only needed if ec2_create_key_pair = false (name of existing key pair)
+ec2_allowed_ssh_cidrs = ["YOUR_IP/32"]  # e.g., ["203.0.113.0/32"] - Change this!
+ec2_use_rds          = true  # Use RDS PostgreSQL (recommended) or Docker PostgreSQL
+ec2_repo_url         = ""  # Git repository URL (optional - leave empty to manually upload)
+ec2_repo_branch      = "main"  # Git branch
+ec2_enable_solr      = true  # Enable Solr services
+
