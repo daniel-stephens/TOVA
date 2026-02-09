@@ -33,6 +33,6 @@ ec2_key_pair_name    = ""  # Only needed if ec2_create_key_pair = false (name of
 ec2_allowed_ssh_cidrs = ["YOUR_IP/32"]  # e.g., ["203.0.113.0/32"] - Change this!
 ec2_use_rds          = true  # Use RDS PostgreSQL (recommended) or Docker PostgreSQL
 ec2_repo_url         = ""  # Git repository URL (optional - leave empty to manually upload)
-ec2_repo_branch      = "main"  # Git branch
+ec2_repo_branch      = "deployed"  # Git branch to clone
 ec2_enable_solr      = true  # Enable Solr services
 

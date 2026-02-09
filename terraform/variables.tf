@@ -131,7 +131,7 @@ variable "ec2_repo_url" {
 variable "ec2_repo_branch" {
   description = "Git repository branch"
   type        = string
-  default     = "main"
+  default     = "deployed"
 }
 
 variable "ec2_enable_solr" {
