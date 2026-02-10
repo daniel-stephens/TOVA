@@ -78,8 +78,8 @@
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
         <ul class="navbar-nav">
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'home' %}active{% endif %}"
-               href="{{ url_for('home') }}">
+            <a class="nav-link {% if request.endpoint == 'load_data_page' %}active{% endif %}"
+               href="{{ url_for('load_data_page') }}">
               Upload Data
             </a>
           </li>
@@ -102,6 +102,9 @@
             <span class="navbar-text small text-muted d-none d-md-inline">
               Hi, {{ user.name }}
             </span>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#llmSettingsModal">
+              <i class="bi bi-cpu me-1"></i>LLM Settings
+            </button>
             <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#configModal">
               Config Editor
             </button>
@@ -466,24 +469,18 @@
             <div class="alert alert-info d-flex align-items-start gap-2 mb-4" role="alert">
               <i class="bi bi-info-circle mt-1"></i>
               <div class="flex-grow-1">
-                <strong>LLM Configuration is Optional</strong>
-                <p class="mb-0 small">You only need to configure LLM settings if you plan to use LLM-based features like topic labeling, summarization, or LLM-based topic modeling. If you're using traditional topic models without LLM post-processing, you can skip this section.</p>
+                <strong>LLM Configuration</strong>
+                <p class="mb-0 small">Configure LLM providers and generation parameters. These settings are used for topic labeling, summarization, and LLM-based topic modeling. You only need to configure the providers you plan to use.</p>
               </div>
             </div>
 
-            <h4 class="mb-3">LLM Generation Parameters & Providers</h4>
-            
-            <ul class="nav nav-tabs nav-justified mb-3" id="llmSubTabs" role="tablist">
-              <li class="nav-item" role="presentation"><button class="nav-link active" id="llm-params-tab" data-bs-toggle="pill" data-bs-target="#llm-params" type="button" role="tab">Global Parameters</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-gpt-tab" data-bs-toggle="pill" data-bs-target="#llm-gpt" type="button" role="tab">GPT (OpenAI)</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-ollama-tab" data-bs-toggle="pill" data-bs-target="#llm-ollama" type="button" role="tab">Ollama (Local)</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" id="llm-llama-cpp-tab" data-bs-toggle="pill" data-bs-target="#llm-llama-cpp" type="button" role="tab">Llama.cpp</button></li>
-            </ul>
-
-            <div class="tab-content card card-body bg-light">
-              <div class="tab-pane fade show active" id="llm-params" role="tabpanel" aria-labelledby="llm-params-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Model Generation Controls</h6>
-                <p class="text-muted small mb-3">These parameters control how the LLM generates text. Default values work well for most use cases.</p>
+            <!-- Global Generation Parameters -->
+            <div class="card mb-4">
+              <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Global Generation Parameters</h5>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small mb-3">These parameters control how all LLMs generate text. Default values work well for most use cases.</p>
                 <div class="row">
                   <div class="col-md-3 mb-3">
                     <label for="llm-params-temperature" class="form-label">Temperature <span class="text-muted small">(0-2)</span></label>
@@ -507,59 +504,110 @@
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="tab-pane fade" id="llm-gpt" role="tabpanel" aria-labelledby="llm-gpt-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">OpenAI (GPT) Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+            <!-- LLM Providers -->
+            <h4 class="mb-3"><i class="bi bi-cloud me-2"></i>LLM Providers</h4>
+            <p class="text-muted small mb-4">Configure one or more LLM providers. Each provider can be used for topic labeling, summarization, or LLM-based topic modeling.</p>
+
+            <!-- OpenAI GPT Provider -->
+            <div class="card mb-3">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 class="mb-0"><i class="bi bi-openai me-2"></i>OpenAI (GPT)</h5>
+                  <small class="text-muted">Cloud-based LLM service</small>
+                </div>
+                <span class="badge bg-primary">Recommended</span>
+              </div>
+              <div class="card-body">
                 <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
                   <i class="bi bi-exclamation-triangle mt-1"></i>
                   <div class="small">
-                    <strong>API Key Required:</strong> You need an OpenAI API key to use GPT models. Store it in a <code>.env</code> file or the path specified below.
+                    <strong>API Key Required:</strong> Store your OpenAI API key in a <code>.env</code> file with: <code>OPENAI_API_KEY=your-key-here</code>
+                  </div>
+                </div>
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="llm-gpt-path_api_key" class="form-label">API Key File Path</label>
+                    <input type="text" class="form-control" id="llm-gpt-path_api_key" name="llm.gpt.path_api_key" value=".env" placeholder=".env">
+                    <div class="form-text small">Path to file containing <code>OPENAI_API_KEY</code></div>
                   </div>
                 </div>
                 <div class="mb-3">
-                  <label for="llm-gpt-path_api_key" class="form-label">API Key Path <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="llm-gpt-path_api_key" name="llm.gpt.path_api_key" value=".env" placeholder=".env">
-                  <div class="form-text">Path to file containing your OpenAI API key (e.g., <code>.env</code>). The file should contain: <code>OPENAI_API_KEY=your-key-here</code></div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Available Models (Read-Only)</label>
-                  <textarea class="form-control form-control-sm" rows="4" readonly style="resize:none; overflow-y: scroll; font-family: monospace; font-size: 0.85em;">gpt-4o-2024-08-06, gpt-4o-mini-2024-07-18, chatgpt-4o-latest, gpt-4-turbo, gpt-4-turbo-2024-04-09, gpt-4, gpt-3.5-turbo, gpt-4o-mini, gpt-4o, gpt-4-32k, gpt-4-0125-preview, gpt-4-1106-preview, gpt-4-vision-preview, gpt-3.5-turbo-0125, gpt-3.5-turbo-instruct, gpt-3.5-turbo-1106, gpt-3.5-turbo-0613, gpt-3.5-turbo-16k-0613, gpt-3.5-turbo-0301</textarea>
-                  <div class="form-text small">These models are available when using OpenAI. Select one when configuring topic models.</div>
+                  <label for="llm-gpt-available_models" class="form-label">Available Models</label>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="llm-gpt-model-input" placeholder="Add model name (e.g., gpt-4o)">
+                    <button type="button" class="btn btn-outline-primary" id="llm-gpt-add-model">Add</button>
+                  </div>
+                  <div id="llm-gpt-models-list" class="d-flex flex-wrap gap-2 mb-2" style="min-height: 40px;">
+                    <!-- Models will be dynamically added here -->
+                  </div>
+                  <input type="hidden" id="llm-gpt-available_models" name="llm.gpt.available_models" value="">
+                  <div class="form-text small">Click a badge to remove. Common models: gpt-4o, gpt-4o-mini, gpt-3.5-turbo</div>
                 </div>
               </div>
+            </div>
 
-              <div class="tab-pane fade" id="llm-ollama" role="tabpanel" aria-labelledby="llm-ollama-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Ollama Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+            <!-- Ollama Provider -->
+            <div class="card mb-3">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 class="mb-0"><i class="bi bi-server me-2"></i>Ollama</h5>
+                  <small class="text-muted">Local or remote LLM server</small>
+                </div>
+                <span class="badge bg-success">Self-Hosted</span>
+              </div>
+              <div class="card-body">
                 <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
                   <i class="bi bi-info-circle mt-1"></i>
                   <div class="small">
-                    <strong>Local/Remote Ollama Server:</strong> Ollama allows you to run LLMs locally or on a remote server. Make sure your Ollama server is running and accessible at the URL below.
+                    <strong>Ollama Server:</strong> Run LLMs locally or on a remote server. Install models with: <code>ollama pull &lt;model-name&gt;</code>
+                  </div>
+                </div>
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="llm-ollama-host" class="form-label">Server URL</label>
+                    <input type="url" class="form-control" id="llm-ollama-host" name="llm.ollama.host" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
+                    <div class="form-text small">Default: <code>http://localhost:11434</code> for local installations</div>
                   </div>
                 </div>
                 <div class="mb-3">
-                  <label for="llm-ollama-host" class="form-label">Host URL <span class="text-danger">*</span></label>
-                  <input type="url" class="form-control" id="llm-ollama-host" name="llm.ollama.host" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
-                  <div class="form-text">URL of your Ollama server. Default: <code>http://localhost:11434</code> for local installations.</div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Available Models (Read-Only)</label>
-                  <textarea class="form-control form-control-sm" rows="3" readonly style="resize:none; overflow-y: scroll; font-family: monospace; font-size: 0.85em;">llama3.2, llama3.1:8b-instruct-q8_0, qwen:32b, llama3.3:70b, qwen2.5:32b</textarea>
-                  <div class="form-text small">These models are available when using Ollama. Make sure they are installed on your Ollama server: <code>ollama pull &lt;model-name&gt;</code></div>
+                  <label for="llm-ollama-available_models" class="form-label">Available Models</label>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="llm-ollama-model-input" placeholder="Add model name (e.g., llama3.2, qwen:32b)">
+                    <button type="button" class="btn btn-outline-primary" id="llm-ollama-add-model">Add</button>
+                  </div>
+                  <div id="llm-ollama-models-list" class="d-flex flex-wrap gap-2 mb-2" style="min-height: 40px;">
+                    <!-- Models will be dynamically added here -->
+                  </div>
+                  <input type="hidden" id="llm-ollama-available_models" name="llm.ollama.available_models" value="">
+                  <div class="form-text small">Click a badge to remove. Make sure models are installed on your Ollama server.</div>
                 </div>
               </div>
+            </div>
 
-              <div class="tab-pane fade" id="llm-llama-cpp" role="tabpanel" aria-labelledby="llm-llama-cpp-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Llama.cpp Settings <span class="badge bg-secondary ms-2">Optional</span></h6>
+            <!-- Llama.cpp Provider -->
+            <div class="card mb-3">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 class="mb-0"><i class="bi bi-code-square me-2"></i>Llama.cpp</h5>
+                  <small class="text-muted">Custom LLM server (OpenAI-compatible API)</small>
+                </div>
+                <span class="badge bg-secondary">Advanced</span>
+              </div>
+              <div class="card-body">
                 <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
                   <i class="bi bi-info-circle mt-1"></i>
                   <div class="small">
-                    <strong>Llama.cpp Server:</strong> Configure this if you're using a llama.cpp compatible server. This is typically for advanced users running custom LLM servers.
+                    <strong>Custom Server:</strong> For advanced users running llama.cpp or other OpenAI-compatible servers.
                   </div>
                 </div>
-                <div class="mb-3">
-                  <label for="llm-llama-cpp-host" class="form-label">Host URL <span class="text-danger">*</span></label>
-                  <input type="url" class="form-control" id="llm-llama-cpp-host" name="llm.llama_cpp.host" value="http://kumo01:11435/v1/chat/completions" placeholder="http://localhost:11435/v1/chat/completions">
-                  <div class="form-text">URL endpoint for your llama.cpp server. Must support OpenAI-compatible API format.</div>
+                <div class="row">
+                  <div class="col-md-6">
+                    <label for="llm-llama-cpp-host" class="form-label">Server Endpoint URL</label>
+                    <input type="url" class="form-control" id="llm-llama-cpp-host" name="llm.llama_cpp.host" value="http://kumo01:11435/v1/chat/completions" placeholder="http://localhost:11435/v1/chat/completions">
+                    <div class="form-text small">Must support OpenAI-compatible API format</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -572,6 +620,119 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- LLM Settings Modal -->
+<div class="modal fade" id="llmSettingsModal" tabindex="-1" aria-labelledby="llmSettingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title fw-bold" id="llmSettingsModalLabel">
+          <i class="bi bi-cpu me-2"></i>LLM Settings
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <div class="alert alert-info d-flex align-items-start gap-2 mb-4" role="alert">
+          <i class="bi bi-info-circle mt-1"></i>
+          <div class="small">
+            <strong>Generalized LLM Configuration:</strong> These settings apply to all topic models that use LLMs (traditional models with labeling/summarization, and LLM-based models). 
+            Changes are saved to your session and will be used for future training jobs.
+          </div>
+        </div>
+
+        <form id="llmSettingsForm">
+          <div class="mb-4">
+            <label for="llm-settings-provider" class="form-label fw-bold">
+              <i class="bi bi-cloud me-1"></i>LLM Provider
+            </label>
+            <select class="form-select" id="llm-settings-provider" name="provider" required>
+              <option value="">-- Select a provider --</option>
+              <option value="openai">OpenAI (GPT)</option>
+              <option value="ollama">Ollama</option>
+              <option value="llama_cpp">llama.cpp</option>
+            </select>
+            <div class="form-text">Choose the LLM provider for topic modeling operations</div>
+          </div>
+
+          <!-- OpenAI Settings -->
+          <div id="llm-settings-openai" class="llm-provider-settings d-none">
+            <div class="card border-primary mb-3">
+              <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-openai me-2"></i>OpenAI Configuration</h6>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label for="llm-settings-openai-model" class="form-label">Model</label>
+                  <select class="form-select" id="llm-settings-openai-model" name="openai_model">
+                    <option value="">-- Select a model --</option>
+                  </select>
+                  <div class="form-text">Available models are loaded from your configuration</div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-settings-openai-api-key" class="form-label">API Key (Optional)</label>
+                  <input type="password" class="form-control" id="llm-settings-openai-api-key" 
+                         name="openai_api_key" placeholder="sk-...">
+                  <div class="form-text">Leave blank to use server-configured API key from .env file</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ollama Settings -->
+          <div id="llm-settings-ollama" class="llm-provider-settings d-none">
+            <div class="card border-success mb-3">
+              <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="bi bi-server me-2"></i>Ollama Configuration</h6>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label for="llm-settings-ollama-model" class="form-label">Model</label>
+                  <select class="form-select" id="llm-settings-ollama-model" name="ollama_model">
+                    <option value="">-- Select a model --</option>
+                  </select>
+                  <div class="form-text">Available models are loaded from your configuration</div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-settings-ollama-host" class="form-label">Server Host</label>
+                  <input type="url" class="form-control" id="llm-settings-ollama-host" 
+                         name="ollama_host" placeholder="http://localhost:11434">
+                  <div class="form-text">Ollama server URL (default: http://localhost:11434)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- llama.cpp Settings -->
+          <div id="llm-settings-llama-cpp" class="llm-provider-settings d-none">
+            <div class="card border-secondary mb-3">
+              <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="bi bi-code-square me-2"></i>llama.cpp Configuration</h6>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label for="llm-settings-llama-cpp-host" class="form-label">Server Endpoint URL</label>
+                  <input type="url" class="form-control" id="llm-settings-llama-cpp-host" 
+                         name="llama_cpp_host" placeholder="http://localhost:11435/v1/chat/completions">
+                  <div class="form-text">Must support OpenAI-compatible API format</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="llm-settings-feedback" class="alert d-none" role="alert"></div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="llm-settings-save-btn">
+          <i class="bi bi-save me-2"></i>Save Settings
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 {% endif %}
@@ -697,6 +858,23 @@
           const raw = el.value;
           const trimmed = raw != null ? raw.trim() : "";
           
+          // Handle hidden fields with JSON arrays (for available_models)
+          if (el.type === "hidden" && path.includes("available_models") && trimmed) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setNestedValue(path, parsed, out);
+              }
+            } catch (e) {
+              // If not valid JSON, try comma-separated
+              const items = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+              if (items.length > 0) {
+                setNestedValue(path, items, out);
+              }
+            }
+            return;
+          }
+          
           // Handle numbers (allow empty/zero values)
           if (el.type === "number") {
             const n = Number(trimmed);
@@ -708,7 +886,7 @@
 
           // Skip empty text fields (but allow empty strings for textareas if needed)
           // Exception: Don't skip LLM fields that are marked as optional - let them be empty
-          if (!trimmed && el.tagName !== "TEXTAREA") {
+          if (!trimmed && el.tagName !== "TEXTAREA" && el.type !== "hidden") {
             // Only skip if it's not an LLM-related field (these can be empty)
             const isLLMField = path.includes('llm.') || path.includes('llm_provider') || path.includes('llm_model') || path.includes('llm_server');
             if (!isLLMField) return;
@@ -775,6 +953,9 @@
             if (element) {
               if (element.type === 'checkbox') {
                 element.checked = Boolean(value);
+              } else if (element.type === 'hidden' && fullKey.includes('available_models') && Array.isArray(value)) {
+                // Store arrays as JSON in hidden fields for available_models
+                element.value = JSON.stringify(value);
               } else if (['number', 'text', 'url'].includes(element.type) || ['TEXTAREA', 'SELECT'].includes(element.tagName)) {
                 const formatted = formatForInput(value);
                 element.value = formatted === undefined || formatted === null ? '' : formatted;
@@ -807,6 +988,7 @@
           if (!res.ok) throw new Error(`Load failed (${res.status})`);
           const data = await res.json();
           populateForm(data || {});
+          initializeModelLists(); // Initialize model lists after form is populated
           updateLastSaved(new Date());
           showFeedback('Loaded your saved configuration.', 'info');
         } catch (err) {
@@ -827,7 +1009,7 @@
         setLoading(true, 'Saving...');
 
         try {
-          const response = await fetch("/api/user-config", {
+          const response = await fetch('/api/user-config', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -869,11 +1051,12 @@
 
         setLoading(true, 'Resetting to defaults...');
         try {
-          const response = await fetch("/api/user-config/reset", { method: 'POST' });
+          const response = await fetch('/api/user-config/reset', { method: 'POST' });
           const result = await response.json().catch(() => ({}));
           if (response.ok && result.success !== false) {
             clearFormCaches(); // Clear caches on reset
             populateForm(result.config || {});
+            initializeModelLists(); // Initialize model lists after form is populated
             updateLastSaved(null);
             showFeedback('Configuration reset to defaults.', 'info');
           } else {
@@ -929,7 +1112,367 @@
       
       // Initialize visibility on load
       updateLLMSettingsVisibility();
+
+      // LLM Model List Management
+      const setupModelList = (provider, inputId, listId, hiddenId, addBtnId) => {
+        const input = document.getElementById(inputId);
+        const list = document.getElementById(listId);
+        const hidden = document.getElementById(hiddenId);
+        const addBtn = document.getElementById(addBtnId);
+        if (!input || !list || !hidden || !addBtn) return;
+
+        const updateHiddenField = () => {
+          const models = Array.from(list.querySelectorAll('.badge')).map(b => b.dataset.model).filter(Boolean);
+          hidden.value = JSON.stringify(models);
+        };
+
+        const addModel = (modelName) => {
+          if (!modelName || !modelName.trim()) return;
+          const trimmed = modelName.trim();
+          
+          // Check if already exists
+          if (list.querySelector(`[data-model="${trimmed}"]`)) {
+            input.value = '';
+            input.focus();
+            return;
+          }
+
+          const badge = document.createElement('span');
+          badge.className = 'badge bg-primary me-1 mb-1';
+          badge.style.cursor = 'pointer';
+          badge.textContent = trimmed;
+          badge.dataset.model = trimmed;
+          badge.title = 'Click to remove';
+          
+          badge.addEventListener('click', () => {
+            badge.remove();
+            updateHiddenField();
+          });
+
+          list.appendChild(badge);
+          updateHiddenField();
+          input.value = '';
+        };
+
+        addBtn.addEventListener('click', () => {
+          addModel(input.value);
+        });
+
+        input.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addModel(input.value);
+          }
+        });
+
+        // Initialize from existing value if present
+        const existingValue = hidden.value;
+        if (existingValue) {
+          try {
+            const models = JSON.parse(existingValue);
+            if (Array.isArray(models)) {
+              models.forEach(model => addModel(model));
+            }
+          } catch (e) {
+            // If not JSON, try comma-separated
+            const models = existingValue.split(',').map(s => s.trim()).filter(Boolean);
+            models.forEach(model => addModel(model));
+          }
+        }
+      };
+
+      // Setup model lists for each provider
+      setupModelList('gpt', 'llm-gpt-model-input', 'llm-gpt-models-list', 'llm-gpt-available_models', 'llm-gpt-add-model');
+      setupModelList('ollama', 'llm-ollama-model-input', 'llm-ollama-models-list', 'llm-ollama-available_models', 'llm-ollama-add-model');
+
+      // Initialize model lists from hidden fields after form population
+      const initializeModelLists = () => {
+        const gptHidden = document.getElementById('llm-gpt-available_models');
+        const ollamaHidden = document.getElementById('llm-ollama-available_models');
+        
+        if (gptHidden && gptHidden.value) {
+          try {
+            const models = JSON.parse(gptHidden.value);
+            if (Array.isArray(models)) {
+              const list = document.getElementById('llm-gpt-models-list');
+              if (list) {
+                list.innerHTML = '';
+                models.forEach(model => {
+                  const badge = document.createElement('span');
+                  badge.className = 'badge bg-primary me-1 mb-1';
+                  badge.style.cursor = 'pointer';
+                  badge.textContent = model;
+                  badge.dataset.model = model;
+                  badge.title = 'Click to remove';
+                  badge.addEventListener('click', () => {
+                    badge.remove();
+                    const remaining = Array.from(list.querySelectorAll('.badge')).map(b => b.dataset.model).filter(Boolean);
+                    gptHidden.value = JSON.stringify(remaining);
+                  });
+                  list.appendChild(badge);
+                });
+              }
+            }
+          } catch (e) {
+            // If not JSON, try comma-separated
+            const models = gptHidden.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (models.length > 0) {
+              const list = document.getElementById('llm-gpt-models-list');
+              if (list) {
+                list.innerHTML = '';
+                models.forEach(model => {
+                  const badge = document.createElement('span');
+                  badge.className = 'badge bg-primary me-1 mb-1';
+                  badge.style.cursor = 'pointer';
+                  badge.textContent = model;
+                  badge.dataset.model = model;
+                  badge.title = 'Click to remove';
+                  badge.addEventListener('click', () => {
+                    badge.remove();
+                    const remaining = Array.from(list.querySelectorAll('.badge')).map(b => b.dataset.model).filter(Boolean);
+                    gptHidden.value = JSON.stringify(remaining);
+                  });
+                  list.appendChild(badge);
+                });
+                gptHidden.value = JSON.stringify(models);
+              }
+            }
+          }
+        }
+        
+        if (ollamaHidden && ollamaHidden.value) {
+          try {
+            const models = JSON.parse(ollamaHidden.value);
+            if (Array.isArray(models)) {
+              const list = document.getElementById('llm-ollama-models-list');
+              if (list) {
+                list.innerHTML = '';
+                models.forEach(model => {
+                  const badge = document.createElement('span');
+                  badge.className = 'badge bg-success me-1 mb-1';
+                  badge.style.cursor = 'pointer';
+                  badge.textContent = model;
+                  badge.dataset.model = model;
+                  badge.title = 'Click to remove';
+                  badge.addEventListener('click', () => {
+                    badge.remove();
+                    const remaining = Array.from(list.querySelectorAll('.badge')).map(b => b.dataset.model).filter(Boolean);
+                    ollamaHidden.value = JSON.stringify(remaining);
+                  });
+                  list.appendChild(badge);
+                });
+              }
+            }
+          } catch (e) {
+            // If not JSON, try comma-separated
+            const models = ollamaHidden.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (models.length > 0) {
+              const list = document.getElementById('llm-ollama-models-list');
+              if (list) {
+                list.innerHTML = '';
+                models.forEach(model => {
+                  const badge = document.createElement('span');
+                  badge.className = 'badge bg-success me-1 mb-1';
+                  badge.style.cursor = 'pointer';
+                  badge.textContent = model;
+                  badge.dataset.model = model;
+                  badge.title = 'Click to remove';
+                  badge.addEventListener('click', () => {
+                    badge.remove();
+                    const remaining = Array.from(list.querySelectorAll('.badge')).map(b => b.dataset.model).filter(Boolean);
+                    ollamaHidden.value = JSON.stringify(remaining);
+                  });
+                  list.appendChild(badge);
+                });
+                ollamaHidden.value = JSON.stringify(models);
+              }
+            }
+          }
+        }
+      };
+
     });
+
+    // LLM Settings Modal
+    const llmSettingsModal = document.getElementById('llmSettingsModal');
+    const llmSettingsForm = document.getElementById('llmSettingsForm');
+    const llmSettingsSaveBtn = document.getElementById('llm-settings-save-btn');
+    const llmSettingsFeedback = document.getElementById('llm-settings-feedback');
+    const llmProviderSelect = document.getElementById('llm-settings-provider');
+
+    if (llmSettingsModal && llmSettingsForm && llmSettingsSaveBtn) {
+      // Load LLM UI config (available models, etc.)
+      let llmUiConfig = {};
+      
+      const loadLlmUiConfig = async () => {
+        try {
+          const response = await fetch('/llm/ui-config');
+          if (response.ok) {
+            llmUiConfig = await response.json();
+            populateModelOptions();
+          }
+        } catch (err) {
+          console.error('Failed to load LLM UI config:', err);
+        }
+      };
+
+      const populateModelOptions = () => {
+        // Populate OpenAI models
+        const openaiSelect = document.getElementById('llm-settings-openai-model');
+        if (openaiSelect && llmUiConfig.gpt) {
+          openaiSelect.innerHTML = '<option value="">-- Select a model --</option>';
+          llmUiConfig.gpt.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            openaiSelect.appendChild(option);
+          });
+        }
+
+        // Populate Ollama models
+        const ollamaSelect = document.getElementById('llm-settings-ollama-model');
+        if (ollamaSelect && llmUiConfig.ollama) {
+          ollamaSelect.innerHTML = '<option value="">-- Select a model --</option>';
+          llmUiConfig.ollama.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            ollamaSelect.appendChild(option);
+          });
+        }
+      };
+
+      // Load saved LLM config
+      const loadSavedLlmConfig = async () => {
+        try {
+          const response = await fetch('/get-llm-config');
+          if (response.ok) {
+            const config = await response.json();
+            if (config.provider) {
+              llmProviderSelect.value = config.provider;
+              showProviderSettings(config.provider);
+
+              if (config.provider === 'openai') {
+                if (config.model) {
+                  const openaiModel = document.getElementById('llm-settings-openai-model');
+                  if (openaiModel) openaiModel.value = config.model;
+                }
+                // Note: API key is not returned for security
+              } else if (config.provider === 'ollama') {
+                if (config.model) {
+                  const ollamaModel = document.getElementById('llm-settings-ollama-model');
+                  if (ollamaModel) ollamaModel.value = config.model;
+                }
+                if (config.host) {
+                  const ollamaHost = document.getElementById('llm-settings-ollama-host');
+                  if (ollamaHost) ollamaHost.value = config.host;
+                }
+              } else if (config.provider === 'llama_cpp') {
+                if (config.host) {
+                  const llamaCppHost = document.getElementById('llm-settings-llama-cpp-host');
+                  if (llamaCppHost) llamaCppHost.value = config.host;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load saved LLM config:', err);
+        }
+      };
+
+      // Show/hide provider-specific settings
+      const showProviderSettings = (provider) => {
+        document.querySelectorAll('.llm-provider-settings').forEach(el => {
+          el.classList.add('d-none');
+        });
+        
+        if (provider === 'openai') {
+          document.getElementById('llm-settings-openai')?.classList.remove('d-none');
+        } else if (provider === 'ollama') {
+          document.getElementById('llm-settings-ollama')?.classList.remove('d-none');
+        } else if (provider === 'llama_cpp') {
+          document.getElementById('llm-settings-llama-cpp')?.classList.remove('d-none');
+        }
+      };
+
+      // Provider selection change handler
+      llmProviderSelect?.addEventListener('change', (e) => {
+        showProviderSettings(e.target.value);
+      });
+
+      // Save LLM settings
+      llmSettingsSaveBtn.addEventListener('click', async () => {
+        const provider = llmProviderSelect.value;
+        if (!provider) {
+          showLlmFeedback('Please select a provider', 'danger');
+          return;
+        }
+
+        const payload = {
+          provider: provider
+        };
+
+        if (provider === 'openai') {
+          const model = document.getElementById('llm-settings-openai-model')?.value;
+          const apiKey = document.getElementById('llm-settings-openai-api-key')?.value;
+          if (model) payload.model = model;
+          if (apiKey) payload.api_key = apiKey;
+        } else if (provider === 'ollama') {
+          const model = document.getElementById('llm-settings-ollama-model')?.value;
+          const host = document.getElementById('llm-settings-ollama-host')?.value;
+          if (model) payload.model = model;
+          if (host) payload.host = host;
+        } else if (provider === 'llama_cpp') {
+          const host = document.getElementById('llm-settings-llama-cpp-host')?.value;
+          if (host) payload.host = host;
+        }
+
+        try {
+          llmSettingsSaveBtn.disabled = true;
+          llmSettingsSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+          const response = await fetch('/save-llm-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const result = await response.json();
+          
+          if (response.ok && result.success) {
+            showLlmFeedback('LLM settings saved successfully!', 'success');
+            setTimeout(() => {
+              const modal = bootstrap.Modal.getInstance(llmSettingsModal);
+              if (modal) modal.hide();
+            }, 1500);
+          } else {
+            showLlmFeedback(result.message || 'Failed to save LLM settings', 'danger');
+          }
+        } catch (err) {
+          console.error('Error saving LLM config:', err);
+          showLlmFeedback('An error occurred while saving settings', 'danger');
+        } finally {
+          llmSettingsSaveBtn.disabled = false;
+          llmSettingsSaveBtn.innerHTML = '<i class="bi bi-save me-2"></i>Save Settings';
+        }
+      });
+
+      const showLlmFeedback = (message, variant) => {
+        if (!llmSettingsFeedback) return;
+        llmSettingsFeedback.textContent = message;
+        llmSettingsFeedback.className = `alert alert-${variant}`;
+        llmSettingsFeedback.classList.remove('d-none');
+        setTimeout(() => {
+          llmSettingsFeedback.classList.add('d-none');
+        }, 5000);
+      };
+
+      // Initialize when modal is shown
+      llmSettingsModal.addEventListener('show.bs.modal', () => {
+        loadLlmUiConfig();
+        loadSavedLlmConfig();
+      });
+    }
   </script>
 {% endif %}
 

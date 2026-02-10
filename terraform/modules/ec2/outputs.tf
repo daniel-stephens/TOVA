@@ -14,8 +14,8 @@ output "public_dns" {
 }
 
 output "ssh_command" {
-  description = "SSH command to connect to instance"
-  value       = "ssh -i your-key.pem ec2-user@${aws_eip.tova.public_ip}"
+  description = "SSH command to connect to instance (uses ubuntu for Ubuntu, ec2-user for Amazon Linux)"
+  value       = "ssh -i your-key.pem ubuntu@${aws_eip.tova.public_ip}"
 }
 
 output "web_url" {

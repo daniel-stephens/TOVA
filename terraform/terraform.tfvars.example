@@ -35,4 +35,6 @@ ec2_use_rds          = true  # Use RDS PostgreSQL (recommended) or Docker Postgr
 ec2_repo_url         = "https://github.com/daniel-stephens/TOVA.git"  # Git repository URL
 ec2_repo_branch      = "deployed"  # Git branch to clone
 ec2_enable_solr      = true  # Enable Solr services
+ec2_allow_public_web = true  # Allow public access to Web UI (port 8080)
+ec2_allow_public_api = true  # Allow public access to API (port 8000)
 

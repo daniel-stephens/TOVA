@@ -58,7 +58,7 @@ module "ec2" {
 | environment | Environment name | string | - | yes |
 | aws_region | AWS region | string | - | yes |
 | instance_type | EC2 instance type | string | "t3.medium" | no |
-| ami_id | AMI ID (empty = latest Amazon Linux 2023) | string | "" | no |
+| ami_id | AMI ID (empty = latest Ubuntu 22.04 LTS) | string | "" | no |
 | key_pair_name | EC2 Key Pair name | string | - | yes |
 | vpc_id | VPC ID | string | - | yes |
 | subnet_id | Subnet ID | string | - | yes |
@@ -98,7 +98,7 @@ The `user_data.sh` script automatically installs:
 
 ## Setup Process
 
-1. Instance launches with Amazon Linux 2023
+1. Instance launches with Ubuntu 22.04 LTS
 2. User data script runs automatically
 3. Installs Docker, Docker Compose, Git
 4. Clones repository (if provided) or creates directory
@@ -114,7 +114,7 @@ After deployment:
 
 - **Web UI**: `http://<public_ip>:8080`
 - **API**: `http://<public_ip>:8000`
-- **SSH**: `ssh -i your-key.pem ec2-user@<public_ip>`
+- **SSH**: `ssh -i your-key.pem ubuntu@<public_ip>` (or `ec2-user@` for Amazon Linux)
 
 ## Troubleshooting
 

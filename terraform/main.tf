@@ -176,6 +176,10 @@ module "ec2" {
   
   allowed_ssh_cidrs = var.ec2_allowed_ssh_cidrs
   
+  # Public access controls
+  ec2_allow_public_web = var.ec2_allow_public_web
+  ec2_allow_public_api = var.ec2_allow_public_api
+  
   # Git repository (optional)
   repo_url   = var.ec2_repo_url
   repo_branch = var.ec2_repo_branch
@@ -236,10 +240,10 @@ output "ec2_private_key_path" {
 
 output "ec2_private_key_save_instructions" {
   description = "Instructions for saving the private key"
-  value = var.deployment_type == "ec2" && var.ec2_create_key_pair ? (
-    "Private key saved to: ${local_file.private_key[0].filename}\n" +
+  value = var.deployment_type == "ec2" && var.ec2_create_key_pair ? join("\n", [
+    "Private key saved to: ${local_file.private_key[0].filename}",
     "Use it to SSH: ssh -i ${local_file.private_key[0].filename} ec2-user@<public_ip>"
-  ) : null
+  ]) : null
 }
 
 output "rds_endpoint" {

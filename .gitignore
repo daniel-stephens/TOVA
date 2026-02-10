@@ -18,3 +18,8 @@ src/tova.egg-info
 *.DS_Store
 static/config/users
 *test_*/
+
+# Terraform private keys
+*.pem
+terraform/*.pem
+terraform/**/*.pem

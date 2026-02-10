@@ -1,11 +1,11 @@
-# Get latest Amazon Linux 2023 AMI
-data "aws_ami" "amazon_linux" {
+# Get latest Ubuntu 22.04 LTS AMI
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
@@ -49,7 +49,7 @@ resource "aws_security_group" "ec2" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_cidrs
+    cidr_blocks = var.ec2_allow_public_web ? ["0.0.0.0/0"] : var.allowed_ssh_cidrs
   }
 
   ingress {
@@ -57,7 +57,7 @@ resource "aws_security_group" "ec2" {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_cidrs
+    cidr_blocks = var.ec2_allow_public_api ? ["0.0.0.0/0"] : var.allowed_ssh_cidrs
   }
 
   egress {
@@ -81,7 +81,7 @@ resource "random_password" "flask_secret" {
 
 # EC2 Instance
 resource "aws_instance" "tova" {
-  ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux.id
+  ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.ec2.id]

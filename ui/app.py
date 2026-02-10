@@ -9,8 +9,25 @@ from uuid import uuid4
 from copy import deepcopy
 
 import requests
-import yaml
+from ruamel.yaml import YAML
 from authlib.integrations.flask_client import OAuth
+
+# Configure ruamel.yaml to preserve formatting (inline arrays, etc.)
+# ruamel.yaml preserves formatting when loading existing files
+yaml = YAML()
+yaml.preserve_quotes = True
+yaml.width = 1000  # Wide width to prevent unwanted line breaks
+yaml.indent(mapping=2, sequence=4, offset=2)  # Match default config indentation
+
+# Configure to use flow style (inline) for short lists/arrays to match default config format
+def represent_list(self, data):
+    """Use flow style (inline) for lists with <= 10 items."""
+    if len(data) <= 10:
+        return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+    return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+
+# Add custom representer for lists
+yaml.Representer.add_representer(list, represent_list)
 from dashboard_utils import pydantic_to_dict, to_dashboard_bundle
 from flask import (
     Flask,
@@ -84,7 +101,7 @@ JOB_STATUS_TIMEOUT_SECONDS = 10
 JOB_STATUS_POLLING_INTERVAL_SECONDS = 1
 try:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        RAW_CONFIG = yaml.safe_load(f) or {}
+        RAW_CONFIG = yaml.load(f) or {}
 except FileNotFoundError:
     server.logger.warning("config.yaml not found at %s; RAW_CONFIG = {}", CONFIG_PATH)
     RAW_CONFIG = {}
@@ -130,51 +147,16 @@ def _load_user_config(user_id: str) -> dict | None:
     return entry.config if entry else None
 
 
-def _get_user_config_file_path(user_id: str) -> Path | None:
-    """Get the file path for a user's config file."""
-    if not user_id:
-        return None
-    # Sanitize user_id for filename (remove any path separators or dangerous chars)
-    safe_user_id = user_id.replace("/", "_").replace("\\", "_").replace("..", "")
-    return USER_CONFIGS_DIR / f"{safe_user_id}.yaml"
-
-
-def _ensure_user_config_file(user_id: str) -> str | None:
+def _save_user_config_overrides(user_id: str, overrides: dict):
     """
-    Ensure a user's config file exists on disk with their effective config.
-    Returns the relative path to the config file (e.g., "static/config/users/{user_id}.yaml")
-    or None if user_id is missing.
+    Save only the user's config overrides (changes) to the database.
+    This stores only what differs from defaults, not the whole config.
     """
-    if not user_id:
-        return None
-    
-    config_file_path = _get_user_config_file_path(user_id)
-    if config_file_path is None:
-        return None
-    
-    # Get the effective config (merged default + user overrides)
-    effective_config = get_effective_user_config(user_id)
-    
-    # Write to file
-    try:
-        with config_file_path.open("w", encoding="utf-8") as f:
-            yaml.dump(effective_config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        server.logger.debug("Saved user config to file: %s", config_file_path)
-    except Exception as e:
-        server.logger.exception("Failed to write user config file %s: %s", config_file_path, e)
-        # Fallback to default config path
-        return "static/config/config.yaml"
-    
-    # Return relative path from project root
-    relative_path = config_file_path.relative_to(BASE_DIR)
-    return str(relative_path).replace("\\", "/")  # Normalize path separators
-
-
-def _save_user_config(user_id: str, config: dict):
-    """Upsert user configuration in the database and static file."""
     if not user_id:
         return
-    sanitized = _json_safe(config or {})
+    
+    # Save only the overrides to database
+    sanitized = _json_safe(overrides or {})
     entry = UserConfig.query.filter_by(user_id=user_id).first()
     if entry:
         entry.config = sanitized
@@ -182,22 +164,18 @@ def _save_user_config(user_id: str, config: dict):
         entry = UserConfig(user_id=user_id, config=sanitized)
         db.session.add(entry)
     db.session.commit()
-    
-    # Also save to static file
-    _ensure_user_config_file(user_id)
+    server.logger.debug("Saved user config overrides to database for user: %s", user_id)
 
 
 def _reset_user_config(user_id: str):
-    """Remove user-specific configuration (falls back to defaults) and update static file."""
+    """Remove user-specific configuration overrides (falls back to defaults)."""
     if not user_id:
         return
     entry = UserConfig.query.filter_by(user_id=user_id).first()
     if entry:
         db.session.delete(entry)
         db.session.commit()
-    
-    # Update the static config file (will now contain only defaults)
-    _ensure_user_config_file(user_id)
+        server.logger.debug("Reset user config overrides for user: %s", user_id)
 
 
 def get_effective_user_config(user_id: str) -> dict:
@@ -213,10 +191,17 @@ def get_effective_user_config(user_id: str) -> dict:
         g._effective_user_config = base
         return base
 
+    # Load user's overrides from database
     overrides = _load_user_config(user_id) or {}
-    merged = _deep_merge(base, overrides if isinstance(overrides, dict) else {})
-    g._effective_user_config = merged
-    return merged
+    if overrides:
+        # Merge defaults with user overrides
+        merged = _deep_merge(base, overrides if isinstance(overrides, dict) else {})
+        g._effective_user_config = merged
+        return merged
+    
+    # If no user config exists, return default
+    g._effective_user_config = base
+    return g._effective_user_config
 
 
 def build_llm_ui_config(config: dict | None = None):
@@ -392,6 +377,8 @@ def inject_user():
     return {"user": getattr(g, "user", None)}
 
 
+
+
 # ------------------------------------------------------------------------------
 # Auth routes (local username/password + optional Okta)
 # ------------------------------------------------------------------------------
@@ -512,7 +499,9 @@ def auth_okta_callback():
 
     # Find or create user in the database
     user = User.query.filter_by(email=email).first()
+    is_new_user = False
     if not user:
+        is_new_user = True
         user = User(
             id=str(uuid4()),
             name=name or email,
@@ -641,15 +630,26 @@ def api_update_user_config():
         return jsonify({"success": False, "message": "Config must be a JSON object."}), 400
 
     user_id = session.get("user_id")
-    merged = _deep_merge(DEFAULT_CONFIG, _json_safe(payload))
-    _save_user_config(user_id, merged)
-    config_path = _ensure_user_config_file(user_id)
+    # Save only the overrides (what changed from defaults)
+    overrides = _json_safe(payload)
+    _save_user_config_overrides(user_id, overrides)
+    
+    # Return the effective config (defaults merged with overrides)
+    merged = get_effective_user_config(user_id)
     return jsonify({
         "success": True, 
         "config": merged, 
-        "message": "Configuration saved.",
-        "config_path": config_path  # Return the file path where config was saved
+        "message": "Configuration saved."
     }), 200
+
+
+@server.route("/api/user-config/overrides", methods=["GET"])
+@login_required
+def api_get_user_config_overrides():
+    """Get only the user's config overrides (not the full effective config)."""
+    user_id = session.get("user_id")
+    overrides = _load_user_config(user_id) or {}
+    return jsonify(overrides), 200
 
 
 @server.route("/api/user-config/reset", methods=["POST"])
@@ -658,12 +658,10 @@ def api_reset_user_config():
     user_id = session.get("user_id")
     _reset_user_config(user_id)
     fresh = get_effective_user_config(user_id)
-    config_path = _ensure_user_config_file(user_id)
     return jsonify({
         "success": True, 
         "config": fresh, 
-        "message": "Configuration reset to defaults.",
-        "config_path": config_path  # Return the file path where config was saved
+        "message": "Configuration reset to defaults."
     }), 200
 
 
@@ -1053,40 +1051,95 @@ def training_start():
     model = payload.get("model")
     model_name = payload.get("model_name")
     training_params = payload.get("training_params") or {}
+    config_path = payload.get("config_path", "static/config/config.yaml")  # Get config_path from payload or use default
     user_id = session.get("user_id")
 
     if not corpus_id or not model or not model_name:
         return jsonify({"error": "Missing corpus_id/model/model_name"}), 400
 
-    # Merge training_params into user config for traditional models
-    # This ensures the config file has the correct values when the base class reads from it
-    if training_params and model in ["tomotopyLDA", "CTM"]:  # Traditional models
-        current_config = get_effective_user_config(user_id)
-        # Map training_params to config structure
-        if "do_labeller" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_labeller"] = training_params["do_labeller"]
-        if "do_summarizer" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_summarizer"] = training_params["do_summarizer"]
-        if "llm_model_type" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["llm_model_type"] = training_params["llm_model_type"]
-        if "labeller_prompt" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_prompt"]
-        elif "labeller_model_path" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_model_path"]
-        if "summarizer_prompt" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["summarizer_prompt"] = training_params["summarizer_prompt"]
-        if "num_topics" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["num_topics"] = training_params["num_topics"]
-        if "thetas_thr" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["thetas_thr"] = training_params["thetas_thr"]
-        if "topn" in training_params:
-            current_config.setdefault("topic_modeling", {}).setdefault("traditional", {})["topn"] = training_params["topn"]
+    # Load existing user config overrides from database
+    existing_overrides = _load_user_config(user_id) or {}
+    
+    # Build new overrides from training_params (what user changed in this form)
+    # We merge with existing overrides to preserve previous user changes
+    new_overrides = {}
+    if training_params:
+        # Build overrides structure matching config hierarchy
+        if model in ["tomotopyLDA", "CTM"]:  # Traditional models
+            if "do_labeller" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_labeller"] = training_params["do_labeller"]
+            if "do_summarizer" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["do_summarizer"] = training_params["do_summarizer"]
+            if "llm_model_type" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["llm_model_type"] = training_params["llm_model_type"]
+            if "labeller_prompt" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_prompt"]
+            elif "labeller_model_path" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["labeller_model_path"] = training_params["labeller_model_path"]
+            if "summarizer_prompt" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["summarizer_prompt"] = training_params["summarizer_prompt"]
+            if "num_topics" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["num_topics"] = training_params["num_topics"]
+            if "thetas_thr" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["thetas_thr"] = training_params["thetas_thr"]
+            if "topn" in training_params:
+                new_overrides.setdefault("topic_modeling", {}).setdefault("traditional", {})["topn"] = training_params["topn"]
+            
+            # Map CTM-specific parameters to topic_modeling.ctm
+            if model == "CTM":
+                ctm_params = [
+                    "num_epochs", "sbert_model", "sbert_context", "batch_size",
+                    "contextual_size", "inference_type", "n_components", "model_type",
+                    "hidden_sizes", "activation", "dropout", "learn_priors",
+                    "lr", "momentum", "solver", "reduce_on_plateau",
+                    "num_data_loader_workers", "label_size", "loss_weights"
+                ]
+                for param in ctm_params:
+                    if param in training_params:
+                        value = training_params[param]
+                        # Handle string representations of arrays/objects (e.g., "[100,100]")
+                        if param in ["hidden_sizes", "loss_weights"] and isinstance(value, str):
+                            try:
+                                value = json.loads(value)
+                            except (json.JSONDecodeError, ValueError):
+                                # Keep as string if parsing fails
+                                pass
+                        # Ensure lists are stored as lists (not tuples)
+                        if param in ["hidden_sizes", "loss_weights"] and isinstance(value, (list, tuple)):
+                            value = list(value)  # Convert tuple to list if needed
+                        new_overrides.setdefault("topic_modeling", {}).setdefault("ctm", {})[param] = value
         
-        # Save the updated config
-        _save_user_config(user_id, current_config)
-
-    # Ensure user config file exists and get its path
-    config_path = _ensure_user_config_file(user_id) or "static/config/config.yaml"
+        # Also handle model-specific overrides (for any model)
+        model_specific_params = {}
+        for key, value in training_params.items():
+            # Skip already handled params
+            if key in ["do_labeller", "do_summarizer", "llm_model_type", "labeller_prompt", 
+                      "labeller_model_path", "summarizer_prompt", "num_topics", "thetas_thr", "topn",
+                      "preprocess_text"]:
+                continue
+            # Skip CTM params if model is CTM
+            if model == "CTM" and key in ["num_epochs", "sbert_model", "sbert_context", "batch_size",
+                                          "contextual_size", "inference_type", "n_components", "model_type",
+                                          "hidden_sizes", "activation", "dropout", "learn_priors",
+                                          "lr", "momentum", "solver", "reduce_on_plateau",
+                                          "num_data_loader_workers", "label_size", "loss_weights"]:
+                continue
+            # Add to model-specific overrides
+            model_specific_params[key] = value
+        
+        if model_specific_params:
+            new_overrides.setdefault("topic_modeling", {})[model] = model_specific_params
+        
+        # Merge new overrides with existing overrides (new takes precedence)
+        merged_overrides = _deep_merge(existing_overrides, new_overrides)
+        
+        # Save merged overrides to database
+        if merged_overrides:
+            _save_user_config_overrides(user_id, merged_overrides)
+    
+    # training_params already contains all user changes (from database + form)
+    # So we send it directly to the API along with config_path
+    final_training_params = deepcopy(training_params)
 
     # get corpus
     try:
@@ -1115,8 +1168,8 @@ def training_start():
         "data": docs,
         "id_col": "id",
         "text_col": "text",
-        "training_params": training_params,
-        "config_path": config_path,  # Use user-specific config path
+        "training_params": final_training_params,  # All user changes (from database + form) as parameters
+        "config_path": config_path,  # Default config path (user changes sent as parameters)
         "model_name": model_name,
         "owner_id": user_id,
     }
@@ -2015,8 +2068,8 @@ def load_config(filepath=CONFIG_PATH):
     try:
         with open(filepath, 'r') as f:
             # Use safe_load to avoid potential security issues
-            return yaml.safe_load(f)
-    except yaml.YAMLError as exc:
+            return yaml.load(f)
+    except Exception as exc:
         print(f"Error reading YAML file: {exc}")
         return {}
     except Exception as exc:
@@ -2136,13 +2189,19 @@ def load_config(filepath=CONFIG_PATH):
     try:
         with open(filepath, 'r') as f:
             # Use safe_load to avoid potential security issues
-            return yaml.safe_load(f)
-    except yaml.YAMLError as exc:
+            return yaml.load(f)
+    except Exception as exc:
         print(f"Error reading YAML file: {exc}")
         return {}
     except Exception as exc:
         print(f"An unexpected error occurred: {exc}")
         return {}
+
+
+# Note: Encoded routes are handled by the custom url_for which generates encoded paths.
+# The server accepts both original and encoded routes for backward compatibility.
+# For better security, consider registering routes with both original and encoded paths
+# using the register_encoded_route() helper function above.
 
 
 # ------------------------------------------------------------------------------

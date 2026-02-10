@@ -34,8 +34,27 @@ build-api:
 build-web:
 	docker compose build web
 
-# build-solr-api:
-# 	docker compose build solr-api
+build-solr-api:
+	docker build \
+		--build-arg BUILDER_IMAGE=tova-builder:$(VERSION) \
+		-t tova-solr-api:$(VERSION) \
+		-f docker/Dockerfile.solr_api .
+
+build-solr:
+	docker build \
+		-t tova-solr:$(VERSION) \
+		-f docker/Dockerfile.solr_db .
+
+rebuild-solr-api:
+	docker build --no-cache \
+		--build-arg BUILDER_IMAGE=tova-builder:$(VERSION) \
+		-t tova-solr-api:$(VERSION) \
+		-f docker/Dockerfile.solr_api .
+
+rebuild-solr:
+	docker build --no-cache \
+		-t tova-solr:$(VERSION) \
+		-f docker/Dockerfile.solr_db .
 
 rebuild-api:
 	docker compose build --no-cache api
@@ -74,7 +93,7 @@ logs-postgres:
 # 	docker compose logs -f solr-api
 
 .PHONY: build-builder build-assets rebuild-builder rebuild-assets \
-        build-api build-web \
-        rebuild-api rebuild-web \
+        build-api build-web build-solr-api build-solr \
+        rebuild-api rebuild-web rebuild-solr-api rebuild-solr \
         build rebuild-all rebuild-run up down \
         logs-api logs-web logs-postgres

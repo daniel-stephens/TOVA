@@ -140,3 +140,15 @@ variable "ec2_enable_solr" {
   default     = true
 }
 
+variable "ec2_allow_public_web" {
+  description = "Allow public access to Web UI on port 8080 (default: true)"
+  type        = bool
+  default     = true
+}
+
+variable "ec2_allow_public_api" {
+  description = "Allow public access to API on port 8000 (default: true)"
+  type        = bool
+  default     = true
+}
+

@@ -20,7 +20,7 @@ variable "instance_type" {
 }
 
 variable "ami_id" {
-  description = "AMI ID (leave empty to use latest Amazon Linux 2023)"
+  description = "AMI ID (leave empty to use latest Ubuntu 22.04 LTS)"
   type        = string
   default     = ""
 }
@@ -43,7 +43,7 @@ variable "subnet_id" {
 variable "volume_size" {
   description = "Root volume size in GB"
   type        = number
-  default     = 30
+  default     = 100
 }
 
 variable "allowed_ssh_cidrs" {
@@ -101,6 +101,18 @@ variable "repo_branch" {
 
 variable "enable_solr" {
   description = "Enable Solr services"
+  type        = bool
+  default     = true
+}
+
+variable "ec2_allow_public_web" {
+  description = "Allow public access to Web UI on port 8080 (if false, only allowed_ssh_cidrs can access)"
+  type        = bool
+  default     = true
+}
+
+variable "ec2_allow_public_api" {
+  description = "Allow public access to API on port 8000 (if false, only allowed_ssh_cidrs can access)"
   type        = bool
   default     = true
 }

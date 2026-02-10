@@ -196,14 +196,6 @@
         </div>
 
         <div class="border rounded">
-          <div class="d-flex justify-content-between align-items-center px-2 pt-2">
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" id="includeAdvanced" checked>
-              <label class="form-check-label small text-muted" for="includeAdvanced">
-                Include advanced parameters
-              </label>
-            </div>
-          </div>
           <button class="btn btn-light w-100 d-flex justify-content-between align-items-center p-2 rounded-top"
                   type="button" id="toggleAdvanced" style="font-size: 0.9rem;">
             <span class="fw-bold text-secondary">
@@ -267,7 +259,8 @@
     corpora: "{{ url_for('getAllCorpora') }}",
     names: "{{ url_for('get_model_names') }}",
     config: "{{ url_for('static', filename='config/config.yaml') }}",
-    page: "{{ url_for('training_page_get') }}"
+    page: "{{ url_for('training_page_get') }}",
+    userOverrides: "/api/user-config/overrides"
   };
 
   const state = {
@@ -466,8 +459,6 @@
       advancedSettings: $("#advancedSettings"),
       advancedIcon: $("#advancedIcon"),
       toggleAdvancedBtn: $("#toggleAdvanced"),
-      includeAdvanced: $("#includeAdvanced"),
-      includeLlm: $("#include_llm"),
     });
 
     // Safe modal init
@@ -660,26 +651,6 @@
     );
   };
 
-  // Helper to setup LLM provider show/hide behavior
-  // Helper to setup LLM provider show/hide behavior
-const setupLlmProviderUi = (initialProvider) => {
-  const providerSelect = $("#llm_provider");
-  if (!providerSelect || !dom.basicGroupParams) return;
-  const sections = dom.basicGroupParams.querySelectorAll(".llm-provider-section");
-
-  const showProvider = (prov) => {
-    sections.forEach((sec) => {
-      const p = sec.dataset.provider || "";
-      sec.classList.toggle("d-none", p !== prov);
-    });
-  };
-
-  showProvider(initialProvider || "");
-
-  providerSelect.addEventListener("change", (e) => {
-    showProvider(e.target.value || "");
-  });
-};
 
 // ---- Basic group-level params (traditional / llm-based) ----
 const renderBasicGroupParams = (modelName) => {
@@ -703,13 +674,14 @@ const renderBasicGroupParams = (modelName) => {
       key !== "topn"
   );
 
+  // Filter out LLM-related fields - they're now in a separate LLM Settings modal
   const isLlmField = (key) => {
-  const k = key.toLowerCase();
-  return (
-    k.includes("llm") ||   // llm, llm_server, llm_model_type, etc.
-    k.includes("prompt")   // labeller_prompt, summarizer_prompt, etc.
-  );
-};
+    const k = key.toLowerCase();
+    return (
+      k.includes("llm") ||   // llm, llm_server, llm_model_type, etc.
+      k.includes("prompt")   // labeller_prompt, summarizer_prompt, etc.
+    );
+  };
 
   const nonLlmEntries = entries.filter(([key]) => !isLlmField(key));
 
@@ -796,212 +768,28 @@ const renderBasicGroupParams = (modelName) => {
     parts.push(makeFieldHtml(key, val));
   });
 
-  // 2) LLM provider UI in one aligned line: Provider | Model | Host/API
-  const pm = state.promptModels || {};
-  const kindCfg =
-    kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
-  const backends = pm.backends || {};
-
-  const openaiModels = backends.openai?.models || [];
-  const openaiApiPath = backends.openai?.api_key_path || null;
-  const ollamaModels = backends.ollama?.models || [];
-  const ollamaHostDefault = backends.ollama?.host || "";
-  const llamaCppHostDefault = backends.llama_cpp?.host || "";
-
-  let initialProvider = "";
-  let initialOpenaiModel = "";
-  let initialOllamaModel = "";
-  let initialOllamaHost = ollamaHostDefault;
-  let initialLlamaCppHost = llamaCppHostDefault;
-
-  const configuredModel = kindCfg.model;
-  const configuredServer = kindCfg.server;
-
-  if (configuredModel && openaiModels.includes(configuredModel)) {
-    initialProvider = "openai";
-    initialOpenaiModel = configuredModel;
-  } else if (configuredModel && ollamaModels.includes(configuredModel)) {
-    initialProvider = "ollama";
-    initialOllamaModel = configuredModel;
-  } else if (configuredServer && configuredServer === ollamaHostDefault) {
-    initialProvider = "ollama";
-  } else if (configuredServer && configuredServer === llamaCppHostDefault) {
-    initialProvider = "llama_cpp";
-  } else if (configuredModel && openaiModels.length && configuredModel.startsWith("gpt-")) {
-    initialProvider = "openai";
-    initialOpenaiModel = configuredModel;
-  } else if (configuredModel && ollamaModels.length) {
-    initialProvider = "ollama";
-    initialOllamaModel = configuredModel;
-  }
-
-  if (configuredServer && initialProvider === "ollama") {
-    initialOllamaHost = configuredServer;
-  } else if (configuredServer && initialProvider === "llama_cpp") {
-    initialLlamaCppHost = configuredServer;
-  }
-
-  const providerOptions = `
-    <option value="" selected>Choose a provider</option>
-    <option value="openai">OpenAI</option>
-    <option value="ollama">Ollama</option>
-    <option value="llama_cpp">llama.cpp</option>
-  `;
-
-  const openaiModelOptions = [
-    initialOpenaiModel && !openaiModels.includes(initialOpenaiModel)
-      ? initialOpenaiModel
-      : null,
-    ...openaiModels,
-  ]
-    .filter(Boolean)
-    .map((m) => {
-      const s = escapeHtml(String(m));
-      const selected = s === initialOpenaiModel ? "selected" : "";
-      return `<option value="${s}" ${selected}>${s}</option>`;
-    })
-    .join("") || '<option value="">(no models configured)</option>';
-
-  const ollamaModelOptions = [
-    initialOllamaModel && !ollamaModels.includes(initialOllamaModel)
-      ? initialOllamaModel
-      : null,
-    ...ollamaModels,
-  ]
-    .filter(Boolean)
-    .map((m) => {
-      const s = escapeHtml(String(m));
-      const selected = s === initialOllamaModel ? "selected" : "";
-      return `<option value="${s}" ${selected}>${s}</option>`;
-    })
-    .join("") || '<option value="">(no models configured)</option>';
-
-  const openaiApiHint = openaiApiPath
-    ? `Configured via <code>${escapeHtml(openaiApiPath)}</code>.`
-    : "Configured via server environment.";
-
-  parts.push(`
-    <div class="col-12 mt-3">
-      <div class="border rounded p-2 bg-light-subtle">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="small fw-bold text-secondary">
-            <i class="bi bi-toggle-on me-1"></i> Include LLM provider &amp; model
+  // 2) LLM settings are now in a separate "LLM Settings" modal
+  // Add a note about LLM settings
+  if (nonLlmEntries.length > 0) {
+    parts.push(`
+      <div class="col-12 mt-2">
+        <div class="alert alert-info d-flex align-items-center gap-2 py-2" style="font-size: 0.85rem;">
+          <i class="bi bi-info-circle"></i>
+          <span>
+            <strong>LLM Configuration:</strong> Configure LLM providers and models in the 
+            <button type="button" class="btn btn-link btn-sm p-0 align-baseline" 
+                    data-bs-toggle="modal" data-bs-target="#llmSettingsModal" 
+                    style="text-decoration: underline; font-size: inherit;">
+              LLM Settings
+            </button> modal.
           </span>
-          <div class="form-check form-switch m-0">
-            <input class="form-check-input" type="checkbox" id="include_llm" checked>
-          </div>
-        </div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="small fw-bold text-secondary">
-            <i class="bi bi-cpu me-1"></i> LLM provider &amp; model
-          </span>
-        </div>
-        <div class="row g-2 align-items-end">
-          <!-- Provider -->
-          <div class="col-md-4 col-sm-12">
-            <label class="form-label-compact" for="llm_provider">
-              Provider
-            </label>
-            <select id="llm_provider"
-                    class="form-select form-select-sm llm-field">
-              ${providerOptions}
-            </select>
-          </div>
-
-          <!-- Model (OpenAI / Ollama) or N/A -->
-          <div class="col-md-4 col-sm-6">
-            <div class="llm-provider-section d-none" data-provider="openai">
-              <label class="form-label-compact" for="llm_openai_model">
-                Model
-              </label>
-              <select id="llm_openai_model" class="form-select form-select-sm llm-field">
-                ${openaiModelOptions}
-              </select>
-            </div>
-
-            <div class="llm-provider-section d-none" data-provider="ollama">
-              <label class="form-label-compact" for="llm_ollama_model">
-                Model
-              </label>
-              <select id="llm_ollama_model" class="form-select form-select-sm">
-                ${ollamaModelOptions}
-              </select>
-            </div>
-
-            <div class="llm-provider-section d-none" data-provider="llama_cpp">
-              <label class="form-label-compact" for="llm_llamacpp_model_placeholder">
-                Model
-              </label>
-              <input type="text"
-                     id="llm_llamacpp_model_placeholder"
-                     class="form-control form-control-sm"
-                     value="N/A for llama.cpp"
-                     disabled>
-            </div>
-          </div>
-
-          <!-- Host / API key -->
-          <div class="col-md-4 col-sm-6">
-            <!-- OpenAI: API key -->
-            <div class="llm-provider-section d-none" data-provider="openai">
-              <label class="form-label-compact" for="llm_openai_api_key">
-                API key / Host
-              </label>
-              <input type="password"
-                     class="form-control form-control-sm"
-                     id="llm_openai_api_key"
-                     placeholder="Leave blank to use server key">
-              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
-                ${openaiApiHint}
-              </small>
-            </div>
-
-            <!-- Ollama: host -->
-            <div class="llm-provider-section d-none" data-provider="ollama">
-              <label class="form-label-compact" for="llm_ollama_host">
-                Host
-              </label>
-              <input type="text"
-                     class="form-control form-control-sm llm-field"
-                     id="llm_ollama_host"
-                     value="${escapeHtml(initialOllamaHost || "")}">
-              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
-                Default: ${escapeHtml(ollamaHostDefault || "not set")}
-              </small>
-            </div>
-
-            <!-- llama.cpp: host -->
-            <div class="llm-provider-section d-none" data-provider="llama_cpp">
-              <label class="form-label-compact" for="llm_llamacpp_host">
-                Host
-              </label>
-              <input type="text"
-                     class="form-control form-control-sm llm-field"
-                     id="llm_llamacpp_host"
-                     value="${escapeHtml(initialLlamaCppHost || "")}">
-              <small class="text-muted d-block mt-1" style="font-size:0.7rem;">
-                Default: ${escapeHtml(llamaCppHostDefault || "not set")}
-              </small>
-            </div>
-          </div>
         </div>
       </div>
-    </div>
-  `);
+    `);
+  }
 
   dom.basicGroupParams.innerHTML = parts.join("");
-
-  // Wire provider switching
-  setupLlmProviderUi(initialProvider);
 };
-
-
-
-
-  // ---- Basic group-level params (traditional / llm-based) ----
-  // Helper to setup LLM provider show/hide behavior
-
-// ---- Basic group-level params (traditional / llm-based) ----
 
   // ---- Advanced params rendering (model-specific only) ----
   const renderParamsIntoModal = (modelName) => {
@@ -1221,8 +1009,7 @@ const renderBasicGroupParams = (modelName) => {
 
     if (dom.toggleAdvancedBtn && dom.advancedSettings && dom.advancedIcon) {
       dom.toggleAdvancedBtn.addEventListener("click", () => {
-      if (dom.includeAdvanced && !dom.includeAdvanced.checked) return;
-      const isHidden =
+        const isHidden =
           dom.advancedSettings.style.display === "none" ||
           !dom.advancedSettings.style.display;
         dom.advancedSettings.style.display = isHidden ? "block" : "none";
@@ -1231,18 +1018,6 @@ const renderBasicGroupParams = (modelName) => {
       });
     }
 
-    // Wire include_llm toggle to disable/enable llm fields
-    if (dom.includeLlm) {
-      const toggleLlmFields = (enabled) => {
-        document.querySelectorAll(".llm-field").forEach((el) => {
-          el.disabled = !enabled;
-        });
-      };
-      toggleLlmFields(dom.includeLlm.checked);
-      dom.includeLlm.addEventListener("change", (e) => {
-        toggleLlmFields(e.target.checked);
-      });
-    }
 
     if (dom.confirmBtn) {
       dom.confirmBtn.addEventListener("click", handleTrainingStart);
@@ -1311,9 +1086,8 @@ const renderBasicGroupParams = (modelName) => {
       const includeToggle = container.querySelector(`.include-adv[data-for="${key}"]`);
       if (includeToggle && !includeToggle.checked) return;
 
-      // Skip provider-specific fields that are hidden
-      const llmSection = el.closest(".llm-provider-section");
-      if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
+      // Skip LLM fields - they're now in a separate modal
+      if (key.startsWith("llm_")) return;
 
       // If this element is gated by an include toggle and it's off, disable edits
       if (includeToggle && !includeToggle.checked) {
@@ -1347,6 +1121,19 @@ const renderBasicGroupParams = (modelName) => {
         return;
       }
 
+      // Try to parse JSON for array/object parameters (e.g., hidden_sizes, loss_weights)
+      // This handles cases where the value was JSON.stringified during rendering
+      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          out[key] = parsed;
+          return;
+        } catch (e) {
+          // If parsing fails, treat as regular string
+          console.warn(`Failed to parse JSON for ${key}:`, trimmed);
+        }
+      }
+
       out[key] = trimmed;
     });
     return out;
@@ -1358,82 +1145,135 @@ const renderBasicGroupParams = (modelName) => {
   const collectAdvancedParams = () =>
     collectParamsFromContainer(dom.paramsArea);
 
-  // Map provider UI fields back into training_params.{llm_model_type|llm,llm_server,...}
-  const applyLlmSelection = (training_params, modelName) => {
+  // Apply LLM settings from session/user config to training_params
+  const applyLlmSelection = async (training_params, modelName) => {
     const kind = getModelKind(modelName);
     const pm = state.promptModels || {};
     const backends = pm.backends || {};
-
-    const provider = training_params.llm_provider || "";
-    const openaiModel = training_params.llm_openai_model || "";
-    const openaiKey = training_params.llm_openai_api_key || "";
-    const ollamaModel = training_params.llm_ollama_model || "";
-    const ollamaHost = training_params.llm_ollama_host || "";
-    const llamaCppHost = training_params.llm_llamacpp_host || "";
-
-    delete training_params.llm_provider;
-    delete training_params.llm_openai_model;
-    delete training_params.llm_openai_api_key;
-    delete training_params.llm_ollama_model;
-    delete training_params.llm_ollama_host;
-    delete training_params.llm_llamacpp_host;
+    const kindCfg = kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
 
     let targetModelField = null;
     if (kind === "traditional") targetModelField = "llm_model_type";
     else if (kind === "llm_based") targetModelField = "llm";
 
-    const kindCfg =
-      kind === "traditional" ? pm.traditional || {} : pm.llm_based || {};
+    // Fetch saved LLM config from server (session-based)
+    try {
+      const response = await fetch("/get-llm-config");
+      if (!response.ok) return; // No saved config, use defaults
+      
+      const savedConfig = await response.json();
+      const provider = savedConfig.provider;
+      const model = savedConfig.model;
+      const host = savedConfig.host;
+      const apiKey = savedConfig.api_key; // May not be returned for security
 
-    if (!provider) return; // optional: no provider chosen, keep only what user set elsewhere
+      if (!provider) return; // No provider configured
 
-    training_params.llm_provider = provider;
+      training_params.llm_provider = provider;
 
-    if (provider === "openai") {
-      const chosenModel =
-        openaiModel ||
-        kindCfg.model ||
-        (backends.openai?.models?.[0] || null);
-      if (targetModelField && chosenModel) {
-        training_params[targetModelField] = chosenModel;
-      }
-      if (openaiKey) {
-        training_params.llm_api_key = openaiKey;
-      }
-      // For OpenAI, server is implicit; clear explicit ollama/llama servers
-      if ("llm_server" in training_params && !kindCfg.server) {
-        delete training_params.llm_server;
-      }
-    } else if (provider === "ollama") {
-      const chosenModel =
-        ollamaModel ||
-        kindCfg.model ||
-        (backends.ollama?.models?.[0] || null);
-      const host =
-        ollamaHost ||
-        kindCfg.server ||
-        backends.ollama?.host ||
-        null;
+      if (provider === "openai") {
+        const chosenModel = model || kindCfg.model || (backends.openai?.models?.[0] || null);
+        if (targetModelField && chosenModel) {
+          training_params[targetModelField] = chosenModel;
+        }
+        if (apiKey) {
+          training_params.llm_api_key = apiKey;
+        }
+        // For OpenAI, server is implicit; clear explicit ollama/llama servers
+        if ("llm_server" in training_params && !kindCfg.server) {
+          delete training_params.llm_server;
+        }
+      } else if (provider === "ollama") {
+        const chosenModel = model || kindCfg.model || (backends.ollama?.models?.[0] || null);
+        const serverHost = host || kindCfg.server || backends.ollama?.host || null;
 
-      if (targetModelField && chosenModel) {
-        training_params[targetModelField] = chosenModel;
+        if (targetModelField && chosenModel) {
+          training_params[targetModelField] = chosenModel;
+        }
+        if (serverHost) {
+          training_params.llm_server = serverHost;
+        }
+      } else if (provider === "llama_cpp") {
+        const serverHost = host || kindCfg.server || backends.llama_cpp?.host || null;
+        if (serverHost) {
+          training_params.llm_server = serverHost;
+        }
+        if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
+          training_params[targetModelField] = kindCfg.model;
+        }
       }
-      if (host) {
-        training_params.llm_server = host;
-      }
-    } else if (provider === "llama_cpp") {
-      const host =
-        llamaCppHost ||
-        kindCfg.server ||
-        backends.llama_cpp?.host ||
-        null;
-      if (host) {
-        training_params.llm_server = host;
-      }
-      if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
-        training_params[targetModelField] = kindCfg.model;
-      }
+    } catch (err) {
+      console.warn("Failed to load LLM config from session:", err);
+      // Fall back to defaults from config.yaml if session config fails
     }
+  };
+
+  // Get default values for a model from config
+  const getDefaultParams = (modelName) => {
+    const tm = state.modelConfig?.topic_modeling || {};
+    const kind = getModelKind(modelName);
+    const groupKey = kind === "traditional" || kind === "llm_based" ? kind : null;
+    
+    const general = tm.general || {};
+    const groupCfg = groupKey ? tm[groupKey] || {} : {};
+    const specific = findModelConfigBlock(tm, modelName);
+    
+    // Merge in order: general -> group -> specific (specific overrides)
+    return { ...general, ...groupCfg, ...specific };
+  };
+
+  // Deep comparison of values (handles arrays, objects, primitives)
+  const valuesEqual = (a, b) => {
+    // Handle null/undefined
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    
+    // Handle arrays
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((val, idx) => valuesEqual(val, b[idx]));
+    }
+    
+    // Handle objects
+    if (typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+      return keysA.every(key => valuesEqual(a[key], b[key]));
+    }
+    
+    // Primitive comparison (with type coercion for numbers)
+    if (typeof a === "number" && typeof b === "number") {
+      return Math.abs(a - b) < 1e-10; // Handle floating point
+    }
+    
+    return a === b;
+  };
+
+  // Extract user overrides from nested config structure (topic_modeling.traditional, etc.)
+  const extractUserOverrides = (overrides, modelName) => {
+    const extracted = {};
+    if (!overrides || typeof overrides !== "object") return extracted;
+    
+    const tm = overrides.topic_modeling || {};
+    const kind = getModelKind(modelName);
+    
+    // Extract traditional group overrides
+    if (tm.traditional && typeof tm.traditional === "object") {
+      Object.assign(extracted, tm.traditional);
+    }
+    
+    // Extract model-specific overrides
+    if (tm[modelName] && typeof tm[modelName] === "object") {
+      Object.assign(extracted, tm[modelName]);
+    }
+    
+    // Extract CTM overrides if model is CTM
+    if (modelName === "CTM" && tm.ctm && typeof tm.ctm === "object") {
+      Object.assign(extracted, tm.ctm);
+    }
+    
+    return extracted;
   };
 
   const handleTrainingStart = async () => {
@@ -1448,14 +1288,17 @@ const renderBasicGroupParams = (modelName) => {
 
     const corpusId = state.selectedDataset.id;
 
+    // Get default parameters first to compare against
+    const defaultParams = getDefaultParams(model);
+    
+    // Collect all parameters from form
     const basicParams = collectBasicGroupParams();
-    const includeAdvanced = dom.includeAdvanced ? dom.includeAdvanced.checked : true;
-    const advancedParams = includeAdvanced ? collectAdvancedParams() : {};
-
-    let training_params = {
+    const advancedParams = collectAdvancedParams();
+    
+    // Combine all collected params
+    let allCollectedParams = {
       ...basicParams,
       ...advancedParams,
-      preprocess_text: !!dom.preprocessCheckbox?.checked,
     };
 
     // Inject num_topics for non-external models
@@ -1465,12 +1308,12 @@ const renderBasicGroupParams = (modelName) => {
     if (kind === "traditional") {
       const n = Number(dom.numTopicsInput?.value || 10);
       if (Number.isFinite(n) && n > 0) {
-        training_params.num_topics = n;
+        allCollectedParams.num_topics = n;
       }
     } else {
       // Ensure we don't accidentally send num_topics for LLM-based or others
-      if ("num_topics" in training_params) {
-        delete training_params.num_topics;
+      if ("num_topics" in allCollectedParams) {
+        delete allCollectedParams.num_topics;
       }
     }
 
@@ -1487,35 +1330,56 @@ const renderBasicGroupParams = (modelName) => {
     };
 
     // Apply parameter name mapping by modifying the object in place
-    const keysToUpdate = Object.keys(training_params).filter(key => paramMapping.hasOwnProperty(key));
+    const keysToUpdate = Object.keys(allCollectedParams).filter(key => paramMapping.hasOwnProperty(key));
     keysToUpdate.forEach(key => {
       const mappedKey = paramMapping[key];
       if (mappedKey && mappedKey !== key) {
-        training_params[mappedKey] = training_params[key];
-        delete training_params[key];
+        allCollectedParams[mappedKey] = allCollectedParams[key];
+        delete allCollectedParams[key];
       }
     });
 
-    // Map provider -> llm_model_type / llm / llm_server
-    // Only map provider fields if LLM section is included and a provider is chosen
-    const includeLlm = document.querySelector("#include_llm")?.checked;
-    if (includeLlm && training_params.llm_provider) {
-      applyLlmSelection(training_params, model);
-    } else {
-      // strip any leftover llm_* fields if not including LLM
-      Object.keys(training_params)
-        .filter((k) => k.startsWith("llm_"))
-        .forEach((k) => delete training_params[k]);
+    // Apply LLM settings from session/user config
+    await applyLlmSelection(allCollectedParams, model);
+    
+    // Add preprocess_text if it's checked (only if different from default)
+    const preprocessChecked = !!dom.preprocessCheckbox?.checked;
+    const defaultPreprocess = defaultParams.preprocess_text !== undefined ? defaultParams.preprocess_text : false;
+    if (preprocessChecked !== defaultPreprocess) {
+      allCollectedParams.preprocess_text = preprocessChecked;
     }
     
-    console.log("training_params being sent:", training_params);
-
+    // Filter out parameters that match defaults - only keep changed values
+    const filterChangedParams = (params, defaults) => {
+      const changed = {};
+      for (const [key, value] of Object.entries(params)) {
+        // Skip null/undefined values
+        if (value == null) {
+          continue;
+        }
+        
+        // Compare with default - only include if different
+        const defaultValue = defaults[key];
+        if (!valuesEqual(value, defaultValue)) {
+          changed[key] = value;
+        }
+      }
+      return changed;
+    };
+    
+    // Only keep parameters that differ from defaults
+    const training_params = filterChangedParams(allCollectedParams, defaultParams);
+    
+    console.log("Default params:", defaultParams);
+    console.log("All collected params:", allCollectedParams);
+    console.log("Modified params (only these will be sent):", training_params);
 
     const payload = {
       corpus_id: corpusId,
       model,
       model_name: modelName,
-      training_params,
+      training_params: training_params,  // Only send modified parameters, defaults will be used for the rest
+      config_path: "static/config/config.yaml",  // Always send default config path
     };
 
     try {

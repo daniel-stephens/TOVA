@@ -7,8 +7,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.api
       args:
-        BUILDER_IMAGE: tova-builder:${VERSION}
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        BUILDER_IMAGE: tova-builder:${VERSION:-latest}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,7 +39,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.ui
       args:
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       api:
         condition: service_healthy
@@ -52,9 +52,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
+    command: ["gunicorn", "--reload", "-w", "2", "-b", "0.0.0.0:8080", "app:server"]
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config
+    - ./templates:/app/templates
+    - ./ui:/app
     networks:
       - tova-net
 
@@ -83,8 +86,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.solr_api
       args:
-        BUILDER_IMAGE: tova-builder:${VERSION}
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        BUILDER_IMAGE: tova-builder:${VERSION:-latest}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       - solr
     ports:

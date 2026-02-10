@@ -172,13 +172,13 @@ footer {
 
   /* Section Headers */
   #themeDetailModal .section-header {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #495057;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.35rem;
     border-bottom: 2px solid #e9ecef;
   }
 
@@ -211,6 +211,7 @@ footer {
   #themeDiagnosticsGrid .col > div {
     transition: all 0.2s ease;
     border: 1.5px solid #e9ecef;
+    padding: 0.5rem !important;
   }
 
   #themeDiagnosticsGrid .col > div:hover {
@@ -221,13 +222,13 @@ footer {
 
   #themeDiagnosticsGrid .col strong {
     display: block;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
     color: #495057;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
   }
 
   #themeDiagnosticsGrid .col .text-muted {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     font-weight: 600;
   }
 
@@ -235,12 +236,13 @@ footer {
   #themeDetailModal .similarity-section {
     background: #f8f9fa;
     border-radius: 0.5rem;
-    padding: 1rem;
-    margin-top: 1rem;
+    padding: 0.6rem;
+    margin-top: 0.5rem;
   }
 
   #themeDetailModal .similarity-section p {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3rem;
+    font-size: 0.65rem !important;
   }
 
   /* Documents Section */
@@ -1168,9 +1170,9 @@ footer {
                 </div>
         
                 <!-- Diagnostics Section -->
-                <div class="mb-4">
+                <div class="mb-3">
                   <div class="section-header">Theme Diagnostics</div>
-                  <div id="themeDiagnosticsGrid" class="row row-cols-2 g-3">
+                  <div id="themeDiagnosticsGrid" class="row row-cols-2 g-2">
                     <!-- JS will inject diagnostics here -->
                   </div>
                 </div>
@@ -1178,8 +1180,8 @@ footer {
                 <!-- Similarity Section -->
                 <div class="similarity-section">
                   <div class="section-header">Similar Themes</div>
-                  <canvas id="similarityDotPlot" height="150"></canvas>
-                  <p class="small text-muted mt-3 mb-0" style="font-size: 0.75rem; line-height: 1.5;">
+                  <canvas id="similarityDotPlot" height="100"></canvas>
+                  <p class="small text-muted mt-2 mb-0" style="font-size: 0.65rem; line-height: 1.4;">
                     <strong>Note:</strong> Higher similarity scores (closer to +1) indicate stronger co-occurrence and greater similarity between topics. Values near 0 suggest little or no relationship, while negative values indicate that the topics rarely appear together (less similar).
                   </p>
                 </div>
@@ -1381,19 +1383,37 @@ document.addEventListener("DOMContentLoaded", () => {
   const coordByThemeId = (id) => dashboardV2.coordinates?.byThemeId?.[String(id)];
   const diagByThemeId  = (id) => dashboardV2.diagnostics?.byThemeId?.[String(id)];
 
+  // Count actual documents per theme
+  function countDocumentsByTheme() {
+    const docCounts = {};
+    if (dashboardV2?.documents?.allIds) {
+      for (const docId of dashboardV2.documents.allIds) {
+        const doc = dashboardV2.documents.byId[docId];
+        if (doc && doc.themeId != null) {
+          const themeIdStr = String(doc.themeId);
+          docCounts[themeIdStr] = (docCounts[themeIdStr] || 0) + 1;
+        }
+      }
+    }
+    return docCounts;
+  }
+
   function themesForChart() {
     const ids = themeIds();
+    const docCounts = countDocumentsByTheme();
+    
     return ids.map((id, i) => {
       const t = themeById(id);
       const color = computeColor(i, dashboardV2.color);
+      const idStr = String(id);
       return {
         id: t.id,
         label: getThemeLabel(id),
-        document_count: t.documentCount,
+        document_count: docCounts[idStr] || 0,
         color,
         keywords: (t.keywords || []).join(", ")
       };
-    });
+    }).sort((a, b) => (b.document_count || 0) - (a.document_count || 0));
   }
 
   function docsForTable() {
@@ -1424,9 +1444,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function coordinatesForScatter() {
+    const docCounts = countDocumentsByTheme();
     return themeIds().map((id) => {
       const t = themeById(id);
-      const c = coordByThemeId(id) || { x: 0, y: 0, size: t.documentCount || 1 };
+      const idStr = String(id);
+      const actualDocCount = docCounts[idStr] || 0;
+      const c = coordByThemeId(id) || { x: 0, y: 0, size: actualDocCount || 1 };
       return { id: Number(id), label: getThemeLabel(id), x: c.x, y: c.y, size: c.size, keywords: t.keywords || [] };
     });
   }
@@ -2324,7 +2347,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const docId = doc.id;
     const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
 
-    const response = await fetch("/text-info", {
+    const response = await fetch('/text-info', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2502,7 +2525,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchDashboard(modelId) {
     console.log("this is the model id:", modelId);
 
-    const res = await fetch("/get-dashboard-data", {
+    const res = await fetch('/get-dashboard-data', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({model_id: modelId})
@@ -2820,7 +2843,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.log(payload);
               }
 
-              const response = await fetch("/infer-text", {
+              const response = await fetch('/infer-text', {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -3208,7 +3231,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
-        const response = await fetch("/api/chat", {
+        const response = await fetch('/api/chat', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
