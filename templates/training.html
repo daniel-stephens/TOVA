@@ -239,7 +239,7 @@
     <div class="training-left">
 
       <!-- Theme Overview Panel -->
-      <div class="panel" style="flex: 0 0 50%;">
+      <div class="panel" style="flex: 0 0 50%; min-height: 0;">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="fw-bold mb-0">Theme Overview</h5>
           <!-- Optional glossary button (uses existing modal if you have it) -->
@@ -250,7 +250,7 @@
             Glossary
           </button>
         </div>
-        <div class="flex-grow-1 d-flex position-relative">
+        <div class="flex-grow-1 d-flex position-relative" style="min-height: 0;">
           <canvas id="themeChart" class="w-100 h-100 position-absolute"></canvas>
         </div>
       </div>
@@ -774,6 +774,7 @@
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         onClick: (event, elements) => {
           if (elements.length > 0) {
             const index       = elements[0].index;

@@ -1,6 +1,6 @@
 import logging
-from typing import List
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
+from typing import List, Optional
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, Query
 from tova.api.logger import logger
 from tova.api.models.data_schemas import Corpus, Draft, DraftType, Model, PromoteDraftResponse, Dataset, StorageType, DraftCreatedResponse
 from tova.api.jobs.store import job_store
@@ -204,9 +204,23 @@ def delete_dataset(dataset_id: str):
 # CORPORA #
 ###########
 @router.get("/corpora", response_model=List[Corpus])
-def list_corpora():
-    """List all available corpora."""
-    return corpora.list_corpora()
+def list_corpora(owner_id: Optional[str] = Query(None)):
+    """List all available corpora, optionally filtered by owner_id."""
+    all_corpora = corpora.list_corpora()
+    logger.info(f"list_corpora called with owner_id={owner_id}, total_corpora={len(all_corpora)}")
+    if owner_id:
+        # Filter by owner_id - check both direct attribute and metadata
+        filtered = []
+        for c in all_corpora:
+            corpus_owner = c.owner_id
+            if not corpus_owner and c.metadata:
+                corpus_owner = c.metadata.get("owner_id")
+            logger.debug(f"Corpus {c.id}: owner_id={corpus_owner}, match={corpus_owner == owner_id}")
+            if corpus_owner == owner_id:
+                filtered.append(c)
+        logger.info(f"Filtered to {len(filtered)} corpora for owner_id={owner_id}")
+        return filtered
+    return all_corpora
 
 
 @router.post("/corpora", response_model=DraftCreatedResponse, status_code=201)
@@ -231,11 +245,18 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
 
 
 @router.get("/corpora/{corpus_id}", response_model=Corpus)
-def get_corpus(corpus_id: str):
-    """Get a corpus by ID."""
+def get_corpus(corpus_id: str, owner_id: Optional[str] = Query(None)):
+    """Get a corpus by ID, optionally verifying ownership."""
     c = corpora.get_corpus(corpus_id)
     if c is None:
         raise HTTPException(404, "Corpus not found")
+    
+    # If owner_id is provided, verify ownership
+    if owner_id:
+        corpus_owner = c.owner_id or (c.metadata.get("owner_id") if c.metadata else None)
+        if corpus_owner != owner_id:
+            raise HTTPException(403, "Access denied: You do not own this corpus")
+    
     return c
 
 
@@ -253,7 +274,8 @@ def delete_corpus(corpus_id: str):
 @router.get("/corpora/{corpus_id}/models", response_model=List[Model])
 def list_corpus_models(corpus_id: str):
     """List all models for a corpus."""
-    return corpora.list_corpus_models(corpus_id)
+    all_models = corpora.list_corpus_models(corpus_id)
+    return all_models
 
 @router.post("/corpora/{corpus_id}/add_model", status_code=201)
 def add_model_to_corpus(corpus_id: str, model_id: str) -> DraftCreatedResponse:
@@ -317,8 +339,27 @@ def get_model(model_id: str):
 @router.delete("/models/{model_id}", status_code=204)
 def delete_model(model_id: str):
     """Delete a model by ID."""
-    ok = models.delete_model(model_id)
-    if not ok:
+    # Get the model first to verify it exists
+    m = models.get_model(model_id)
+    if m is None:
         raise HTTPException(404, "Model not found")
+    
+    # Delete the model
+    try:
+        ok = models.delete_model(model_id)
+        if not ok:
+            raise HTTPException(404, "Model not found or could not be deleted")
+    except PermissionError as e:
+        # Handle permission errors with a clear message
+        raise HTTPException(
+            500, 
+            f"Cannot delete model: permission denied. The model directory may be owned by root. "
+            f"Please contact an administrator to fix file ownership. Details: {str(e)}"
+        )
+    except Exception as e:
+        # Handle other errors
+        logger.error(f"Error deleting model {model_id}: {e}")
+        raise HTTPException(500, f"Failed to delete model: {str(e)}")
+    
     return
     

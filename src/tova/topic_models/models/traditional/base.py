@@ -29,7 +29,7 @@ class TradTMmodel(BaseTMModel, ABC):
             "./static/config/config.yaml"),
         load_model: bool = False,
         preprocess_text: bool = True,
-        do_embeddings: bool = False,
+        do_embeddings: bool = False
     ) -> None:
         """
         Initialize the TradTMmodel class.

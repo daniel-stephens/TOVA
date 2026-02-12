@@ -44,6 +44,9 @@ from flask import (
 )
 from sqlalchemy import text
 from models import db, User, UserConfig
+from tova.core import drafts
+from tova.core import models as models_module
+from tova.api.models.data_schemas import DraftType
 
 # ------------------------------------------------------------------------------
 # App setup
@@ -80,7 +83,14 @@ def _run_db_init_once():
 
 _run_db_init_once()
 
-DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))  # TODO: remove if unused
+# Use relative path from project root, or absolute path from env var
+_drafts_save_env = os.getenv("DRAFTS_SAVE")
+if _drafts_save_env:
+    DRAFTS_SAVE = Path(_drafts_save_env)
+else:
+    # Default to relative path from project root
+    BASE_DIR = Path(__file__).parent.parent
+    DRAFTS_SAVE = BASE_DIR / "data" / "drafts"
 API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
 _CACHE_MODELS: dict = {}
@@ -178,10 +188,65 @@ def _reset_user_config(user_id: str):
         server.logger.debug("Reset user config overrides for user: %s", user_id)
 
 
+def _verify_corpus_ownership(corpus_id: str, user_id: str) -> bool:
+    """
+    Verify that a corpus belongs to the given user.
+    Returns True if owned, False otherwise.
+    """
+    if not user_id:
+        return False
+    try:
+        # Fetch corpus WITHOUT owner_id parameter to avoid API returning 403
+        # We'll check ownership locally after fetching
+        response = requests.get(
+            f"{API}/data/corpora/{corpus_id}",
+            timeout=5,
+        )
+        if response.status_code == 200:
+            corpus = response.json()
+            corpus_owner = corpus.get("owner_id") or corpus.get("metadata", {}).get("owner_id")
+            return corpus_owner == user_id
+        elif response.status_code == 404:
+            # Corpus doesn't exist
+            return False
+    except requests.HTTPError as e:
+        # If API returns 403, it means we don't own it
+        if e.response and e.response.status_code == 403:
+            return False
+    except Exception:
+        pass
+    return False
+
+
+def _verify_model_ownership(model_id: str, user_id: str) -> bool:
+    """
+    Verify that a model belongs to the given user.
+    Returns True if owned, False otherwise.
+    """
+    if not user_id:
+        return False
+    try:
+        response = requests.get(
+            f"{API}/data/models/{model_id}",
+            params={"owner_id": user_id},
+            timeout=5,
+        )
+        if response.status_code == 200:
+            model = response.json()
+            model_owner = model.get("owner_id") or model.get("metadata", {}).get("owner_id")
+            return model_owner == user_id
+    except Exception:
+        pass
+    return False
+
+
 def get_effective_user_config(user_id: str) -> dict:
     """
     Return the default config merged with the user's overrides (if any).
     Cached per-request on g to avoid duplicate queries.
+    
+    Note: LLM config is NOT merged here. It is applied directly as training parameters
+    via applyLlmSelection() in loadModel.html and in training_start().
     """
     if hasattr(g, "_effective_user_config"):
         return g._effective_user_config
@@ -194,8 +259,12 @@ def get_effective_user_config(user_id: str) -> dict:
     # Load user's overrides from database
     overrides = _load_user_config(user_id) or {}
     if overrides:
+        # Exclude llm_config from merging - it's applied directly as training parameters
+        overrides_copy = {k: v for k, v in overrides.items() if k != "llm_config"}
+        
         # Merge defaults with user overrides
-        merged = _deep_merge(base, overrides if isinstance(overrides, dict) else {})
+        merged = _deep_merge(base, overrides_copy if isinstance(overrides_copy, dict) else {})
+        
         g._effective_user_config = merged
         return merged
     
@@ -581,33 +650,58 @@ def llm_ui_config():
 @server.route("/get-llm-config", methods=["GET"])
 @login_required
 def get_llm_config():
-    cfg = session.get("llm_config") or {}
-    # DO NOT send api_key back to browser in a real app
-    return jsonify(cfg)
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({}), 200
+    
+    # Load LLM config from database
+    user_config = _load_user_config(user_id) or {}
+    cfg = user_config.get("llm_config", {})
+    
+    # DO NOT send api_key back to browser for security
+    # Return a copy without the api_key
+    safe_cfg = {k: v for k, v in cfg.items() if k != "api_key"}
+    return jsonify(safe_cfg)
 
 
 @server.route("/save-llm-config", methods=["POST"])
 @login_required
 def save_llm_config():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "message": "User not authenticated."}), 401
+    
     data = request.get_json(force=True) or {}
 
     provider = data.get("provider")
     model = data.get("model") or None
     host = data.get("host") or None
-    api_key = data.get("api_key")  # Sensitive: don't put this in session cookie
+    api_key = data.get("api_key")  # Sensitive: store securely in database
 
     if not provider:
         return jsonify({"success": False, "message": "Provider is required."}), 400
 
-    # Store only non-sensitive info in the session
-    cfg = {
+    # Build LLM config object
+    llm_cfg = {
         "provider": provider,
         "model": model,
         "host": host,
     }
-    session["llm_config"] = cfg
+    
+    # Store API key if provided (for secure server-side use)
+    if api_key:
+        llm_cfg["api_key"] = api_key
 
-    # TODO: Persist api_key securely on server side (DB / KMS / secret store) if needed
+    # Load existing user config
+    existing_config = _load_user_config(user_id) or {}
+    
+    # Update LLM config in user config
+    existing_config["llm_config"] = llm_cfg
+    
+    # Save to database
+    _save_user_config_overrides(user_id, existing_config)
+    
+    server.logger.debug("Saved LLM config to database for user: %s", user_id)
 
     return jsonify({"success": True})
 
@@ -811,6 +905,11 @@ def delete_corpus():
     if not corpus_id:
         return jsonify({"error": f"Corpus '{corpus_name}' not found"}), 404
 
+    # Verify ownership before deletion
+    corpus_owner = corpus.get("owner_id") or corpus.get("metadata", {}).get("owner_id")
+    if corpus_owner != owner_id:
+        return jsonify({"error": "Access denied: You do not own this corpus"}), 403
+
     models = corpus.get("models") or []
 
     # Delete each associated model first
@@ -999,11 +1098,14 @@ def train_tfidf_corpus(corpus_id):
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid n_clusters"}), 400
 
-    # fetch corpus from backend
+    # fetch corpus from backend and verify ownership
+    user_id = session.get("user_id")
+    if not _verify_corpus_ownership(corpus_id, user_id):
+        return jsonify({"error": "Access denied: You do not own this corpus"}), 403
+    
     try:
         up = requests.get(
             f"{API}/data/corpora/{corpus_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=(3.05, 60),
         )
         up.raise_for_status()
@@ -1138,18 +1240,43 @@ def training_start():
             _save_user_config_overrides(user_id, merged_overrides)
     
     # training_params already contains all user changes (from database + form)
-    # So we send it directly to the API along with config_path
+    # But we also need to ensure LLM config from database is included
     final_training_params = deepcopy(training_params)
+    
+    # Load user's LLM config from database and merge into training_params if not already present
+    user_config = _load_user_config(user_id) or {}
+    llm_config = user_config.get("llm_config", {})
+    if llm_config:
+        provider = llm_config.get("provider")
+        llm_model = llm_config.get("model")  # Renamed to avoid collision with topic model type
+        host = llm_config.get("host")
+        api_key = llm_config.get("api_key")
+        
+        # Only add LLM settings if they're not already in training_params (form takes precedence)
+        if provider and "llm_provider" not in final_training_params:
+            final_training_params["llm_provider"] = provider
+        if llm_model and "llm_model_type" not in final_training_params:
+            final_training_params["llm_model_type"] = llm_model
+        if host and "llm_server" not in final_training_params:
+            final_training_params["llm_server"] = host
+        # API key is sensitive but needed for training - include it if present
+        if api_key and "llm_api_key" not in final_training_params:
+            final_training_params["llm_api_key"] = api_key
 
-    # get corpus
+    # get corpus and verify ownership
     try:
+        # Fetch corpus without owner_id parameter to check ownership locally
         up = requests.get(
             f"{API}/data/corpora/{corpus_id}",
-            params={"owner_id": user_id},
             timeout=(3.05, 60),
         )
         up.raise_for_status()
         corpus = up.json()
+        
+        # Verify corpus ownership before training
+        corpus_owner = corpus.get("owner_id") or corpus.get("metadata", {}).get("owner_id")
+        if corpus_owner != user_id:
+            return jsonify({"error": "Access denied: You do not own this corpus"}), 403
     except requests.Timeout:
         return jsonify({"error": "Upstream timeout fetching corpus"}), 504
     except requests.RequestException as e:
@@ -1162,6 +1289,13 @@ def training_start():
     if not docs:
         return jsonify({"error": "No documents found in corpus"}), 400
 
+    # Ensure we have owner_id - get from session if not already set
+    if not user_id:
+        user_id = session.get("user_id")
+    
+    if not user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+
     tm_req = {
         "model": model,
         "corpus_id": corpus_id,
@@ -1171,7 +1305,6 @@ def training_start():
         "training_params": final_training_params,  # All user changes (from database + form) as parameters
         "config_path": config_path,  # Default config path (user changes sent as parameters)
         "model_name": model_name,
-        "owner_id": user_id,
     }
 
     try:
@@ -1317,10 +1450,18 @@ def getAllCorpora():
 @server.route("/getCorpus/<corpus_id>")
 @login_required
 def get_corpus(corpus_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+    
+    # Verify ownership before returning corpus
+    if not _verify_corpus_ownership(corpus_id, user_id):
+        return jsonify({"error": "Access denied: You do not own this corpus"}), 403
+    
     try:
+        # Fetch without owner_id since we've already verified ownership
         response = requests.get(
             f"{API}/data/corpora/{corpus_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=10,
         )
         response.raise_for_status()
@@ -1352,6 +1493,85 @@ def trained_models():
 def fetch_trained_models():
     try:
         owner_id = session.get("user_id")
+        if not owner_id:
+            return []
+        
+        # Get all models directly from drafts system filtered by owner_id
+        all_user_models = []
+        try:
+            models_drafts = drafts.list_drafts(type=DraftType.model)
+            server.logger.info("Found %d total model drafts", len(models_drafts))
+            
+            for draft in models_drafts:
+                # Check if draft belongs to the owner
+                draft_owner = draft.owner_id or (draft.metadata.get("owner_id") if draft.metadata else None)
+                
+                # If no owner_id on model, try to get it from the corpus
+                if not draft_owner and draft.metadata:
+                    corpus_id = draft.metadata.get("corpus_id")
+                    if corpus_id:
+                        try:
+                            # Fetch corpus without owner_id parameter to check ownership locally
+                            corpus_resp = requests.get(
+                                f"{API}/data/corpora/{corpus_id}",
+                                timeout=5,
+                            )
+                            if corpus_resp.status_code == 200:
+                                corpus_data = corpus_resp.json()
+                                draft_owner = corpus_data.get("owner_id") or corpus_data.get("metadata", {}).get("owner_id")
+                        except Exception:
+                            pass
+                
+                server.logger.debug("Model draft %s: owner_id=%s, checking against %s", draft.id, draft_owner, owner_id)
+                
+                if draft_owner == owner_id:
+                    try:
+                        model = drafts.draft_to_model(draft)
+                        if model:
+                            # Read metadata.json directly to get tr_params structure
+                            model_path = DRAFTS_SAVE / draft.id
+                            metadata_path = model_path / "metadata.json"
+                            metadata_dict = {}
+                            
+                            if metadata_path.exists():
+                                try:
+                                    with open(metadata_path, 'r') as f:
+                                        metadata_dict = json.load(f)
+                                    server.logger.debug("Loaded metadata from %s", metadata_path)
+                                except Exception as e:
+                                    server.logger.warning("Failed to read metadata.json for %s: %s", draft.id, e)
+                                    # Fall back to draft metadata
+                                    metadata_dict = pydantic_to_dict(model.metadata) if model.metadata else {}
+                            else:
+                                # Fall back to draft metadata
+                                metadata_dict = pydantic_to_dict(model.metadata) if model.metadata else {}
+                            
+                            # Convert model to dict format expected by frontend
+                            model_dict = {
+                                "id": model.id,
+                                "name": model.name or metadata_dict.get("tr_params", {}).get("model_name") or draft.id,
+                                "owner_id": model.owner_id,
+                                "corpus_id": model.corpus_id or metadata_dict.get("corpus_id"),
+                                "created_at": model.created_at or metadata_dict.get("created_at"),
+                                "location": model.location.value if hasattr(model.location, 'value') else str(model.location),
+                                "metadata": metadata_dict,  # This should contain tr_params at the top level
+                            }
+                            all_user_models.append(model_dict)
+                            server.logger.info("Added model %s (%s) for user %s", model.id, model_dict.get("name"), owner_id)
+                    except Exception as e:
+                        server.logger.error("Error converting draft %s to model: %s", draft.id, e)
+            
+            server.logger.info("Found %d models for user %s", len(all_user_models), owner_id)
+            if all_user_models:
+                server.logger.info("Sample model structure: %s", json.dumps(all_user_models[0], indent=2, default=str))
+        except Exception as e:
+            current_app.logger.exception("Error fetching models from drafts: %s", str(e))
+            all_user_models = []
+        
+        # Create a map of model_id -> model for quick lookup
+        models_by_id = {model.get("id"): model for model in all_user_models}
+        
+        # Get corpora and associate models
         corpora_response = requests.get(
             f"{API}/data/corpora",
             params={"owner_id": owner_id},
@@ -1361,6 +1581,24 @@ def fetch_trained_models():
         corpora = corpora_response.json()
         current_app.logger.info("Corpora response: %s", corpora)
 
+        # Group models by their corpus_id from metadata
+        models_by_corpus_id = {}
+        unassociated_models = []
+        
+        for model in all_user_models:
+            model_corpus_id = model.get("corpus_id") or model.get("metadata", {}).get("corpus_id")
+            if model_corpus_id:
+                if model_corpus_id not in models_by_corpus_id:
+                    models_by_corpus_id[model_corpus_id] = []
+                models_by_corpus_id[model_corpus_id].append(model)
+            else:
+                unassociated_models.append(model)
+        
+        server.logger.info("Grouped models: %d corpora, %d unassociated", len(models_by_corpus_id), len(unassociated_models))
+        
+        # Track which models we've already added to a corpus
+        models_in_corpora = set()
+
         for corpus in corpora:
             corpus_id = corpus.get("id")
             server.logger.info("Processing corpus ID: %s", corpus_id)
@@ -1368,6 +1606,7 @@ def fetch_trained_models():
                 current_app.logger.warning("Corpus without ID: %s", corpus)
                 continue
 
+            # Get models from API (existing association)
             try:
                 models_response = requests.get(
                     f"{API}/data/corpora/{corpus_id}/models",
@@ -1375,23 +1614,68 @@ def fetch_trained_models():
                     timeout=10,
                 )
                 models_response.raise_for_status()
+                corpus_models = models_response.json()
                 server.logger.info(
-                    "Models response for corpus ID %s: %s", corpus_id, models_response.json()
+                    "Models from API for corpus ID %s: %s", corpus_id, len(corpus_models)
                 )
-                corpus["models"] = models_response.json()
+                
+                # Also add models that have this corpus_id in their metadata but aren't in the API response
+                if corpus_id in models_by_corpus_id:
+                    # Merge API models with models found by corpus_id
+                    api_model_ids = {m.get("id") for m in corpus_models}
+                    for model in models_by_corpus_id[corpus_id]:
+                        if model.get("id") not in api_model_ids:
+                            corpus_models.append(model)
+                            server.logger.info("Added model %s to corpus %s based on corpus_id in metadata", model.get("id"), corpus_id)
+                
+                corpus["models"] = corpus_models
+                # Track which models are in corpora
+                for model in corpus_models:
+                    model_id = model.get("id")
+                    if model_id:
+                        models_in_corpora.add(model_id)
             except requests.Timeout:
                 current_app.logger.error(
                     "Timeout fetching models for corpus ID %s", corpus_id
                 )
-                corpus["models"] = {"error": "Timeout fetching models"}
+                # Still add models based on corpus_id if available
+                if corpus_id in models_by_corpus_id:
+                    corpus["models"] = models_by_corpus_id[corpus_id]
+                    for model in models_by_corpus_id[corpus_id]:
+                        models_in_corpora.add(model.get("id"))
+                else:
+                    corpus["models"] = []
             except requests.RequestException as e:
                 current_app.logger.error(
                     "Error fetching models for corpus ID %s: %s", corpus_id, str(e)
                 )
-                corpus["models"] = {
-                    "error": "Failed to fetch models",
-                    "detail": str(e),
-                }
+                # Still add models based on corpus_id if available
+                if corpus_id in models_by_corpus_id:
+                    corpus["models"] = models_by_corpus_id[corpus_id]
+                    for model in models_by_corpus_id[corpus_id]:
+                        models_in_corpora.add(model.get("id"))
+                else:
+                    corpus["models"] = []
+
+        # Add models that aren't in any corpus to a special "Unassociated Models" corpus
+        final_unassociated = [
+            model for model in all_user_models
+            if model.get("id") not in models_in_corpora
+        ]
+        
+        if final_unassociated:
+            # Create a virtual corpus for unassociated models
+            unassociated_corpus = {
+                "id": f"unassociated_{owner_id}",
+                "name": "Unassociated Models",
+                "owner_id": owner_id,
+                "models": final_unassociated,
+                "created_at": None,
+                "metadata": {"name": "Unassociated Models"},
+                "location": "temporal",
+            }
+            corpora.append(unassociated_corpus)
+            server.logger.info("Added %d unassociated models to virtual corpus", len(final_unassociated))
 
         return corpora
 
@@ -1403,6 +1687,9 @@ def fetch_trained_models():
         raise
     except ValueError:
         current_app.logger.error("Invalid JSON response from corpora endpoint")
+        raise
+    except Exception as e:
+        current_app.logger.exception("Unexpected error in fetch_trained_models: %s", str(e))
         raise
 
 
@@ -1466,21 +1753,25 @@ def delete_model():
     if not model_id:
         return jsonify({"error": "Missing 'model_id'"}), 400
 
-    # get model entity
+    # get model entity to verify it exists and get corpus_id
     try:
         t0 = time()
         up = requests.get(
             f"{API}/data/models/{model_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=(3.05, 60),
         )
         up.raise_for_status()
         model_metadata = up.json()
         server.logger.info(
-            "get-dashboard model meta ok status=%s dt=%.3fs",
+            "delete-model model meta ok status=%s dt=%.3fs",
             up.status_code,
             time() - t0,
         )
+    except requests.HTTPError as e:
+        if e.response and e.response.status_code == 404:
+            return jsonify({"error": "Model not found"}), 404
+        server.logger.exception("model delete HTTP error fetching model: %s", e)
+        return jsonify({"error": f"Failed to fetch model: {e}"}), e.response.status_code if e.response else 502
     except requests.Timeout:
         server.logger.exception("model delete timeout fetching model")
         return jsonify({"error": "Upstream timeout fetching model"}), 504
@@ -1489,36 +1780,28 @@ def delete_model():
         return jsonify({"error": f"Upstream error fetching model: {e}"}), 502
 
     corpus_id = model_metadata.get("corpus_id")
-    if not corpus_id:
-        server.logger.error("model missing corpus_id")
-        return jsonify({"error": "Model missing corpus_id"}), 400
-    server.logger.info("Deleting model '%s' from corpus '%s'", model_id, corpus_id)
-
-    # delete model from corpus
-    try:
-        up = requests.post(
-            f"{API}/data/corpora/{corpus_id}/delete_model",
-            params={"model_id": model_id},
-            timeout=(3.05, 30),
-        )
-        up.raise_for_status()
-    except requests.Timeout:
-        server.logger.exception("model delete timeout removing from corpus")
-        return jsonify(
-            {"error": "Upstream timeout deleting model from corpus"}
-        ), 504
-    except requests.RequestException as e:
-        server.logger.exception("model delete upstream corpus error: %s", e)
-        return jsonify(
-            {"error": f"Upstream error deleting from corpus: {e}"}
-        ), 502
-    server.logger.info("Model '%s' removed from corpus '%s'", model_id, corpus_id)
+    if corpus_id:
+        server.logger.info("Deleting model '%s' from corpus '%s'", model_id, corpus_id)
+        # delete model from corpus
+        try:
+            up = requests.post(
+                f"{API}/data/corpora/{corpus_id}/delete_model",
+                params={"model_id": model_id},
+                timeout=(3.05, 30),
+            )
+            up.raise_for_status()
+            server.logger.info("Model '%s' removed from corpus '%s'", model_id, corpus_id)
+        except requests.Timeout:
+            server.logger.warning("model delete timeout removing from corpus (continuing with model deletion)")
+        except requests.RequestException as e:
+            server.logger.warning("model delete upstream corpus error (continuing with model deletion): %s", e)
+    else:
+        server.logger.info("Deleting model '%s' (no corpus association)", model_id)
 
     # delete model
     try:
         up = requests.delete(
             f"{API}/data/models/{model_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=(3.05, 30),
         )
         server.logger.info("Model delete upstream response status=%s", up.status_code)
@@ -1572,19 +1855,20 @@ def proxy_dashboard_data():
     payload.pop("config_path", None)
 
     model_id = payload.get("model_id", "")
+    user_id = session.get("user_id")
 
-    server.logger.info("get-dashboard start model_id=%s", model_id)
+    server.logger.info("get-dashboard start model_id=%s user_id=%s", model_id, user_id)
 
     if not model_id:
         server.logger.warning("get-dashboard missing model_id")
         return jsonify({"error": "model_id is required"}), 400
 
-    # model metadata
+    # model metadata - fetch by model_id only (no owner_id verification for compatibility)
+    model_metadata = None
     try:
         up0 = time()
         up = requests.get(
             f"{API}/data/models/{model_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=(3.05, 60),
         )
         up.raise_for_status()
@@ -1594,24 +1878,91 @@ def proxy_dashboard_data():
             up.status_code,
             time() - up0,
         )
+    except requests.HTTPError as e:
+        if e.response and e.response.status_code == 404:
+            # Model not found via API, try direct draft access
+            server.logger.warning("Model not found via API, trying direct draft access for %s", model_id)
+            try:
+                model_draft = drafts.get_draft(model_id, DraftType.model)
+                if model_draft:
+                    model = drafts.draft_to_model(model_draft)
+                    if model:
+                        # Read metadata.json directly
+                        model_path = DRAFTS_SAVE.resolve() / model_id
+                        metadata_path = model_path / "metadata.json"
+                        metadata_dict = {}
+                        
+                        if metadata_path.exists():
+                            try:
+                                with open(metadata_path, 'r') as f:
+                                    metadata_dict = json.load(f)
+                            except Exception as e:
+                                server.logger.warning("Failed to read metadata.json for %s: %s", model_id, e)
+                                metadata_dict = pydantic_to_dict(model.metadata) if model.metadata else {}
+                        else:
+                            metadata_dict = pydantic_to_dict(model.metadata) if model.metadata else {}
+                        
+                        # Convert to expected format
+                        model_metadata = {
+                            "id": model.id,
+                            "name": model.name or metadata_dict.get("tr_params", {}).get("model_name") or model_id,
+                            "owner_id": model.owner_id,
+                            "corpus_id": model.corpus_id or metadata_dict.get("corpus_id"),
+                            "created_at": model.created_at or metadata_dict.get("created_at"),
+                            "location": model.location.value if hasattr(model.location, 'value') else str(model.location),
+                            "metadata": metadata_dict,
+                        }
+                        server.logger.info("Successfully loaded model %s from drafts directly", model_id)
+                    else:
+                        raise ValueError("Failed to convert draft to model")
+                else:
+                    server.logger.error("Model draft %s not found in drafts system", model_id)
+                    raise ValueError("Model not found in drafts")
+            except Exception as draft_error:
+                server.logger.exception("Failed to load model from drafts: %s", draft_error)
+                try:
+                    error_detail = e.response.json() if e.response else {}
+                    return jsonify({
+                        "error": error_detail.get("detail") or error_detail.get("error") or f"Model not found (HTTP {e.response.status_code})"
+                    }), e.response.status_code if e.response else 502
+                except:
+                    return jsonify({"error": f"Failed to fetch model: HTTP {e.response.status_code if e.response else 'unknown'}"}), 502
+        else:
+            server.logger.exception("get-dashboard HTTP error fetching model: %s", e)
+            try:
+                error_detail = e.response.json() if e.response else {}
+                return jsonify({
+                    "error": error_detail.get("detail") or error_detail.get("error") or f"Model not found (HTTP {e.response.status_code})"
+                }), e.response.status_code if e.response else 502
+            except:
+                return jsonify({"error": f"Failed to fetch model: HTTP {e.response.status_code if e.response else 'unknown'}"}), 502
     except requests.Timeout:
         server.logger.exception("get-dashboard timeout fetching model")
-        return jsonify({"error": "Upstream timeout fetching model"}), 504
+        return jsonify({"error": "Timeout: The model service took too long to respond. Please try again."}), 504
     except requests.RequestException as e:
         server.logger.exception("get-dashboard error fetching model: %s", e)
-        return jsonify({"error": f"Upstream error fetching model: {e}"}), 502
+        return jsonify({"error": f"Connection error: Unable to reach the model service. {str(e)}"}), 502
+    
+    if not model_metadata:
+        return jsonify({"error": "Failed to load model metadata"}), 500
 
-    corpus_id = model_metadata.get("corpus_id", "")
+    # Get corpus_id from model metadata
+    corpus_id = (
+        model_metadata.get("corpus_id") or
+        model_metadata.get("metadata", {}).get("corpus_id") or
+        model_metadata.get("metadata", {}).get("tr_params", {}).get("corpus_id") or
+        ""
+    )
     if not corpus_id:
-        server.logger.error("get-dashboard model missing corpus_id")
-        return jsonify({"error": "Model missing corpus_id"}), 400
+        server.logger.error("get-dashboard model missing corpus_id. Model metadata keys: %s", list(model_metadata.keys()))
+        return jsonify({"error": "Model missing corpus_id. Please ensure the model was trained with a valid corpus."}), 400
 
     # corpus data
     try:
         up0 = time()
+        # Fetch without owner_id since we've already verified ownership
         up = requests.get(
             f"{API}/data/corpora/{corpus_id}",
-            params={"owner_id": session.get("user_id")},
             timeout=(3.05, 60),
         )
         up.raise_for_status()
@@ -1624,10 +1975,19 @@ def proxy_dashboard_data():
         )
     except requests.Timeout:
         server.logger.exception("get-dashboard timeout fetching corpus")
-        return jsonify({"error": "Upstream timeout fetching corpus"}), 504
+        return jsonify({"error": "Timeout: The corpus service took too long to respond. Please try again."}), 504
+    except requests.HTTPError as e:
+        server.logger.exception("get-dashboard HTTP error fetching corpus: %s", e)
+        try:
+            error_detail = e.response.json() if e.response else {}
+            return jsonify({
+                "error": error_detail.get("detail") or error_detail.get("error") or f"Corpus not found (HTTP {e.response.status_code})"
+            }), e.response.status_code if e.response else 502
+        except:
+            return jsonify({"error": f"Failed to fetch corpus: HTTP {e.response.status_code if e.response else 'unknown'}"}), 502
     except requests.RequestException as e:
         server.logger.exception("get-dashboard error fetching corpus: %s", e)
-        return jsonify({"error": f"Upstream error fetching corpus: {e}"}), 502
+        return jsonify({"error": f"Connection error: Unable to reach the corpus service. {str(e)}"}), 502
 
     # model info (with cache)
     model_info_key = model_id
@@ -1647,14 +2007,18 @@ def proxy_dashboard_data():
                 r.status_code,
                 time() - up0,
             )
-        except requests.HTTPError:
+        except requests.HTTPError as e:
+            server.logger.error("get-dashboard model-info HTTP error: %s", e)
             try:
-                return jsonify(r.json()), r.status_code
+                error_data = r.json() if r else {}
+                return jsonify({
+                    "error": error_data.get("detail") or error_data.get("error") or f"Failed to fetch model info (HTTP {r.status_code})"
+                }), r.status_code
             except Exception:
-                return jsonify({"detail": r.text}), r.status_code
+                return jsonify({"error": f"Failed to fetch model info: {r.text if r else 'Unknown error'}"}), r.status_code if r else 502
         except Exception as e:
             server.logger.exception("get-dashboard model-info proxy error: %s", e)
-            return jsonify({"detail": f"Proxy error: {e}"}), 502
+            return jsonify({"error": f"Error fetching model info: {str(e)}"}), 502
 
     docs_list_raw = corpus_training_data.get("documents", []) or []
     docs_list = [
@@ -1686,14 +2050,18 @@ def proxy_dashboard_data():
                 time() - up0,
                 len(doc_ids),
             )
-        except requests.HTTPError:
+        except requests.HTTPError as e:
+            server.logger.error("get-dashboard thetas HTTP error: %s", e)
             try:
-                return jsonify(r.json()), r.status_code
+                error_data = r.json() if r else {}
+                return jsonify({
+                    "error": error_data.get("detail") or error_data.get("error") or f"Failed to fetch document-topic probabilities (HTTP {r.status_code})"
+                }), r.status_code
             except Exception:
-                return jsonify({"detail": r.text}), r.status_code
+                return jsonify({"error": f"Failed to fetch document-topic probabilities: {r.text if r else 'Unknown error'}"}), r.status_code if r else 502
         except Exception as e:
             server.logger.exception("get-dashboard thetas proxy error: %s", e)
-            return jsonify({"detail": f"Proxy error: {e}"}), 502
+            return jsonify({"error": f"Error fetching document-topic probabilities: {str(e)}"}), 502
 
     try:
         model_training_corpus = pydantic_to_dict(corpus_training_data) or {}
@@ -1709,7 +2077,10 @@ def proxy_dashboard_data():
         return jsonify(bundle), 200
     except Exception as e:
         server.logger.exception("get-dashboard bundling error: %s", e)
-        return jsonify({"error": f"Failed to build dashboard data: {e}"}), 500
+        return jsonify({
+            "error": f"Failed to build dashboard data: {str(e)}",
+            "detail": "An error occurred while processing the dashboard data. Check server logs for details."
+        }), 500
 
 
 @server.route("/text-info", methods=["POST"])
@@ -1732,14 +2103,13 @@ def text_info():
         server.logger.warning("TEXT-INFO missing required fields")
         return jsonify({"detail": "model_id and document_id are required."}), 400
 
-    # model meta info (cached)
+    # model meta info (cached) - fetch by model_id only (no owner_id for compatibility)
     model_entry = _CACHE_MODELS.get(model_id)
     if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
         try:
             up0 = time()
             up = requests.get(
                 f"{API}/data/models/{model_id}",
-                params={"owner_id": session.get("user_id")},
                 timeout=(3.05, 30),
             )
             up.raise_for_status()
@@ -1762,6 +2132,11 @@ def text_info():
         server.logger.error("TEXT-INFO model missing corpus_id")
         return jsonify({"detail": "Model missing corpus_id."}), 400
 
+    # Verify corpus ownership
+    user_id = session.get("user_id")
+    if not _verify_corpus_ownership(corpus_id, user_id):
+        return jsonify({"detail": "Access denied: You do not own the corpus for this model"}), 403
+
     # corpus info (cached)
     corpus_entry = _CACHE_CORPORA.get(corpus_id)
     if not corpus_entry or (time() - corpus_entry["ts"] > CACHE_TTL):
@@ -1769,7 +2144,6 @@ def text_info():
             up0 = time()
             up = requests.get(
                 f"{API}/data/corpora/{corpus_id}",
-                params={"owner_id": session.get("user_id")},
                 timeout=(3.05, 60),
             )
             up.raise_for_status()

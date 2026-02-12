@@ -3,7 +3,7 @@ import logging
 import pathlib
 import shutil
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -99,23 +99,26 @@ class BaseTMModel(ABC):
                 return f"<{type(val).__name__}>"
             return val
 
-        return {
+        result = {
             # TODO: make all the "no_include" as start with "_" to simplify this
             k: safe_value(v)
             for k, v in self.__dict__.items()
             if not k.startswith('_') and k not in self.not_include
             and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM, TMmodel))}
+        return result
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
 
+        tr_params_dict = self.to_dict()
+        
         model_info = {
             "corpus_id": self.corpus_id,
             "path": self.model_path.as_posix(),
             "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "location": "temporal",
             "created_at": pd.Timestamp.now().isoformat(),
-            "tr_params": self.to_dict(),
+            "tr_params": tr_params_dict,
         }
 
         with json_path.open('w') as f:

@@ -40,21 +40,45 @@ def get_model(model_id: str) -> Optional[Model]:
 
 def delete_model(model_id: str) -> bool:
     """
-    Delete a model by ID within a corpus.
+    Delete a model by ID. Removes the model directory from disk.
     """
-    # list drafts datasets
-    models_drafts = drafts.list_drafts(type=DraftType.model)
-    if model_id in [d.id for d in models_drafts]:
-        #  convert draft to model
-        model = drafts.draft_to_model(
-            drafts.get_draft(model_id, DraftType.model))
-    else:  # search in database
-        # TODO: Implement actual database deletion
-        pass
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Use model_id directly to construct the path
+    path_model = DRAFTS_SAVE / model_id
 
-    path_model = DRAFTS_SAVE / model.id
+    if not path_model.exists():
+        logger.warning(f"Model directory does not exist: {path_model}")
+        return False
+    
+    if not path_model.is_dir():
+        logger.warning(f"Model path exists but is not a directory: {path_model}")
+        return False
 
-    if path_model.exists() and path_model.is_dir():
+    try:
+        # Try to delete directly
         shutil.rmtree(path_model)
+        logger.info(f"Successfully deleted model directory: {path_model}")
         return True
-    return False
+    except PermissionError as e:
+        # Permission denied - likely owned by root
+        logger.error(
+            f"Permission denied deleting model directory {path_model}. "
+            f"Directory may be owned by root. Error: {e}. "
+            f"Try running: sudo rm -rf {path_model}"
+        )
+        # Re-raise with more context for the API to handle
+        raise PermissionError(
+            f"Cannot delete model {model_id}: permission denied. "
+            f"The model directory is likely owned by root. "
+            f"Please fix file ownership or delete manually."
+        ) from e
+    except OSError as e:
+        # Other OS errors (e.g., file in use, read-only filesystem)
+        logger.error(f"OS error deleting model directory {path_model}: {e}")
+        raise
+    except Exception as e:
+        # Unexpected errors
+        logger.error(f"Unexpected error deleting model directory {path_model}: {e}")
+        raise

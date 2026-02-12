@@ -1201,6 +1201,19 @@ const renderBasicGroupParams = (modelName) => {
         if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
           training_params[targetModelField] = kindCfg.model;
         }
+      } else if (provider === "rchat" || provider === "custom") {
+        const chosenModel = model || kindCfg.model || null;
+        const serverHost = host || kindCfg.server || null;
+        
+        if (targetModelField && chosenModel) {
+          training_params[targetModelField] = chosenModel;
+        }
+        if (serverHost) {
+          training_params.llm_server = serverHost;
+        }
+        if (apiKey) {
+          training_params.llm_api_key = apiKey;
+        }
       }
     } catch (err) {
       console.warn("Failed to load LLM config from session:", err);

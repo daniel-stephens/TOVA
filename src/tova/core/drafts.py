@@ -93,10 +93,13 @@ def get_draft(draft_id: str, kind: Optional[DraftType] = None) -> Optional[Draft
         except Exception:
             pass
 
+    # Extract owner_id from metadata if present (for backward compatibility)
+    owner_id = metadata.get("owner_id") if metadata else None
+    
     return Draft(
         id=draft_id,
         type=draft_type,
-        path=str(draft_dir),
+        owner_id=owner_id,
         metadata=metadata,
         data=data,
     )
@@ -119,7 +122,13 @@ def save_draft(draft: Draft) -> bool:
         logger.info("Saving draft: %s", draft.dict())
         draft_dir = DRAFTS_SAVE / draft.id
         draft_dir.mkdir(parents=True, exist_ok=True)
-        write_json_atomic(draft_dir / METADATA_FILENAME, draft.metadata)
+        
+        # Ensure owner_id is included in metadata for persistence
+        metadata_to_save = dict(draft.metadata or {})
+        if draft.owner_id:
+            metadata_to_save["owner_id"] = draft.owner_id
+        
+        write_json_atomic(draft_dir / METADATA_FILENAME, metadata_to_save)
         data_serialized = [record.dict() for record in draft.data]
         write_json_atomic(draft_dir / DATA_FILENAME, data_serialized)
         logger.info("Draft saved successfully: %s", draft.id)

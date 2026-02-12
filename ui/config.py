@@ -14,5 +14,6 @@ if not _db_url:
 SQLALCHEMY_DATABASE_URI = _db_url
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = True
+# Only require secure cookies when using HTTPS (set via USE_HTTPS env var)
+SESSION_COOKIE_SECURE = os.getenv("USE_HTTPS", "false").lower() == "true"
 SESSION_COOKIE_SAMESITE = "Lax"

@@ -2525,18 +2525,39 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchDashboard(modelId) {
     console.log("this is the model id:", modelId);
 
+    if (!modelId) {
+      throw new Error("Model ID is required");
+    }
+
     const res = await fetch('/get-dashboard-data', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({model_id: modelId})
     });
-    if (!res.ok) throw new Error(`Dashboard fetch failed: ${res.status}`);
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}: ${res.statusText}` }));
+      console.error("Dashboard fetch failed:", errorData);
+      throw new Error(errorData.error || errorData.detail || `Dashboard fetch failed: ${res.status} ${res.statusText}`);
+    }
+    
     return res.json();
   }
 
   (async () => {
     try {
       const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      
+      if (!modelId) {
+        console.error("No model ID found on page");
+        const errorMsg = document.createElement("div");
+        errorMsg.className = "alert alert-danger m-3";
+        errorMsg.textContent = "Error: Model ID not found. Please go back and select a model.";
+        document.body.insertBefore(errorMsg, document.body.firstChild);
+        return;
+      }
+      
+      console.log("Loading dashboard for model:", modelId);
       
       // Load renames from backend (will reset to backend state on each reload)
       await loadThemeRenames();
@@ -2943,8 +2964,19 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
     } catch (err) {
-      console.error(err);
-      alert("Failed to load dashboard.");
+      console.error("Dashboard loading error:", err);
+      const errorMsg = document.createElement("div");
+      errorMsg.className = "alert alert-danger m-3";
+      errorMsg.innerHTML = `
+        <h5><i class="bi bi-exclamation-triangle me-2"></i>Failed to Load Dashboard</h5>
+        <p class="mb-0">${err.message || "An error occurred while loading the dashboard data."}</p>
+        <p class="small mt-2 mb-0">Check the browser console for more details.</p>
+      `;
+      const container = document.querySelector(".container-fluid") || document.body;
+      container.insertBefore(errorMsg, container.firstChild);
+      
+      // Also show alert for immediate feedback
+      alert(`Failed to load dashboard: ${err.message || "Unknown error"}`);
     }
   })();
 
