@@ -168,6 +168,6 @@ llm:
       "qwen2.5:32b",
       "gemma3:4b"
     }
-    host: http://kumo01.tsc.uc3m.es:11434
+    host: http://host.docker.internal:11434
   llama_cpp:
     host: http://kumo01:11435/v1/chat/completions

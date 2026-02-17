@@ -1245,10 +1245,11 @@
         }, 5000);
       };
 
-      // Initialize when modal is shown
-      llmSettingsModal.addEventListener('show.bs.modal', () => {
-        loadLlmUiConfig();
-        loadSavedLlmConfig();
+      // Initialize when modal is shown: load UI config (and populate options) first,
+      // then apply the user's latest saved LLM settings so provider/model/host preload correctly.
+      llmSettingsModal.addEventListener('show.bs.modal', async () => {
+        await loadLlmUiConfig();
+        await loadSavedLlmConfig();
       });
     }
   </script>
