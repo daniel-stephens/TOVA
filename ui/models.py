@@ -56,7 +56,7 @@ class ChatMessage(db.Model):
     __tablename__ = "chat_messages"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)  # nullable for legacy rows pre-migration
     model_id = db.Column(db.String(255), nullable=False, index=True)  # topic model id messages belong to
     role = db.Column(db.String(16), nullable=False)  # 'user' or 'assistant'
     content = db.Column(db.Text, nullable=False)

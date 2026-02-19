@@ -100,6 +100,16 @@ def _run_db_init_once():
                 conn.execute(text(
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false"
                 ))
+                # Add user_id to chat_messages if table existed before user scoping (PostgreSQL)
+                conn.execute(text(
+                    "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id VARCHAR(36)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_chat_messages_user_id ON chat_messages (user_id)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_chat_messages_user_model ON chat_messages (user_id, model_id)"
+                ))
             finally:
                 conn.execute(text("SELECT pg_advisory_unlock(420420)"))
 
@@ -264,25 +274,47 @@ def _verify_corpus_ownership(corpus_id: str, user_id: str) -> bool:
 
 
 def _verify_model_ownership(model_id: str, user_id: str) -> bool:
-    """
-    Verify that a model belongs to the given user.
-    Returns True if owned, False otherwise.
-    """
+    """Verify that a model belongs to the given user. Returns True if owned, False otherwise."""
     if not user_id:
         return False
     try:
-        response = requests.get(
-            f"{API}/data/models/{model_id}",
-            params={"owner_id": user_id},
-            timeout=5,
-        )
+        response = requests.get(f"{API}/data/models/{model_id}", timeout=5)
         if response.status_code == 200:
             model = response.json()
-            model_owner = model.get("owner_id") or model.get("metadata", {}).get("owner_id")
+            model_owner = model.get("owner_id") or (model.get("metadata") or {}).get("owner_id")
             return model_owner == user_id
     except Exception:
         pass
     return False
+
+
+def _verify_dataset_ownership(dataset_id: str, user_id: str) -> bool:
+    """Verify that a dataset belongs to the given user. Returns True if owned, False otherwise."""
+    if not user_id:
+        return False
+    try:
+        response = requests.get(f"{API}/data/datasets/{dataset_id}", timeout=5)
+        if response.status_code == 200:
+            dataset = response.json()
+            owner = dataset.get("owner_id") or (dataset.get("metadata") or {}).get("owner_id")
+            return owner == user_id
+    except Exception:
+        pass
+    return False
+
+
+def _filter_list_by_owner(items: list, user_id: str) -> list:
+    """Keep only items (corpora, datasets, or models) owned by user_id. No backend change."""
+    if not user_id or not items:
+        return [] if not user_id else items
+    out = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        owner = item.get("owner_id") or (item.get("metadata") or {}).get("owner_id")
+        if owner == user_id:
+            out.append(item)
+    return out
 
 
 def get_effective_user_config(user_id: str) -> dict:
@@ -1156,11 +1188,13 @@ def create_corpus():
     datasets = payload.get("datasets", [])
     datasets_lst = []
 
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
     for el in datasets:
         try:
             upstream = requests.get(
                 f"{API}/data/datasets/{el['id']}",
-                params={"owner_id": session.get("user_id")},
                 timeout=(3.05, 30),
             )
             if not upstream.ok:
@@ -1169,7 +1203,11 @@ def create_corpus():
                     status=upstream.status_code,
                     mimetype=upstream.headers.get("Content-Type", "application/json"),
                 )
-            datasets_lst.append(upstream.json())
+            ds = upstream.json()
+            owner = ds.get("owner_id") or (ds.get("metadata") or {}).get("owner_id")
+            if owner != user_id:
+                return jsonify({"error": "Access denied: You do not own one or more of the selected datasets"}), 403
+            datasets_lst.append(ds)
         except requests.Timeout:
             return jsonify({"error": "Upstream timeout"}), 504
         except requests.RequestException as e:
@@ -1220,6 +1258,8 @@ def add_model_to_corpus():
         return jsonify({"error": "Missing model_id"}), 400
     if not corpus_id:
         return jsonify({"error": "Missing corpus_id"}), 400
+    if not session.get("user_id"):
+        return jsonify({"error": "Not authenticated"}), 401
 
     upstream_url = f"{API}/data/corpora/{corpus_id}/add_model"
     try:
@@ -1611,13 +1651,22 @@ def training_start():
             _save_user_config_overrides(user_id, merged_overrides)
     
     # training_params already contains all user changes (from database + form)
-    # But we also need to ensure LLM config from database is included
+    # But we also need to ensure LLM config from database is included when the model uses it
     final_training_params = deepcopy(training_params)
     
-    # Load user's LLM config from database and merge into training_params if not already present
+    # Traditional models (LDA, CTM): only add LLM params when labeller/summarizer is on,
+    # so we never send llm_provider etc. for plain training (avoids TradTMmodel.__init__ error).
+    TRADITIONAL_MODELS = ("tomotopyLDA", "CTM")
+    add_llm_params = True
+    if model in TRADITIONAL_MODELS:
+        add_llm_params = bool(
+            final_training_params.get("do_labeller") or final_training_params.get("do_summarizer")
+        )
+    
+    # Load user's LLM config from database and merge into training_params when needed
     user_config = _load_user_config(user_id) or {}
     llm_config = user_config.get("llm_config", {})
-    if llm_config:
+    if llm_config and add_llm_params:
         provider = llm_config.get("provider")
         llm_model = llm_config.get("model")  # Renamed to avoid collision with topic model type
         host = llm_config.get("host")
@@ -1754,14 +1803,14 @@ def loadModel():
 @server.route("/getUniqueCorpusNames", methods=["GET"])
 @login_required
 def get_unique_corpus_names():
-    """
-    Return a deduped (case-insensitive), A→Z list of corpus names.
-    Prefers the most recent 'created_at' when duplicates exist.
-    """
+    """Return a deduped, A→Z list of corpus names for the current user only."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
     try:
         r = requests.get(
             f"{API}/data/corpora",
-            params={"owner_id": session.get("user_id")},
+            params={"owner_id": user_id},
             timeout=10,
         )
         r.raise_for_status()
@@ -1769,9 +1818,9 @@ def get_unique_corpus_names():
     except requests.RequestException:
         server.logger.exception("Failed to fetch drafts from upstream")
         return jsonify({"error": "Upstream drafts service failed"}), 502
-
+    items = _filter_list_by_owner(items or [], user_id)
     pick = {}  # lower(name) -> {"name": original, "created_at": ts}
-    for d in items or []:
+    for d in items:
         meta = (d or {}).get("metadata") or {}
         name = (meta.get("name") or "").strip()
         if not name:
@@ -1788,13 +1837,14 @@ def get_unique_corpus_names():
 @server.route("/getAllCorpora", methods=["GET"])
 @login_required
 def getAllCorpora():
-    """
-    Pulls all corpora (draft or permanent storage) from the upstream API.
-    """
+    """Pulls corpora from the API; only returns those owned by the current user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
     try:
         r = requests.get(
             f"{API}/data/corpora",
-            params={"owner_id": session.get("user_id")},
+            params={"owner_id": user_id},
             timeout=10,
         )
         r.raise_for_status()
@@ -1802,7 +1852,8 @@ def getAllCorpora():
     except requests.RequestException:
         server.logger.exception("Failed to fetch drafts from upstream")
         return jsonify({"error": "Upstream drafts service failed"}), 502
-
+    # UI-only filter: ensure only current user's corpora (in case API returns more)
+    items = _filter_list_by_owner(items or [], user_id)
     def _norm_corpus(c):
         location = c.get("location")
         is_draft = location != "database"
@@ -1812,7 +1863,6 @@ def getAllCorpora():
             "is_draft": is_draft,
             "created_at": c.get("metadata", {}).get("created_at", ""),
         }
-
     corpora = [_norm_corpus(c) for c in items]
     corpora.sort(key=lambda x: (x["name"].lower(), not x["is_draft"]))
     return jsonify(corpora), 200
@@ -1950,7 +2000,8 @@ def fetch_trained_models():
         )
         corpora_response.raise_for_status()
         corpora = corpora_response.json()
-        current_app.logger.info("Corpora response: %s", corpora)
+        corpora = _filter_list_by_owner(corpora or [], owner_id)
+        current_app.logger.info("Corpora (owner-filtered): %s", len(corpora))
 
         # Group models by their corpus_id from metadata
         models_by_corpus_id = {}
@@ -2123,6 +2174,11 @@ def delete_model():
 
     if not model_id:
         return jsonify({"error": "Missing 'model_id'"}), 400
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    if not _verify_model_ownership(model_id, user_id):
+        return jsonify({"error": "Access denied: You do not own this model"}), 403
 
     # get model entity to verify it exists and get corpus_id
     try:
@@ -2235,7 +2291,7 @@ def proxy_dashboard_data():
         server.logger.warning("get-dashboard missing model_id")
         return jsonify({"error": "model_id is required"}), 400
 
-    # model metadata - fetch by model_id only (no owner_id verification for compatibility)
+    # model metadata
     model_metadata = None
     try:
         up0 = time()
@@ -2474,8 +2530,13 @@ def text_info():
     if not model_id or not doc_id:
         server.logger.warning("TEXT-INFO missing required fields")
         return jsonify({"detail": "model_id and document_id are required."}), 400
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"detail": "Not authenticated"}), 401
+    if not _verify_model_ownership(model_id, user_id):
+        return jsonify({"detail": "Access denied: You do not own this model"}), 403
 
-    # model meta info (cached) - fetch by model_id only (no owner_id for compatibility)
+    # model meta info (cached)
     model_entry = _CACHE_MODELS.get(model_id)
     if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
         try:

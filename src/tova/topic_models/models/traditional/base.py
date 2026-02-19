@@ -29,10 +29,13 @@ class TradTMmodel(BaseTMModel, ABC):
             "./static/config/config.yaml"),
         load_model: bool = False,
         preprocess_text: bool = True,
-        do_embeddings: bool = False
+        do_embeddings: bool = False,
+        **kwargs
     ) -> None:
         """
         Initialize the TradTMmodel class.
+        Extra kwargs (e.g. llm_provider from the UI) are accepted and ignored;
+        traditional models read LLM settings from config in BaseTMModel.
         """
 
         super().__init__(model_name, corpus_id, id,
