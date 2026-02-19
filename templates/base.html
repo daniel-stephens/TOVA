@@ -95,6 +95,14 @@
               Model Repository
             </a>
           </li>
+          {% if user and user.get('is_admin') %}
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'admin_page' %}active{% endif %}"
+               href="{{ url_for('admin_page') }}">
+              Admin
+            </a>
+          </li>
+          {% endif %}
         </ul>
 
         <div class="d-flex align-items-center gap-2">

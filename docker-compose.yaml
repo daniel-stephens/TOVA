@@ -54,6 +54,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
       - PYTHONPATH=/app/src
+      # Chat assistant (OpenAI) reads key from env when running in Docker (project root .env not mounted)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Admin emails (from host .env; comma-separated)
+      - TOVA_ADMIN_EMAILS=${TOVA_ADMIN_EMAILS:-}
     command: ["gunicorn", "--reload", "-w", "2", "-b", "0.0.0.0:8080", "app:server"]
     volumes:
     - ./data:/data

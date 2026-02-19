@@ -517,14 +517,14 @@ footer {
   }
 
   #chatSidebar .sidebar-header {
-    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
     color: white;
     padding: 1rem 1.25rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   #chatSidebar .sidebar-header h5 {
@@ -544,23 +544,133 @@ footer {
 
   #chatSidebar .sidebar-body {
     flex: 1 1 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f8fafc 100%);
+    min-height: 0;
+  }
+
+  /* Suggested questions at top */
+  .chat-suggested-questions {
+    flex-shrink: 0;
+    padding: 1rem 1rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  .chat-suggested-questions.hidden {
+    display: none !important;
+  }
+
+  .chat-suggested-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin: 0 0 0.6rem 0;
+  }
+
+  .chat-suggested-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chat-suggestion-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #475569;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .chat-suggestion-pill:hover {
+    color: #0d6efd;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.12);
+  }
+
+  .chat-suggestion-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  /* Scrollable messages area - fills remaining space and scrolls */
+  .chat-messages-inner {
+    flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 1rem;
-    background-color: #f8f9fa;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    scroll-behavior: smooth;
+  }
+
+  .chat-messages-inner::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chat-messages-inner::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-messages-inner::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+  }
+
+  .chat-messages-inner::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
   }
 
   #chatSidebar .sidebar-footer {
     flex-shrink: 0;
     padding: 1rem;
     background: white;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .chat-input-group .form-control {
+    border-radius: 999px;
+    padding: 0.6rem 1rem;
+    border-color: #e2e8f0;
+  }
+
+  .chat-input-group .form-control:focus {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+  }
+
+  .chat-input-group .btn-primary {
+    border-radius: 999px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Chat Widget Button */
+  #chatWidgetBtn.chat-fab,
+  .chat-fab {
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
+  }
   #chatWidgetBtn {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
     border: none !important;
     cursor: pointer !important;
     position: fixed !important;
@@ -574,44 +684,138 @@ footer {
   }
 
   #chatWidgetBtn:hover {
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
-    transform: scale(1.1) !important;
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5) !important;
+    transform: scale(1.08) !important;
   }
 
   #chatWidgetBtn.sidebar-open {
     right: 420px !important;
   }
 
-  #chatMessages {
-    scrollbar-width: thin;
-    scrollbar-color: #cbd5e0 #f8f9fa;
+  /* Message bubbles and avatars */
+  .chat-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
-  #chatMessages::-webkit-scrollbar {
-    width: 6px;
+  .chat-avatar-bot {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
   }
 
-  #chatMessages::-webkit-scrollbar-track {
-    background: #f8f9fa;
+  .chat-avatar-user {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    color: white;
+    font-size: 1rem;
   }
 
-  #chatMessages::-webkit-scrollbar-thumb {
-    background-color: #cbd5e0;
-    border-radius: 3px;
+  .chat-bubble {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.875rem;
+    max-width: 72%;
+    line-height: 1.4;
+    font-size: 0.8125rem;
   }
 
-  #chatMessages::-webkit-scrollbar-thumb:hover {
-    background-color: #a0aec0;
+  .chat-bubble-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: inherit;
+    opacity: 0.8;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Markdown-rendered content inside bot bubbles */
+  .chat-bubble-bot .chat-bubble-content {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .chat-bubble-bot .chat-bubble-content p {
+    margin-bottom: 0.4em;
+    font-size: inherit;
+  }
+  .chat-bubble-bot .chat-bubble-content p:last-child {
+    margin-bottom: 0;
+  }
+  .chat-bubble-bot .chat-bubble-content h1, .chat-bubble-bot .chat-bubble-content h2, .chat-bubble-bot .chat-bubble-content h3 {
+    font-size: 0.95em;
+    font-weight: 600;
+    margin: 0.5em 0 0.25em 0;
+  }
+  .chat-bubble-bot .chat-bubble-content ul, .chat-bubble-bot .chat-bubble-content ol {
+    margin: 0.35em 0;
+    padding-left: 1.25em;
+  }
+  .chat-bubble-bot .chat-bubble-content li {
+    margin-bottom: 0.15em;
+  }
+  .chat-bubble-bot .chat-bubble-content code {
+    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0.15em 0.35em;
+    border-radius: 0.25rem;
+  }
+  .chat-bubble-bot .chat-bubble-content pre {
+    margin: 0.4em 0;
+    padding: 0.5rem 0.6rem;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 0.35rem;
+    overflow-x: auto;
+    font-size: 0.8em;
+  }
+  .chat-bubble-bot .chat-bubble-content pre code {
+    background: none;
+    padding: 0;
+  }
+  .chat-bubble-bot .chat-bubble-content strong {
+    font-weight: 600;
+  }
+  .chat-bubble-bot .chat-bubble-content a {
+    color: #4f46e5;
+    text-decoration: none;
+  }
+  .chat-bubble-bot .chat-bubble-content a:hover {
+    text-decoration: underline;
+  }
+  .chat-bubble-bot .chat-bubble-content blockquote {
+    margin: 0.35em 0;
+    padding-left: 0.75em;
+    border-left: 3px solid rgba(0, 0, 0, 0.15);
+    color: #64748b;
+  }
+
+  .chat-bubble-bot {
+    background: white;
+    color: #334155;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .chat-bubble-user {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    font-size: 0.8125rem;
+  }
+
+  .chat-bubble-user .chat-bubble-label {
+    color: rgba(255, 255, 255, 0.9);
   }
 
   .chat-message {
-    animation: fadeIn 0.3s ease-in;
+    animation: chatMessageIn 0.3s ease-out;
   }
 
-  @keyframes fadeIn {
+  @keyframes chatMessageIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -656,6 +860,14 @@ footer {
               Manage Models
             </a>
           </li>
+          {% if user and user.get('is_admin') %}
+          <li class="nav-item">
+            <a class="nav-link{% if request.path == '/admin' %} active{% endif %}"
+               {% if request.path == '/admin' %}aria-current="page"{% endif %} href="{{ url_for('admin_page') }}">
+              Admin
+            </a>
+          </li>
+          {% endif %}
         </ul>
   
         <!-- Utilities / actions (right) -->
@@ -846,45 +1058,48 @@ footer {
   <!-- Chat Sidebar -->
   <div id="chatSidebar">
     <div class="sidebar-header">
-      <div class="d-flex align-items-center">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="me-2">
-          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-          <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
-          <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
-          <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
-        </svg>
-        <div>
-          <h5 class="mb-0">Chat with Model</h5>
-          <small class="opacity-75" id="chatModelName">Ask questions about topics and documents</small>
-        </div>
+      <div class="d-flex align-items-center flex-grow-1 min-w-0">
+        <h5 class="mb-0 text-truncate" id="chatModelName">Model Agent</h5>
       </div>
-      <button type="button" class="btn-close btn-close-white" id="chatSidebarClose" aria-label="Close"></button>
+      <button type="button" class="btn-close btn-close-white flex-shrink-0" id="chatSidebarClose" aria-label="Close"></button>
     </div>
     <div class="sidebar-body">
-      <div id="chatMessages">
-        <div class="chat-message mb-3">
+      <!-- Suggested questions at top -->
+      <div id="chatSuggestedQuestions" class="chat-suggested-questions">
+        <p class="chat-suggested-label">Try asking</p>
+        <div class="chat-suggested-buttons">
+          <button type="button" class="chat-suggestion-pill quick-action-btn" data-prompt="What are the main topics in this model?">
+            <span class="chat-suggestion-icon">📊</span>
+            <span>Main topics</span>
+          </button>
+          <button type="button" class="chat-suggestion-pill quick-action-btn" data-prompt="Explain the most common theme">
+            <span class="chat-suggestion-icon">💡</span>
+            <span>Top theme</span>
+          </button>
+          <button type="button" class="chat-suggestion-pill quick-action-btn" data-prompt="Show me documents related to">
+            <span class="chat-suggestion-icon">📄</span>
+            <span>Find documents</span>
+          </button>
+        </div>
+      </div>
+      <div id="chatMessages" class="chat-messages-inner">
+        <div class="chat-message mb-3 chat-welcome-msg">
           <div class="d-flex align-items-start">
-            <div class="flex-shrink-0 me-2">
-              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
-                </svg>
-              </div>
+            <div class="flex-shrink-0 me-2 chat-avatar chat-avatar-bot">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+              </svg>
             </div>
             <div class="flex-grow-1">
-              <div class="bg-white rounded p-3 shadow-sm">
-                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
-                <p class="mb-2">Hello! I can help you explore your topic model. You can ask me:</p>
-                <ul class="mb-0 small text-muted" style="padding-left: 20px;">
-                  <li>Questions about specific topics or themes</li>
-                  <li>To explain document classifications</li>
-                  <li>About relationships between topics</li>
-                  <li>To analyze document patterns</li>
-                </ul>
+              <div class="chat-bubble chat-bubble-bot">
+                <span class="chat-bubble-label">Model Assistant</span>
+                <div class="chat-bubble-content">
+                  <p class="mb-1">Hello! I can help you explore your topic model.</p>
+                  <p class="mb-0 text-muted">Ask about topics, document classifications, or relationships between themes.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -892,19 +1107,34 @@ footer {
       </div>
     </div>
     <div class="sidebar-footer">
-      <!-- Quick Action Buttons -->
-      <div class="d-flex flex-wrap gap-2 mb-2">
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="What are the main topics in this model?">
-          📊 Main Topics
+      <!-- RAG Assistant LLM settings (user-only; separate from main config) -->
+      <div class="mb-2">
+        <button class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-between" type="button" id="chatLlmSettingsToggle" aria-expanded="false" aria-controls="chatLlmSettingsCollapse">
+          <span>⚙️ Assistant LLM</span>
+          <svg id="chatLlmSettingsChevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
         </button>
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Explain the most common theme">
-          💡 Top Theme
-        </button>
-        <button class="btn btn-sm btn-outline-secondary quick-action-btn" data-prompt="Show me documents related to">
-          📄 Find Documents
-        </button>
+        <div class="collapse mt-1 small" id="chatLlmSettingsCollapse">
+          <div class="card card-body bg-light py-2">
+            <label class="form-label mb-1">Provider</label>
+            <select id="chatLlmProvider" class="form-select form-select-sm mb-2">
+              <option value="ollama">Ollama</option>
+              <option value="gpt">OpenAI (GPT)</option>
+            </select>
+            <label class="form-label mb-1">Model</label>
+            <select id="chatLlmModel" class="form-select form-select-sm mb-2"></select>
+            <div id="chatLlmHostWrap">
+              <label class="form-label mb-1">Ollama host</label>
+              <input type="text" id="chatLlmHost" class="form-control form-control-sm" placeholder="http://localhost:11434">
+            </div>
+            <div id="chatLlmApiKeyWrap" class="d-none">
+              <label class="form-label mb-1">OpenAI API key</label>
+              <input type="password" id="chatLlmApiKey" class="form-control form-control-sm" placeholder="sk-... (optional if set in .env)">
+            </div>
+            <p class="text-muted mb-0 mt-1 small">Saved in this browser. Overrides config for chat only.</p>
+          </div>
+        </div>
       </div>
-      <div class="input-group">
+      <div class="input-group chat-input-group">
         <input type="text" 
                id="chatInput" 
                class="form-control" 
@@ -916,16 +1146,13 @@ footer {
           </svg>
         </button>
       </div>
-      <small class="text-muted d-block mt-2">
-        <span class="badge bg-info">Model Chat</span> Backend integration active
-      </small>
     </div>
   </div>
 
   <!-- Model Chat Widget Button (Fixed Position) -->
   <button id="chatWidgetBtn" 
-          class="btn btn-primary rounded-circle shadow-lg" 
-          style="position: fixed !important; bottom: 20px !important; right: 20px !important; width: 64px !important; height: 64px !important; z-index: 1039 !important; display: flex !important; align-items: center !important; justify-content: center !important; background-color: #0d6efd !important; border: none !important; padding: 0 !important;"
+          class="btn btn-primary rounded-circle shadow-lg chat-fab"
+          style="position: fixed !important; bottom: 20px !important; right: 20px !important; width: 64px !important; height: 64px !important; z-index: 1039 !important; display: flex !important; align-items: center !important; justify-content: center !important; border: none !important; padding: 0 !important;"
           title="Chat with Model - Ask questions about topics and documents">
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="white" viewBox="0 0 24 24" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
       <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
@@ -1307,6 +1534,8 @@ footer {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
   <script>
 document.addEventListener("DOMContentLoaded", () => {
   const modelId   = document.getElementById("model_id")?.textContent?.trim() || ""; 
@@ -3160,6 +3389,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         chatInput.focus();
         updateChatModelName();
+        loadChatHistory();
+        scrollChatToBottom();
+      }
+    }
+
+    // Load saved chat messages for the current model
+    async function loadChatHistory() {
+      const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      if (!modelId) return;
+      try {
+        const response = await fetch("/api/chat/messages?model_id=" + encodeURIComponent(modelId));
+        if (!response.ok) return;
+        const data = await response.json();
+        const messages = data.messages || [];
+        chatMessages.innerHTML = "";
+        const suggestedEl = document.getElementById("chatSuggestedQuestions");
+        if (suggestedEl) suggestedEl.classList.toggle("hidden", messages.length > 0);
+        messages.forEach(function (msg) {
+          addMessage(msg.content || "", msg.role === "user");
+        });
+        scrollChatToBottom();
+      } catch (e) {
+        console.warn("Could not load chat history:", e);
       }
     }
 
@@ -3195,54 +3447,58 @@ document.addEventListener("DOMContentLoaded", () => {
       chatSidebarBackdrop.addEventListener("click", toggleSidebar);
     }
 
+    // Scroll chat to bottom (smooth)
+    function scrollChatToBottom() {
+      if (!chatMessages) return;
+      requestAnimationFrame(() => {
+        chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: "smooth" });
+      });
+    }
+
     // Function to add a message to the chat
     function addMessage(text, isUser = false) {
+      const suggestedEl = document.getElementById("chatSuggestedQuestions");
+      if (suggestedEl && isUser) suggestedEl.classList.add("hidden");
+
       const messageDiv = document.createElement("div");
       messageDiv.className = "chat-message mb-3";
-      
+
       if (isUser) {
         messageDiv.innerHTML = `
           <div class="d-flex align-items-start justify-content-end">
             <div class="flex-grow-1 text-end">
-              <div class="bg-primary text-white rounded p-2 shadow-sm d-inline-block" style="max-width: 75%;">
-                <small class="d-block mb-1 opacity-75">You</small>
+              <div class="chat-bubble chat-bubble-user d-inline-block text-start">
+                <span class="chat-bubble-label">You</span>
                 <p class="mb-0">${escapeHtml(text)}</p>
               </div>
             </div>
-            <div class="flex-shrink-0 ms-2">
-              <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px; font-size: 16px;">
-                👤
-              </div>
-            </div>
+            <div class="flex-shrink-0 ms-2 chat-avatar chat-avatar-user">👤</div>
           </div>
         `;
       } else {
+        const contentHtml = renderMarkdown(text);
         messageDiv.innerHTML = `
           <div class="d-flex align-items-start">
-            <div class="flex-shrink-0 me-2">
-              <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
-                   style="width: 36px; height: 36px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                  <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
-                  <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
-                </svg>
-              </div>
+            <div class="flex-shrink-0 me-2 chat-avatar chat-avatar-bot">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+              </svg>
             </div>
             <div class="flex-grow-1">
-              <div class="bg-white rounded p-3 shadow-sm">
-                <small class="text-muted d-block mb-2 fw-semibold">Model Assistant</small>
-                <p class="mb-0">${escapeHtml(text)}</p>
+              <div class="chat-bubble chat-bubble-bot">
+                <span class="chat-bubble-label">Model Assistant</span>
+                <div class="chat-bubble-content">${contentHtml}</div>
               </div>
             </div>
           </div>
         `;
       }
-      
+
       chatMessages.appendChild(messageDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      scrollChatToBottom();
     }
 
     // Simple HTML escape function
@@ -3251,6 +3507,163 @@ document.addEventListener("DOMContentLoaded", () => {
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // Render markdown to safe HTML for bot messages (marked + DOMPurify)
+    function renderMarkdown(text) {
+      if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
+        return escapeHtml(text).replace(/\n/g, "<br>");
+      }
+      const raw = (typeof text === "string" ? text : "").trim() || "";
+      const html = marked.parse(raw, { gfm: true, breaks: true });
+      return DOMPurify.sanitize(html, { ALLOWED_TAGS: ["p", "br", "strong", "em", "code", "pre", "ul", "ol", "li", "h1", "h2", "h3", "a", "blockquote"], ALLOWED_ATTR: ["href", "target"] });
+    }
+
+    // Build dashboard context for the chat API (used as LLM context when an LLM is wired).
+    function buildChatContext() {
+      if (!dashboardV2) {
+        return { themes: [], document_count: 0 };
+      }
+      const docCounts = countDocumentsByTheme();
+      const themeList = (dashboardV2.themes?.allIds || []).map(id => {
+        const t = themeById(id);
+        const idStr = String(id);
+        return {
+          id: t?.id,
+          label: getThemeLabel(id),
+          keywords: t?.keywords || [],
+          documentCount: docCounts[idStr] ?? t?.documentCount ?? 0,
+          summary: t?.summary || ""
+        };
+      });
+      const diagnostics = {};
+      (dashboardV2.themes?.allIds || []).forEach(id => {
+        const d = diagByThemeId(id);
+        if (d && Object.keys(d).length) diagnostics[String(id)] = d;
+      });
+      let model_info = null;
+      if (dashboardV2.modelInfos && typeof dashboardV2.modelInfos === "object") {
+        const keys = Object.keys(dashboardV2.modelInfos);
+        if (keys.length) {
+          const first = dashboardV2.modelInfos[keys[0]];
+          if (first) {
+            model_info = {
+              model_name: first.model_name,
+              model_type: first.model_type,
+              num_topics: first.num_topics,
+              trained_on: first.trained_on || ""
+            };
+          }
+        }
+      }
+      const document_samples = (dashboardV2.documents?.allIds || [])
+        .slice(0, 5)
+        .map(docId => {
+          const d = dashboardV2.documents.byId[docId];
+          return d ? { id: d.id, text: d.text, themeId: d.themeId, score: d.score } : null;
+        })
+        .filter(Boolean);
+      return {
+        themes: themeList,
+        document_count: (dashboardV2.documents?.allIds || []).length,
+        diagnostics,
+        model_info,
+        document_samples,
+        similarities: dashboardV2.similarities || {}
+      };
+    }
+
+    // RAG Assistant LLM settings (user-only; stored in localStorage, sent with each request)
+    const CHAT_LLM_STORAGE_KEY = "tova_chat_llm_settings";
+    let chatLlmOptions = { ollama: { models: [], default_host: "http://host.docker.internal:11434" }, gpt: { models: [] } };
+
+    function getChatLlmSettings() {
+      const provider = document.getElementById("chatLlmProvider")?.value || "ollama";
+      let model = document.getElementById("chatLlmModel")?.value || "";
+      const host = document.getElementById("chatLlmHost")?.value?.trim() || "";
+      const apiKey = document.getElementById("chatLlmApiKey")?.value?.trim() || "";
+      // When GPT is selected but dropdown is empty, use a default so server gets provider and can use .env key
+      if (provider === "gpt" && !model) model = "gpt-4o";
+      if (!model) return null;
+      const out = { provider, model };
+      if (provider === "ollama" && host) out.host = host;
+      // Always send api_key for GPT (empty = use server .env or saved key)
+      if (provider === "gpt") out.api_key = apiKey || "";
+      return out;
+    }
+
+    function saveChatLlmSettingsToStorage() {
+      const s = getChatLlmSettings();
+      if (s) try { localStorage.setItem(CHAT_LLM_STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+
+    function loadChatLlmSettingsFromStorage() {
+      try {
+        const raw = localStorage.getItem(CHAT_LLM_STORAGE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        const prov = document.getElementById("chatLlmProvider");
+        const mod = document.getElementById("chatLlmModel");
+        const hostEl = document.getElementById("chatLlmHost");
+        const apiKeyEl = document.getElementById("chatLlmApiKey");
+        if (prov && s.provider) prov.value = s.provider;
+        if (hostEl && s.host) hostEl.value = s.host;
+        if (apiKeyEl && s.api_key) apiKeyEl.value = s.api_key;
+        fillChatLlmModels();
+        if (mod && s.model) mod.value = s.model;
+      } catch (e) {}
+    }
+
+    function fillChatLlmModels() {
+      const provider = document.getElementById("chatLlmProvider")?.value || "ollama";
+      const sel = document.getElementById("chatLlmModel");
+      const hostWrap = document.getElementById("chatLlmHostWrap");
+      const apiKeyWrap = document.getElementById("chatLlmApiKeyWrap");
+      if (hostWrap) hostWrap.style.display = provider === "ollama" ? "block" : "none";
+      if (apiKeyWrap) apiKeyWrap.classList.toggle("d-none", provider !== "gpt");
+      if (!sel) return;
+      const list = provider === "ollama" ? (chatLlmOptions.ollama?.models || []) : (chatLlmOptions.gpt?.models || []);
+      const models = Array.isArray(list) ? list : [];
+      sel.innerHTML = models.map(m => `<option value="${escapeHtml(String(m))}">${escapeHtml(String(m))}</option>`).join("") || "<option value=\"\">—</option>";
+      if (models.length && !sel.value) sel.selectedIndex = 0;
+    }
+
+    async function loadChatLlmOptions() {
+      try {
+        const r = await fetch("/api/chat-llm-options");
+        if (r.ok) {
+          chatLlmOptions = await r.json();
+          fillChatLlmModels();
+          const hostEl = document.getElementById("chatLlmHost");
+          if (hostEl && chatLlmOptions.ollama?.default_host && !hostEl.value) hostEl.value = chatLlmOptions.ollama.default_host;
+        }
+      } catch (e) { console.warn("Chat LLM options load failed:", e); }
+    }
+
+    const chatLlmSettingsToggle = document.getElementById("chatLlmSettingsToggle");
+    const chatLlmSettingsCollapse = document.getElementById("chatLlmSettingsCollapse");
+    const chatLlmChevron = document.getElementById("chatLlmSettingsChevron");
+    if (chatLlmSettingsToggle && chatLlmSettingsCollapse) {
+      chatLlmSettingsToggle.addEventListener("click", () => {
+        const open = chatLlmSettingsCollapse.classList.toggle("show");
+        chatLlmSettingsToggle.setAttribute("aria-expanded", open);
+        if (chatLlmChevron) chatLlmChevron.style.transform = open ? "rotate(180deg)" : "";
+      });
+    }
+    const chatLlmProvider = document.getElementById("chatLlmProvider");
+    const chatLlmModel = document.getElementById("chatLlmModel");
+    const chatLlmHost = document.getElementById("chatLlmHost");
+    if (chatLlmProvider) chatLlmProvider.addEventListener("change", () => { fillChatLlmModels(); saveChatLlmSettingsToStorage(); });
+    if (chatLlmModel) chatLlmModel.addEventListener("change", saveChatLlmSettingsToStorage);
+    if (chatLlmHost) chatLlmHost.addEventListener("change", saveChatLlmSettingsToStorage);
+    if (chatLlmHost) chatLlmHost.addEventListener("blur", saveChatLlmSettingsToStorage);
+    const chatLlmApiKey = document.getElementById("chatLlmApiKey");
+    if (chatLlmApiKey) chatLlmApiKey.addEventListener("change", saveChatLlmSettingsToStorage);
+    if (chatLlmApiKey) chatLlmApiKey.addEventListener("blur", saveChatLlmSettingsToStorage);
+
+    (async () => {
+      await loadChatLlmOptions();
+      loadChatLlmSettingsFromStorage();
+    })();
 
     // Function to send a message
     async function sendMessage() {
@@ -3263,20 +3676,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+        const body = { message: message, model_id: modelId, context: buildChatContext() };
+        const llmSettings = getChatLlmSettings();
+        if (llmSettings) body.llm_settings = llmSettings;
         const response = await fetch('/api/chat', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: message,
-            model_id: modelId,
-            context: {
-              themes: dashboardV2?.themes?.allIds?.map(id => {
-                const t = themeById(id);
-                return { id: t?.id, label: getThemeLabel(id), keywords: t?.keywords || [] };
-              }) || [],
-              document_count: dashboardV2?.documents?.allIds?.length || 0
-            }
-          })
+          body: JSON.stringify(body)
         });
         
         if (!response.ok) {
@@ -3334,9 +3740,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       if (modelId) {
-        modelNameEl.textContent = `${modelName} (${modelId})`;
+        modelNameEl.textContent = `${modelName} Agent`;
       } else {
-        modelNameEl.textContent = modelName;
+        modelNameEl.textContent = modelName ? `${modelName} Agent` : "Model Agent";
       }
     }
     window.updateChatModelName = updateChatModelName;
@@ -3346,6 +3752,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (chatSidebar.classList.contains("open")) {
         chatInput.focus();
         updateChatModelName();
+        scrollChatToBottom();
       }
     });
     observer.observe(chatSidebar, { attributes: true, attributeFilter: ["class"] });

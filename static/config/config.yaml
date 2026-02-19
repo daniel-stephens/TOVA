@@ -21,7 +21,8 @@ topic_modeling:
     n_top_docs_per_topic: 20
     llm_provider: "ollama"
     llm_model_type: "gemma3:4b"
-    llm_server: "http://kumo01.tsc.uc3m.es:11434"
+    # Use localhost when running locally; use host.docker.internal if the app runs in Docker and Ollama is on the host
+    llm_server: "http://localhost:11434"
   traditional:
     num_topics: 15
     thetas_thr: 3e-3
@@ -158,6 +159,7 @@ llm:
         "gpt-3.5-turbo-16k-0613",
         "gpt-3.5-turbo-0301",
       }
+      
     path_api_key: .env
   ollama:
     available_models: {

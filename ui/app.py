@@ -8,6 +8,20 @@ from functools import wraps
 from uuid import uuid4
 from copy import deepcopy
 
+# Load .env so OPENAI_API_KEY (and others) are available from the project .env file
+try:
+    from dotenv import load_dotenv
+    _base = Path(__file__).resolve().parent   # ui/
+    _root = _base.parent                      # project root (TOVA)
+    # Load project root .env first (so it works regardless of cwd), then cwd; override so file wins
+    if (_root / ".env").exists():
+        load_dotenv(_root / ".env", override=True)
+    if (_base / ".env").exists():
+        load_dotenv(_base / ".env", override=True)
+    load_dotenv(override=True)  # .env in current working directory
+except ImportError:
+    pass
+
 import requests
 from ruamel.yaml import YAML
 from authlib.integrations.flask_client import OAuth
@@ -28,7 +42,11 @@ def represent_list(self, data):
 
 # Add custom representer for lists
 yaml.Representer.add_representer(list, represent_list)
-from dashboard_utils import pydantic_to_dict, to_dashboard_bundle
+from dashboard_utils import (
+    pydantic_to_dict,
+    to_dashboard_bundle,
+    dashboard_context_for_llm,
+)
 from flask import (
     Flask,
     Response,
@@ -43,7 +61,7 @@ from flask import (
     g,
 )
 from sqlalchemy import text
-from models import db, User, UserConfig
+from models import db, User, UserConfig, AuditLog, ChatMessage
 from tova.core import drafts
 from tova.core import models as models_module
 from tova.api.models.data_schemas import DraftType
@@ -69,6 +87,7 @@ def _run_db_init_once():
     """
     Initialize tables once, guarded by an advisory lock to avoid
     gunicorn worker races that can cause duplicate type errors.
+    Also run one-off migrations (e.g. add is_admin to existing users table).
     """
     if not RUN_DB_INIT_ON_START:
         return
@@ -77,11 +96,37 @@ def _run_db_init_once():
             conn.execute(text("SELECT pg_advisory_lock(420420)"))
             try:
                 db.create_all()
+                # Add is_admin to users if table existed before admin support (PostgreSQL)
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false"
+                ))
             finally:
                 conn.execute(text("SELECT pg_advisory_unlock(420420)"))
 
 
 _run_db_init_once()
+
+
+def _log_audit(action: str, target_type: str = None, target_id: str = None, details: str = None):
+    """Record an audit event. Does not raise; failures are logged only."""
+    try:
+        actor_id = (getattr(g, "user", None) or {}).get("id")
+        entry = AuditLog(
+            actor_id=actor_id,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            details=details[:1024] if details else None,
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.warning("Audit log failed: %s", e)
+
 
 # Use relative path from project root, or absolute path from env var
 _drafts_save_env = os.getenv("DRAFTS_SAVE")
@@ -406,6 +451,14 @@ def _cache_set(cache: dict, key, data):
 # ------------------------------------------------------------------------------
 # Auth helpers
 # ------------------------------------------------------------------------------
+def _admin_emails_from_env():
+    """Comma-separated list of emails that are always treated as admin (e.g. TOVA_ADMIN_EMAILS)."""
+    raw = os.getenv("TOVA_ADMIN_EMAILS", "").strip()
+    if not raw:
+        return set()
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
 def login_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -413,6 +466,21 @@ def login_required(view_func):
         if "user_id" not in session:
             next_url = request.path  # or request.full_path
             return redirect(url_for("login", next=next_url))
+        return view_func(*args, **kwargs)
+
+    return wrapped_view
+
+
+def admin_required(view_func):
+    """Require the current user to be logged in and an admin (DB is_admin or TOVA_ADMIN_EMAILS)."""
+    @wraps(view_func)
+    def wrapped_view(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login", next=request.path))
+        user = getattr(g, "user", None)
+        if not user or not user.get("is_admin"):
+            flash("Admin access required.", "danger")
+            return redirect(url_for("home"))
         return view_func(*args, **kwargs)
 
     return wrapped_view
@@ -428,10 +496,13 @@ def load_logged_in_user():
 
     user = User.query.filter_by(id=user_id).first()
     if user:
+        admin_emails = _admin_emails_from_env()
+        is_admin = getattr(user, "is_admin", False) or (user.email.lower() in admin_emails)
         g.user = {
             "id": user.id,
             "email": user.email,
             "name": user.name or user.email,
+            "is_admin": is_admin,
         }
         session["user_email"] = user.email
         session["user_name"] = user.name or user.email
@@ -484,6 +555,7 @@ def signup():
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
+        _log_audit("user_created", target_type="user", target_id=user.id, details=user.email)
 
         # Log them in
         session.clear()
@@ -519,6 +591,7 @@ def login():
         session["user_email"] = user.email
         session["user_name"] = user.name or user.email
         session.permanent = True
+        _log_audit("login", target_type="user", target_id=user.id, details=user.email)
 
         flash("Signed in successfully.", "success")
 
@@ -591,6 +664,7 @@ def auth_okta_callback():
     session["user_email"] = user.email
     session["user_name"] = user.name or name or email
     session.permanent = True
+    _log_audit("login", target_type="user", target_id=user.id, details=user.email)
 
     flash("Signed in with Okta.", "success")
 
@@ -603,6 +677,302 @@ def logout():
     session.clear()
     flash("You have been signed out.", "info")
     return redirect(url_for("login"))
+
+
+# ------------------------------------------------------------------------------
+# Admin (superuser) page
+# ------------------------------------------------------------------------------
+@server.route("/admin")
+@login_required
+@admin_required
+def admin_page():
+    """Admin page: list users and manage admin status."""
+    admin_emails = _admin_emails_from_env()
+    rows = User.query.order_by(User.created_at.desc()).all()
+    users = [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "auth_source": u.auth_source,
+            "created_at": u.created_at,
+            "is_admin": getattr(u, "is_admin", False),
+        }
+        for u in rows
+    ]
+    return render_template(
+        "admin.html",
+        users=users,
+        admin_emails_from_env=admin_emails,
+    )
+
+
+@server.route("/admin/users/<user_id>/toggle-admin", methods=["POST"])
+@login_required
+@admin_required
+def admin_toggle_user(user_id):
+    """Toggle is_admin for a user (only admins). Cannot remove your own admin if you're the last admin."""
+    if not getattr(g, "user", None) or not g.user.get("is_admin"):
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+    target = User.query.get(user_id)
+    if not target:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    admin_emails = _admin_emails_from_env()
+    db_admin_count = User.query.filter_by(is_admin=True).count()
+    # If we're demoting ourselves and we're the only DB admin (and not in env list), forbid
+    if (
+        target.id == g.user["id"]
+        and getattr(target, "is_admin", False)
+        and db_admin_count <= 1
+        and target.email.lower() not in admin_emails
+    ):
+        return jsonify({"success": False, "message": "Cannot remove the last admin."}), 400
+    target.is_admin = not getattr(target, "is_admin", False)
+    db.session.commit()
+    action = "admin_revoked" if not target.is_admin else "admin_promoted"
+    _log_audit(action, target_type="user", target_id=target.id, details=target.email)
+    return jsonify({"success": True, "is_admin": target.is_admin})
+
+
+@server.route("/admin/users", methods=["POST"])
+@login_required
+@admin_required
+def admin_create_user():
+    """Create a new user (admin only). JSON: name, email, password."""
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    password = (payload.get("password") or "").strip()
+    if not email or not password:
+        return jsonify({"success": False, "message": "Email and password are required"}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"success": False, "message": "An account with that email already exists"}), 400
+    user = User(
+        id=str(uuid4()),
+        name=name or email,
+        email=email,
+    )
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    _log_audit("user_created", target_type="user", target_id=user.id, details=user.email)
+    return jsonify({"success": True, "user_id": user.id, "email": user.email}), 201
+
+
+@server.route("/admin/users/<user_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    """Delete a user (admin only). Cannot delete yourself."""
+    if user_id == g.user.get("id"):
+        return jsonify({"success": False, "message": "Cannot delete your own account"}), 400
+    target = User.query.get(user_id)
+    if not target:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    email = target.email
+    db.session.delete(target)
+    db.session.commit()
+    _log_audit("user_deleted", target_type="user", target_id=user_id, details=email)
+    return jsonify({"success": True}), 200
+
+
+@server.route("/admin/corpora", methods=["GET"])
+@login_required
+@admin_required
+def admin_list_corpora():
+    """List all corpora across all users (admin only)."""
+    try:
+        r = requests.get(f"{API}/data/corpora", timeout=15)
+        r.raise_for_status()
+        corpora = r.json()
+    except requests.RequestException as e:
+        server.logger.exception("Admin list corpora: %s", e)
+        return jsonify({"error": str(e)}), 502
+    user_ids = {c.get("owner_id") or (c.get("metadata") or {}).get("owner_id") for c in corpora if c.get("owner_id") or (c.get("metadata") or {}).get("owner_id")}
+    users_by_id = {}
+    for uid in user_ids:
+        if uid:
+            u = User.query.get(uid)
+            users_by_id[uid] = {"email": u.email if u else None, "name": (u.name if u else None) or ""}
+    for c in corpora:
+        oid = c.get("owner_id") or (c.get("metadata") or {}).get("owner_id")
+        c["owner_email"] = users_by_id.get(oid, {}).get("email") if oid else None
+        c["owner_name"] = users_by_id.get(oid, {}).get("name") if oid else None
+    return jsonify(corpora), 200
+
+
+@server.route("/admin/corpora/<corpus_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_corpus(corpus_id):
+    """Delete any corpus (admin only)."""
+    try:
+        r = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=10)
+        if r.status_code == 404:
+            return jsonify({"error": "Corpus not found"}), 404
+        r.raise_for_status()
+        corpus = r.json()
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+    corpus_name = (corpus.get("metadata") or {}).get("name") or corpus_id
+    models = corpus.get("models") or []
+    for model_id in models:
+        try:
+            requests.delete(f"{API}/data/models/{model_id}", timeout=(3, 30))
+        except Exception:
+            pass
+    try:
+        del_resp = requests.delete(f"{API}/data/corpora/{corpus_id}", timeout=(3, 30))
+        if del_resp.status_code == 204:
+            _log_audit("corpus_deleted", target_type="corpus", target_id=corpus_id, details=corpus_name)
+            return jsonify({"success": True}), 200
+        if del_resp.status_code == 404:
+            return jsonify({"error": "Corpus not found"}), 404
+        return jsonify({"error": f"Upstream status {del_resp.status_code}"}), del_resp.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@server.route("/admin/models", methods=["GET"])
+@login_required
+@admin_required
+def admin_list_models():
+    """List all models across all users (admin only)."""
+    try:
+        models_drafts = drafts.list_drafts(type=DraftType.model)
+    except Exception as e:
+        server.logger.exception("Admin list models drafts: %s", e)
+        return jsonify({"error": str(e)}), 500
+    user_ids = set()
+    models_list = []
+    for draft in models_drafts:
+        owner_id = draft.owner_id or (draft.metadata.get("owner_id") if draft.metadata else None)
+        # Same fallback as fetch_trained_models: if no owner on model, use corpus owner
+        if not owner_id and draft.metadata:
+            corpus_id = draft.metadata.get("corpus_id")
+            if corpus_id:
+                try:
+                    corpus_resp = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=5)
+                    if corpus_resp.status_code == 200:
+                        corpus_data = corpus_resp.json()
+                        owner_id = corpus_data.get("owner_id") or (corpus_data.get("metadata") or {}).get("owner_id")
+                except Exception:
+                    pass
+        if owner_id:
+            user_ids.add(owner_id)
+        try:
+            model = drafts.draft_to_model(draft)
+            if model:
+                meta = (draft.metadata or {}).copy()
+                name = model.name or meta.get("tr_params", {}).get("model_name") or draft.id
+                models_list.append({
+                    "id": model.id,
+                    "name": name,
+                    "owner_id": model.owner_id or owner_id,
+                    "corpus_id": getattr(model, "corpus_id", None) or meta.get("corpus_id"),
+                    "created_at": model.created_at or meta.get("created_at"),
+                })
+        except Exception:
+            continue
+    users_by_id = {}
+    for uid in user_ids:
+        u = User.query.get(uid)
+        users_by_id[uid] = {"email": u.email if u else None, "name": (u.name if u else None) or ""}
+    for m in models_list:
+        oid = m.get("owner_id")
+        m["owner_email"] = users_by_id.get(oid, {}).get("email") if oid else None
+        m["owner_name"] = users_by_id.get(oid, {}).get("name") if oid else None
+    return jsonify(models_list), 200
+
+
+@server.route("/admin/models/<model_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_model(model_id):
+    """Delete any model (admin only)."""
+    try:
+        up = requests.get(f"{API}/data/models/{model_id}", timeout=10)
+        if up.status_code == 404:
+            return jsonify({"error": "Model not found"}), 404
+        up.raise_for_status()
+        model_meta = up.json()
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+    corpus_id = model_meta.get("corpus_id")
+    if corpus_id:
+        try:
+            requests.post(f"{API}/data/corpora/{corpus_id}/delete_model", params={"model_id": model_id}, timeout=10)
+        except Exception:
+            pass
+    try:
+        del_resp = requests.delete(f"{API}/data/models/{model_id}", timeout=(3, 30))
+        if del_resp.status_code == 204:
+            _log_audit("model_deleted", target_type="model", target_id=model_id)
+            return jsonify({"success": True}), 200
+        if del_resp.status_code == 404:
+            return jsonify({"error": "Model not found"}), 404
+        return jsonify({"error": f"Upstream status {del_resp.status_code}"}), del_resp.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@server.route("/admin/stats", methods=["GET"])
+@login_required
+@admin_required
+def admin_stats():
+    """System stats (admin only)."""
+    try:
+        r = requests.get(f"{API}/data/corpora", timeout=10)
+        corpus_count = len(r.json()) if r.ok else None
+    except Exception:
+        corpus_count = None
+    try:
+        models_drafts = drafts.list_drafts(type=DraftType.model)
+        model_count = len(models_drafts)
+    except Exception:
+        model_count = None
+    user_count = User.query.count()
+    audit_count = AuditLog.query.count()
+    return jsonify({
+        "users": user_count,
+        "corpora": corpus_count,
+        "models": model_count,
+        "audit_log_entries": audit_count,
+    }), 200
+
+
+@server.route("/admin/audit", methods=["GET"])
+@login_required
+@admin_required
+def admin_audit():
+    """Paginated audit log (admin only)."""
+    page = max(1, request.args.get("page", 1, type=int))
+    per_page = min(100, max(1, request.args.get("per_page", 50, type=int)))
+    q = AuditLog.query.order_by(AuditLog.created_at.desc())
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+    items = []
+    for row in pagination.items:
+        actor = None
+        if row.actor_id:
+            u = User.query.get(row.actor_id)
+            actor = u.email if u else row.actor_id
+        items.append({
+            "id": row.id,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "actor_id": row.actor_id,
+            "actor_email": actor,
+            "action": row.action,
+            "target_type": row.target_type,
+            "target_id": row.target_id,
+            "details": row.details,
+        })
+    return jsonify({
+        "items": items,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "total": pagination.total,
+        "pages": pagination.pages,
+    }), 200
 
 
 # ------------------------------------------------------------------------------
@@ -952,6 +1322,7 @@ def delete_corpus():
     try:
         del_resp = requests.delete(f"{API}/data/corpora/{corpus_id}", timeout=(3.05, 30))
         if del_resp.status_code == 204:
+            _log_audit("corpus_deleted", target_type="corpus", target_id=corpus_id, details=corpus_name)
             return jsonify(
                 {
                     "message": f"Corpus '{corpus_id}' deleted successfully",
@@ -1806,6 +2177,7 @@ def delete_model():
         )
         server.logger.info("Model delete upstream response status=%s", up.status_code)
         if up.status_code == 204:
+            _log_audit("model_deleted", target_type="model", target_id=model_id)
             return jsonify({"message": f"Model '{model_id}' deleted successfully"}), 200
         elif up.status_code == 404:
             return jsonify({"error": f"Model '{model_id}' not found"}), 404
@@ -1838,10 +2210,10 @@ def delete_model():
 # ------------------------------------------------------------------------------
 # Dashboard-related routes
 # ------------------------------------------------------------------------------
-@server.route("/dashboard", methods=["POST"])
+@server.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
-    model_id = request.form.get("model_id", "")
+    model_id = request.form.get("model_id") or request.args.get("model_id", "")
     return render_template("dashboard.html", model_id=model_id)
 
 
@@ -2360,70 +2732,321 @@ def save_settings():
     return jsonify({"ok": True, "echo": payload}), 200
 
 
+def _safe_dict(val):
+    """Return val if it's a dict, else {} (handles ruamel.yaml scalars etc.)."""
+    return val if isinstance(val, dict) else {}
+
+
+def _chat_llm(provider: str, model: str, system_content: str, user_content: str, host: str = None, api_key: str = None):
+    """
+    Call configured LLM (Ollama or OpenAI) for the model assistant.
+    api_key: optional OpenAI API key from chat UI; if not set, uses OPENAI_API_KEY env for GPT.
+    Returns (response_text, None) on success or (None, error_message) on failure.
+    """
+    llm_cfg = _safe_dict(RAW_CONFIG.get("llm"))
+    if provider == "ollama":
+        ollama_cfg = _safe_dict(llm_cfg.get("ollama"))
+        base_url = host or ollama_cfg.get("host", "http://host.docker.internal:11434")
+        base_url = str(base_url).strip().rstrip("/")
+        try:
+            r = requests.post(
+                f"{base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "stream": False,
+                },
+                timeout=(5, 120),
+            )
+            r.raise_for_status()
+            data = r.json()
+            content = (data.get("message") or {}).get("content", "").strip()
+            return (content, None) if content else (None, "Empty response from Ollama")
+        except requests.RequestException as e:
+            return None, str(e)
+        except Exception as e:
+            return None, str(e)
+    if provider == "gpt" or provider == "openai":
+        key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
+        if not key:
+            return None, "OpenAI API key not set. Add your key in Assistant LLM settings (chat sidebar) or set OPENAI_API_KEY in the server .env file."
+        try:
+            r = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "max_tokens": 1024,
+                },
+                timeout=(5, 120),
+            )
+            r.raise_for_status()
+            data = r.json()
+            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            return (content, None) if content else (None, "Empty response from OpenAI")
+        except requests.RequestException as e:
+            return None, str(e)
+        except Exception as e:
+            return None, str(e)
+    return None, f"Unsupported LLM provider: {provider}"
+
+
+def _read_key_from_dotfile(env_path: Path) -> str | None:
+    """Read OPENAI_API_KEY from one .env file. Returns None if not found or on error."""
+    if not env_path.exists():
+        return None
+    try:
+        with open(env_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                name, _, value = line.partition("=")
+                if name.strip() == "OPENAI_API_KEY":
+                    key = value.strip().strip('"').strip("'").strip()
+                    return key if key else None
+    except OSError:
+        pass
+    return None
+
+
+
+def _get_openai_key_from_env() -> str | None:
+    project_root = Path(__file__).resolve().parent.parent  # /TOVA
+    env_path = project_root / ".env"
+
+    load_dotenv(dotenv_path=env_path, override=False)  # set True if you want .env to override existing env vars
+
+    key = os.getenv("OPENAI_API_KEY", "").strip().strip('"').strip("'")
+    return key or None
+
+# Startup: confirm whether app.py can see the OpenAI key from .env/config (no key value logged)
+_openai_key_at_startup = _get_openai_key_from_env()
+server.logger.info("OpenAI API key at startup: %s", "configured" if _openai_key_at_startup else "not set (set in .env or llm.gpt.api_key in config)")
+
+
+def _get_chat_llm_defaults():
+    """Return default provider, model, host from config (for RAG chat). Used when user has not set overrides."""
+    tm_gen = _safe_dict(_safe_dict(RAW_CONFIG.get("topic_modeling")).get("general"))
+    llm_cfg = _safe_dict(RAW_CONFIG.get("llm"))
+    provider = tm_gen.get("llm_provider") or "ollama"
+    if hasattr(provider, "strip"):
+        provider = provider.strip().lower()
+    else:
+        provider = str(provider).strip().lower()
+    if provider == "openai":
+        provider = "gpt"
+    _ollama = _safe_dict(llm_cfg.get("ollama")).get("available_models")
+    _gpt = _safe_dict(llm_cfg.get("gpt")).get("available_models")
+    ollama_list = list(_ollama) if _ollama else []
+    gpt_list = list(_gpt) if _gpt else []
+    chat_model = (
+        tm_gen.get("llm_model_type")
+        or (ollama_list[0] if ollama_list else None)
+        or (gpt_list[0] if gpt_list else None)
+    )
+    if chat_model is not None and not isinstance(chat_model, str):
+        chat_model = str(chat_model)
+    host = tm_gen.get("llm_server") or _safe_dict(llm_cfg.get("ollama")).get("host")
+    if host is not None and not isinstance(host, str):
+        host = str(host)
+    return provider, chat_model, host, ollama_list, gpt_list, _safe_dict(llm_cfg.get("ollama")).get("host")
+
+
+@server.route("/api/chat-openai-key-status", methods=["GET"])
+@login_required
+def chat_openai_key_status():
+    """Diagnostic: report where OPENAI_API_KEY was found (or not). No key value is returned."""
+    project_root = Path(__file__).resolve().parent.parent
+    env_project = project_root / ".env"
+    env_cwd = Path.cwd() / ".env"
+    tried = [
+        {"path": str(env_project), "exists": env_project.exists()},
+        {"path": str(env_cwd), "exists": env_cwd.exists()},
+    ]
+    if server.root_path:
+        tried.append({"path": str(Path(server.root_path) / ".env"), "exists": (Path(server.root_path) / ".env").exists()})
+        tried.append({"path": str(Path(server.root_path).parent / ".env"), "exists": (Path(server.root_path).parent / ".env").exists()})
+    key = _get_openai_key_from_env()
+    gpt_cfg = _safe_dict(RAW_CONFIG.get("llm", {})).get("gpt") or {}
+    config_has_key = bool((gpt_cfg.get("api_key") or "").strip()) if isinstance(gpt_cfg, dict) else False
+    path_api_key = (gpt_cfg.get("path_api_key") or ".env") if isinstance(gpt_cfg, dict) else ".env"
+    return jsonify({
+        "key_configured": bool(key) or config_has_key,
+        "key_from_config": config_has_key,
+        "env_has_key": bool((os.environ.get("OPENAI_API_KEY") or "").strip()),
+        "path_api_key_from_config": path_api_key,
+        "note": "Labeler (Prompter) uses load_dotenv(path_api_key) then os.getenv('OPENAI_API_KEY'); UI uses same.",
+        "project_root_from_file": str(project_root),
+        "cwd": str(Path.cwd()),
+        "server_root_path": getattr(server, "root_path", None),
+        "tried_env_paths": tried,
+    }), 200
+
+
+@server.route("/api/chat-llm-options", methods=["GET"])
+@login_required
+def chat_llm_options():
+    """Return available RAG/chat LLM options (providers, models, default host) for the chat UI. Does not expose secrets."""
+    llm_cfg = _safe_dict(RAW_CONFIG.get("llm"))
+    ollama_cfg = _safe_dict(llm_cfg.get("ollama"))
+    gpt_cfg = _safe_dict(llm_cfg.get("gpt"))
+    tm_gen = _safe_dict(_safe_dict(RAW_CONFIG.get("topic_modeling")).get("general"))
+    default_host = tm_gen.get("llm_server") or ollama_cfg.get("host", "http://host.docker.internal:11434")
+    if default_host is not None and not isinstance(default_host, str):
+        default_host = str(default_host)
+    return jsonify({
+        "ollama": {
+            "models": list(ollama_cfg.get("available_models") or []),
+            "default_host": default_host,
+        },
+        "gpt": {
+            "models": list(gpt_cfg.get("available_models") or []),
+        },
+    }), 200
+
+
+@server.route("/api/chat/messages", methods=["GET"])
+@login_required
+def get_chat_messages():
+    """Return saved chat messages for the current user and the given model_id (query param)."""
+    model_id = (request.args.get("model_id") or "").strip()
+    if not model_id:
+        return jsonify({"error": "model_id is required"}), 400
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    try:
+        messages = (
+            ChatMessage.query.filter_by(user_id=user_id, model_id=model_id)
+            .order_by(ChatMessage.created_at.asc())
+            .all()
+        )
+        return jsonify({
+            "messages": [
+                {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat() + "Z" if m.created_at else None}
+                for m in messages
+            ]
+        }), 200
+    except Exception as e:
+        server.logger.exception("Failed to load chat messages: %s", e)
+        return jsonify({"error": "Failed to load messages"}), 500
+
+
 @server.route("/api/chat", methods=["POST"])
 @login_required
 def chat():
     """
     Chat interface endpoint for topic modeling assistance.
-    Provides contextual help about themes, documents, and dashboard usage.
+    Uses the LLM set in the request (llm_settings from chat UI) or config. No rule-based fallback.
     """
     try:
         payload = request.get_json(silent=True) or {}
         message = payload.get("message", "").strip()
         model_id = payload.get("model_id", "")
         context = payload.get("context", {})
+        llm_settings = _safe_dict(payload.get("llm_settings"))
         
         if not message:
             return jsonify({"error": "Message is required"}), 400
         
         server.logger.info("Chat request: model_id=%s, message_length=%d", model_id, len(message))
         
-        # Get dashboard context if available
-        themes = context.get("themes", [])
-        document_count = context.get("document_count", 0)
+        llm_context_str = dashboard_context_for_llm(
+            context,
+            max_themes=30,
+            max_doc_snippets=5,
+            include_diagnostics=True,
+            include_model_info=True,
+        )
+        if llm_context_str:
+            server.logger.debug("LLM context length: %d chars", len(llm_context_str))
         
-        # Simple rule-based responses (can be enhanced with LLM later)
-        message_lower = message.lower()
-        response = ""
-        
-        if any(word in message_lower for word in ["theme", "topic", "themes", "topics"]):
-            if themes:
-                theme_list = ", ".join([t.get("label", f"Theme {t.get('id')}") for t in themes[:5]])
-                response = f"I found {len(themes)} themes in your model. Here are some: {theme_list}."
-                if len(themes) > 5:
-                    response += f" And {len(themes) - 5} more. Click on any theme in the chart to see details."
+        # RAG LLM: user overrides from chat UI take precedence over config
+        provider, chat_model, host, ollama_list, gpt_list, _ = _get_chat_llm_defaults()
+        if llm_settings.get("provider") and llm_settings.get("model"):
+            p = llm_settings.get("provider")
+            if hasattr(p, "strip"):
+                p = p.strip().lower()
             else:
-                response = "I don't have information about themes yet. Please make sure your dashboard is loaded."
+                p = str(p).strip().lower()
+            if p == "openai":
+                p = "gpt"
+            provider = p
+            chat_model = llm_settings.get("model")
+            if chat_model is not None and not isinstance(chat_model, str):
+                chat_model = str(chat_model)
+            if provider == "ollama" and llm_settings.get("host"):
+                host = str(llm_settings.get("host")).strip().rstrip("/") or host
+        if host is not None and not isinstance(host, str):
+            host = str(host)
         
-        elif any(word in message_lower for word in ["document", "documents", "text", "data"]):
-            if document_count > 0:
-                response = f"Your model contains {document_count} documents. You can search and filter them using the search bar and filters in the Documents panel. Click on any document row to see full details and theme probabilities."
+        if chat_model:
+            # RAG-style: system = strict rules; user = retrieved context + question
+            system_content = (
+                "You are a retrieval-augmented assistant for topic model analysis. You must answer ONLY "
+                "using the retrieved context provided in the user message. Do not use external knowledge "
+                "or invent themes, counts, or metrics. If the answer is not in the context, say so clearly. "
+                "When you use numbers or theme names, they must come directly from the context.\n\n"
+                "For comparison questions: use the Themes section and the Theme similarities section.\n\n"
+                "For analysis and insight questions (e.g. 'give me an analysis', 'key insights', 'what stands out'): "
+                "synthesize from the context. Use the 'Analysis cues' section (dominant themes, highest coherence, "
+                "most focused themes, overall stats). Offer 2-4 clear insights: e.g. which themes dominate, which are "
+                "most interpretable or focused, how themes relate or differ, and what the corpus seems to be about. "
+                "Keep insights grounded in the data; cite theme names and metrics from the context."
+            )
+            context_block = llm_context_str if llm_context_str else "(No dashboard context loaded yet.)"
+            user_content = (
+                "[Retrieved context from the topic model dashboard]\n"
+                "---\n"
+                f"{context_block}\n"
+                "---\n\n"
+                f"Question: {message}"
+            )
+            # OpenAI key: chat UI > user saved (DB) > config.yaml llm.gpt.api_key > .env
+            from_ui = (llm_settings.get("api_key") or "").strip()
+            stored_key = None
+            if not from_ui:
+                user_config = _load_user_config(session.get("user_id")) or {}
+                stored_llm = user_config.get("llm_config") or {}
+                stored_key = (stored_llm.get("api_key") or "").strip()
+            from_config = (_safe_dict(RAW_CONFIG.get("llm", {})).get("gpt") or {})
+            if isinstance(from_config, dict):
+                config_key = (from_config.get("api_key") or "").strip()
             else:
-                response = "I don't have document information yet. Please make sure your dashboard is loaded."
+                config_key = ""
+            openai_key = from_ui or stored_key or config_key or _get_openai_key_from_env()
+            response_text, err = _chat_llm(provider, chat_model, system_content, user_content, host=host, api_key=openai_key)
+            if response_text:
+                server.logger.info("Chat response from LLM: length=%d", len(response_text))
+                user_id = session.get("user_id")
+                if user_id and model_id:
+                    try:
+                        db.session.add(ChatMessage(user_id=user_id, model_id=model_id.strip(), role="user", content=message))
+                        db.session.add(ChatMessage(user_id=user_id, model_id=model_id.strip(), role="assistant", content=response_text))
+                        db.session.commit()
+                    except Exception as save_err:
+                        server.logger.warning("Failed to save chat messages: %s", save_err)
+                        db.session.rollback()
+                return jsonify({"response": response_text}), 200
+            if err:
+                server.logger.warning("Chat LLM error: %s", err)
         
-        elif any(word in message_lower for word in ["help", "how", "what", "explain"]):
-            response = """I can help you with:
-• Understanding themes and topics - Ask about specific themes or how they're organized
-• Exploring documents - Ask about document counts, searching, or filtering
-• Using the dashboard - Ask how to interact with charts, tables, or modals
-• Interpreting results - Ask about scores, probabilities, or diagnostics
-
-Try asking: "What themes do I have?" or "How do I search documents?" """
-        
-        elif any(word in message_lower for word in ["search", "filter", "find"]):
-            response = "You can search documents using the search bar in the Documents panel. You can also filter by theme using the Theme dropdown, or by score range using the Min/Max Score inputs. Click 'Apply Filters' to update the results."
-        
-        elif any(word in message_lower for word in ["chart", "graph", "visualization"]):
-            response = "The dashboard shows two views: a bar chart and a scatter plot grid. Click on any bar or point to open detailed information about that theme. You can switch between views using the toggle button."
-        
-        elif any(word in message_lower for word in ["diagnostic", "metric", "coherence", "entropy"]):
-            response = "Theme diagnostics include metrics like coherence (how semantically consistent keywords are), prevalence (percentage of documents), and entropy (balance across topics). View these in the Theme Details modal by clicking on any theme."
-        
-        else:
-            response = f"I understand you're asking about '{message}'. I can help with questions about themes, documents, dashboard usage, and interpreting results. Try asking: 'What themes do I have?' or 'How do I search documents?'"
-        
-        server.logger.info("Chat response generated: length=%d", len(response))
-        return jsonify({"response": response}), 200
+        # No rule-based fallback: LLM only. If we get here, model is missing or the call failed.
+        if not chat_model:
+            return jsonify({
+                "response": "No language model is configured for the assistant. Open the chat sidebar, expand \"Assistant LLM\", and choose a provider and model (and set the Ollama host if using Ollama). You can also set defaults in config under topic_modeling.general."
+            }), 200
+        return jsonify({
+            "response": f"The assistant could not get a response from the model ({err or 'unknown error'}). Check that the LLM service is running and reachable, then try again."
+        }), 200
         
     except Exception as e:
         server.logger.exception("Chat error: %s", e)
@@ -2583,4 +3206,4 @@ def load_config(filepath=CONFIG_PATH):
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     # For local development; in production use gunicorn/uwsgi, etc.
-    server.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    server.run(debug=True, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", 5000)))
