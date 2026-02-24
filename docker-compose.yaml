@@ -16,6 +16,9 @@ services:
     #  condition: service_healthy
     ports:
       - "8000:8000"
+    # Reach Ollama on host; use http://host.docker.internal:11434 from inside the container (0.0.0.0 is not usable as a destination)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).getcode()==200 else 1)"]
       interval: 10s

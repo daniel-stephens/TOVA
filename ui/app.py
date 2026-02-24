@@ -1168,7 +1168,8 @@ def api_reset_user_config():
 @login_required
 def load_data_page():
     """Page for uploading/creating a dataset."""
-    return render_template("loadData.html")
+    current_user_id = session.get("user_id")
+    return render_template("loadData.html", current_user_id=current_user_id or "")
 
 
 @server.route("/load-corpus-page/")
@@ -1205,6 +1206,9 @@ def create_corpus():
                 )
             ds = upstream.json()
             owner = ds.get("owner_id") or (ds.get("metadata") or {}).get("owner_id")
+            # Treat missing or "anonymous" owner as owned by current user when logged in
+            if owner is None or owner == "anonymous":
+                owner = user_id
             if owner != user_id:
                 return jsonify({"error": "Access denied: You do not own one or more of the selected datasets"}), 403
             datasets_lst.append(ds)

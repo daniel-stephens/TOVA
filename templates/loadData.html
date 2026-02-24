@@ -902,6 +902,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ===============================
   const SAVE_DATASET_URL = "/data/create/dataset/"; 
   const SAVE_CORPUS_URL  = "/data/create/corpus/";  
+  window.currentUserId = {{ current_user_id|tojson }};
 
   function setBusy(on, message = "Processing... Please wait.") {
     const overlay = document.getElementById('loader-overlay');
