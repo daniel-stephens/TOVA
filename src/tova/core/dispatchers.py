@@ -6,13 +6,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from tova.topic_models.tm_model import TMmodel
-from tova.topic_models.models.traditional.base import TradTMmodel
 from tova.utils.cancel import CancellationToken
 from tova.utils.common import init_logger, load_yaml_config_file
 from tova.utils.progress import ProgressCallback
-
-# Keys that only LLM-based models accept in __init__; strip before passing to traditional models
-_LLM_ONLY_TR_PARAMS = frozenset({"llm_provider", "llm_model_type", "llm_server", "llm_api_key"})
 
 # -------------------- #
 # AUXILIARY FUNCTIONS  #
@@ -67,12 +63,11 @@ def train_model_dispatch(
     if model_cls is None:
         raise ValueError(f"Unknown model: {model}")
 
-    tr_params = tr_params or {}
+    tr_params = dict(tr_params or {})
 
-    # Traditional models (LDA, CTM) don't accept LLM-only params in __init__; strip them so
-    # training works even if the UI sends them (e.g. from saved user LLM config).
-    if issubclass(model_cls, TradTMmodel):
-        tr_params = {k: v for k, v in tr_params.items() if k not in _LLM_ONLY_TR_PARAMS}
+    # UI sends "llm" for LLM-based models; backend models use "llm_model_type"
+    if "llm" in tr_params and "llm_model_type" not in tr_params:
+        tr_params["llm_model_type"] = tr_params["llm"]
 
     tm_model = model_cls(
         model_name=model_name,

@@ -34,12 +34,23 @@ class TradTMmodel(BaseTMModel, ABC):
     ) -> None:
         """
         Initialize the TradTMmodel class.
-        Extra kwargs (e.g. llm_provider from the UI) are accepted and ignored;
-        traditional models read LLM settings from config in BaseTMModel.
+        LLM-related kwargs (llm_provider, llm_model_type, llm_server, llm_api_key)
+        from the UI override config; other kwargs are ignored.
         """
 
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
+
+        # User selection overrides config; empty/missing = keep config (fallback to config.yaml)
+        def _has_value(v):
+            if v is None:
+                return False
+            s = str(v).strip()
+            return len(s) > 0
+
+        for key in ("llm_provider", "llm_model_type", "llm_server", "llm_api_key"):
+            if key in kwargs and _has_value(kwargs[key]):
+                setattr(self, key, kwargs[key])
 
         if preprocess_text:
             self._logger.info("Text preprocessing is enabled.")
@@ -67,6 +78,11 @@ class TradTMmodel(BaseTMModel, ABC):
             "labeller_prompt", "src/tova/prompter/prompts/labelling_dft.txt")
         self.summarizer_prompt = self.config.get("traditional", {}).get(
             "summarizer_prompt", "src/tova/prompter/prompts/summarization_dft.txt")
+        # User preference overrides for labeller/summarizer
+        if "do_labeller" in kwargs:
+            self.do_labeller = bool(kwargs["do_labeller"])
+        if "do_summarizer" in kwargs:
+            self.do_summarizer = bool(kwargs["do_summarizer"])
         self._config_path = config_path
 
     def set_training_data(self, data: List[Dict]):

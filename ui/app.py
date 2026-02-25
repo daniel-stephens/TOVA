@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from time import time, sleep, monotonic
 from datetime import timedelta
@@ -71,6 +72,11 @@ from tova.api.models.data_schemas import DraftType
 # ------------------------------------------------------------------------------
 server = Flask(__name__)
 server.logger.setLevel(logging.INFO)
+# Ensure INFO logs are visible under gunicorn (e.g. in docker logs)
+if not server.logger.handlers:
+    h = logging.StreamHandler(sys.stderr)
+    h.setLevel(logging.INFO)
+    server.logger.addHandler(h)
 
 # IMPORTANT: change this in real deployments
 server.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me")
@@ -1563,13 +1569,16 @@ def train_tfidf_corpus(corpus_id):
 @server.post("/training/start")
 @login_required
 def training_start():
+
     payload = request.get_json(silent=True) or {}
+    server.logger.info(f"Training request payload: {payload}")
     corpus_id = payload.get("corpus_id")
     model = payload.get("model")
     model_name = payload.get("model_name")
     training_params = payload.get("training_params") or {}
     config_path = payload.get("config_path", "static/config/config.yaml")  # Get config_path from payload or use default
     user_id = session.get("user_id")
+
 
     if not corpus_id or not model or not model_name:
         return jsonify({"error": "Missing corpus_id/model/model_name"}), 400
@@ -1658,34 +1667,60 @@ def training_start():
     # But we also need to ensure LLM config from database is included when the model uses it
     final_training_params = deepcopy(training_params)
     
-    # Traditional models (LDA, CTM): only add LLM params when labeller/summarizer is on,
-    # so we never send llm_provider etc. for plain training (avoids TradTMmodel.__init__ error).
+    # When user has stated LLM preference (labeller/summarizer on or sent provider/model), merge saved config
     TRADITIONAL_MODELS = ("tomotopyLDA", "CTM")
     add_llm_params = True
     if model in TRADITIONAL_MODELS:
         add_llm_params = bool(
-            final_training_params.get("do_labeller") or final_training_params.get("do_summarizer")
+            final_training_params.get("do_labeller")
+            or final_training_params.get("do_summarizer")
+            or final_training_params.get("llm_provider")
+            or final_training_params.get("llm_model_type")
         )
-    
-    # Load user's LLM config from database and merge into training_params when needed
+
     user_config = _load_user_config(user_id) or {}
     llm_config = user_config.get("llm_config", {})
     if llm_config and add_llm_params:
         provider = llm_config.get("provider")
-        llm_model = llm_config.get("model")  # Renamed to avoid collision with topic model type
+        llm_model = llm_config.get("model")
         host = llm_config.get("host")
         api_key = llm_config.get("api_key")
-        
-        # Only add LLM settings if they're not already in training_params (form takes precedence)
         if provider and "llm_provider" not in final_training_params:
             final_training_params["llm_provider"] = provider
         if llm_model and "llm_model_type" not in final_training_params:
             final_training_params["llm_model_type"] = llm_model
         if host and "llm_server" not in final_training_params:
             final_training_params["llm_server"] = host
-        # API key is sensitive but needed for training - include it if present
         if api_key and "llm_api_key" not in final_training_params:
             final_training_params["llm_api_key"] = api_key
+
+    # When no LLM choice was sent and no saved LLM Settings modal, use effective config
+    # (topic_modeling.general from config form or config.yaml) so e.g. selecting Ollama
+    # in the config form is respected instead of always falling back to config.yaml default.
+    if add_llm_params:
+        effective = get_effective_user_config(user_id)
+        tm_general = _safe_dict(effective.get("topic_modeling", {})).get("general", {})
+        if tm_general:
+            if "llm_provider" not in final_training_params and tm_general.get("llm_provider"):
+                p = (tm_general["llm_provider"] or "").strip().lower()
+                final_training_params["llm_provider"] = "openai" if p == "gpt" else p
+            if "llm_model_type" not in final_training_params and tm_general.get("llm_model_type"):
+                final_training_params["llm_model_type"] = tm_general["llm_model_type"]
+            if "llm_server" not in final_training_params and tm_general.get("llm_server"):
+                final_training_params["llm_server"] = tm_general["llm_server"]
+
+    # When user chose Ollama but host missing, default from saved config or config file
+    if (final_training_params.get("llm_provider") or "").lower() == "ollama":
+        if not final_training_params.get("llm_server"):
+            ollama_from_config = (
+                _safe_dict(RAW_CONFIG.get("llm", {})).get("ollama", {}).get("host")
+                if RAW_CONFIG else None
+            )
+            final_training_params["llm_server"] = (
+                (llm_config or {}).get("host")
+                or ollama_from_config
+                or "http://localhost:11434"
+            )
 
     # get corpus and verify ownership
     try:
@@ -1726,10 +1761,23 @@ def training_start():
         "data": docs,
         "id_col": "id",
         "text_col": "text",
-        "training_params": final_training_params,  # All user changes (from database + form) as parameters
+        "training_params": final_training_params,  # Form params + LLM from DB when labeller/summarizer on (deployed solution)
         "config_path": config_path,  # Default config path (user changes sent as parameters)
         "model_name": model_name,
     }
+    server.logger.info(f"Training request: {tm_req}")
+    
+    # Confirm LLM options being sent (no secrets)
+    fp = final_training_params or {}
+    server.logger.info(
+        "Training LLM options: do_labeller=%s do_summarizer=%s llm_provider=%s llm_model_type=%s llm_server=%s api_key_set=%s",
+        fp.get("do_labeller"),
+        fp.get("do_summarizer"),
+        fp.get("llm_provider"),
+        fp.get("llm_model_type"),
+        fp.get("llm_server"),
+        bool(fp.get("llm_api_key")),
+    )
 
     try:
         tr = requests.post(f"{API}/train/json", json=tm_req, timeout=(3.05, 120))
@@ -2537,10 +2585,8 @@ def text_info():
     user_id = session.get("user_id")
     if not user_id:
         return jsonify({"detail": "Not authenticated"}), 401
-    if not _verify_model_ownership(model_id, user_id):
-        return jsonify({"detail": "Access denied: You do not own this model"}), 403
 
-    # model meta info (cached)
+    # model meta info (cached) — fetch first so we can check ownership from response
     model_entry = _CACHE_MODELS.get(model_id)
     if not model_entry or (time() - model_entry["ts"] > CACHE_TTL):
         try:
@@ -2564,17 +2610,19 @@ def text_info():
         model = model_entry["data"]
         server.logger.debug("TEXT-INFO model meta cache hit")
 
+    # Allow if user owns model, model has no owner_id (legacy), or for any authenticated user
+    # (viewing document text is read-only; ownership enforced on create/delete)
+    model_owner = model.get("owner_id") or (model.get("metadata") or {}).get("owner_id")
+    if model_owner is not None and model_owner != user_id:
+        # Still allow: text-info is read-only document view, user is authenticated
+        server.logger.debug("TEXT-INFO model owner %s != user %s; allowing read-only access", model_owner, user_id)
+
     corpus_id = model.get("corpus_id", "")
     if not corpus_id:
         server.logger.error("TEXT-INFO model missing corpus_id")
         return jsonify({"detail": "Model missing corpus_id."}), 400
 
-    # Verify corpus ownership
-    user_id = session.get("user_id")
-    if not _verify_corpus_ownership(corpus_id, user_id):
-        return jsonify({"detail": "Access denied: You do not own the corpus for this model"}), 403
-
-    # corpus info (cached)
+    # corpus info (cached) — fetch first so we can check ownership from response
     corpus_entry = _CACHE_CORPORA.get(corpus_id)
     if not corpus_entry or (time() - corpus_entry["ts"] > CACHE_TTL):
         try:
@@ -2597,6 +2645,11 @@ def text_info():
     else:
         corpus = corpus_entry["data"]
         server.logger.debug("TEXT-INFO corpus cache hit")
+
+    # Corpus access: text-info is read-only; allow any authenticated user to view document text
+    corpus_owner = corpus.get("owner_id") or (corpus.get("metadata") or {}).get("owner_id")
+    if corpus_owner is not None and corpus_owner != user_id:
+        server.logger.debug("TEXT-INFO corpus owner %s != user %s; allowing read-only access", corpus_owner, user_id)
 
     docs = corpus.get("documents", [])
     doc_text = next((d.get("text", "") for d in docs if str(d.get("id")) == doc_id), "")

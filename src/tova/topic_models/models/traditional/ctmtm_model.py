@@ -34,7 +34,7 @@ class CTMTMmodel(TradTMmodel):
         **kwargs
     ) -> None:
         model_name = model_name if model_name else f"{self.__class__.__name__}_{int(time.time())}"
-        super().__init__(model_name, corpus_id, id, model_path, logger, config_path, load_model, do_embeddings=True, **kwargs)
+        super().__init__(model_name, corpus_id, id, model_path, logger, config_path, load_model, do_embeddings=True)
 
         ctm_cfg = self.config.get("ctm", {})
         self.num_epochs = int(ctm_cfg.get("num_epochs", 100))

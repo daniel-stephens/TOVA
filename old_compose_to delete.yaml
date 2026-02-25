@@ -7,8 +7,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.api
       args:
-        BUILDER_IMAGE: tova-builder:${VERSION}
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        BUILDER_IMAGE: tova-builder:${VERSION:-latest}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -16,6 +16,10 @@ services:
     #  condition: service_healthy
     ports:
       - "8000:8000"
+    # Reach Ollama on host: 0.0.0.0 and host.docker.internal both resolve to host (host-gateway)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "0.0.0.0:host-gateway"
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).getcode()==200 else 1)"]
       interval: 10s
@@ -31,6 +35,7 @@ services:
     volumes:
       - ./data:/data
       - ./static/config:/app/static/config
+      - ./src:/app/src
     networks:
       - tova-net
 
@@ -39,8 +44,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.ui
       args:
-        BUILDER_IMAGE: tova-builder:${VERSION}
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       api:
         condition: service_healthy
@@ -53,11 +57,18 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
+      - PYTHONPATH=/app/src
+      # Chat assistant (OpenAI) reads key from env when running in Docker (project root .env not mounted)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Admin emails (from host .env; comma-separated)
       - TOVA_ADMIN_EMAILS=${TOVA_ADMIN_EMAILS:-}
+    command: ["gunicorn", "--reload", "-w", "2", "-b", "0.0.0.0:8080", "app:server"]
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config
+    - ./templates:/app/templates
+    - ./ui:/app
+    - ./src:/app/src
     networks:
       - tova-net
 
@@ -86,8 +97,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.solr_api
       args:
-        BUILDER_IMAGE: tova-builder:${VERSION}
-        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE}
+        BUILDER_IMAGE: tova-builder:${VERSION:-latest}
+        ASSETS_IMAGE:  tova-assets:${ASSETS_DATE:-dev}
     depends_on:
       - solr
     ports:

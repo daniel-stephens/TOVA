@@ -1382,10 +1382,29 @@ const renderBasicGroupParams = (modelName) => {
     
     // Only keep parameters that differ from defaults
     const training_params = filterChangedParams(allCollectedParams, defaultParams);
+
+    // Traditional: always send do_labeller/do_summarizer so user preference is explicit
+    if (kind === "traditional") {
+      const labellerEl = document.getElementById("tm-trad-do_labeller");
+      const summarizerEl = document.getElementById("tm-trad-do_summarizer");
+      training_params.do_labeller = allCollectedParams.do_labeller !== undefined
+        ? !!allCollectedParams.do_labeller
+        : (labellerEl ? !!labellerEl.checked : true);
+      training_params.do_summarizer = allCollectedParams.do_summarizer !== undefined
+        ? !!allCollectedParams.do_summarizer
+        : (summarizerEl ? !!summarizerEl.checked : true);
+    }
+
+    // When user has LLM preference (labeller/summarizer on or provider/model set), send LLM settings
+    if (training_params.do_labeller || training_params.do_summarizer || allCollectedParams.llm_provider || allCollectedParams.llm_model_type) {
+      if (allCollectedParams.llm_provider) training_params.llm_provider = allCollectedParams.llm_provider;
+      if (allCollectedParams.llm_model_type) training_params.llm_model_type = allCollectedParams.llm_model_type;
+      if (allCollectedParams.llm_server != null && allCollectedParams.llm_server !== "") training_params.llm_server = allCollectedParams.llm_server;
+    }
     
-    console.log("Default params:", defaultParams);
-    console.log("All collected params:", allCollectedParams);
-    console.log("Modified params (only these will be sent):", training_params);
+    // console.log("Default params:", defaultParams);
+    // console.log("All collected params:", allCollectedParams);
+    // console.log("Modified params (only these will be sent):", training_params);
 
     const payload = {
       corpus_id: corpusId,
@@ -1394,6 +1413,7 @@ const renderBasicGroupParams = (modelName) => {
       training_params: training_params,  // Only send modified parameters, defaults will be used for the rest
       config_path: "static/config/config.yaml",  // Always send default config path
     };
+    console.log("Training payload:", payload);
 
     try {
       if (dom.modal) dom.modal.hide();

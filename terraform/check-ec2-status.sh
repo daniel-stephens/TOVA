@@ -110,7 +110,7 @@ echo "Docker version:"
 docker --version 2>/dev/null || echo "❌ Docker not installed"
 echo ""
 echo "Docker Compose version:"
-docker-compose --version 2>/dev/null || echo "❌ Docker Compose not installed"
+(docker compose version 2>/dev/null || docker-compose --version 2>/dev/null) || echo "❌ Docker Compose not installed"
 echo ""
 echo "Running containers:"
 docker ps 2>/dev/null || echo "No containers running"
@@ -124,8 +124,9 @@ echo "=========================================="
 ssh -i "$KEY_FILE" ec2-user@$PUBLIC_IP << 'EOF'
 if [ -d "/home/ec2-user/TOVA" ]; then
     cd /home/ec2-user/TOVA
+    if docker compose version &>/dev/null; then DC="docker compose"; else DC="docker-compose"; fi
     echo "Docker Compose services:"
-    docker compose ps 2>/dev/null || echo "No services defined or docker-compose not working"
+    $DC ps 2>/dev/null || echo "No services defined or docker compose not working"
 else
     echo "Cannot check services - TOVA directory doesn't exist"
 fi

@@ -47,10 +47,11 @@ echo "Docker Compose Status"
 echo "=========================================="
 if [ -d "/home/ec2-user/TOVA" ]; then
     cd /home/ec2-user/TOVA
-    docker compose ps 2>&1 || echo "Docker compose command failed"
+    if docker compose version &>/dev/null; then DC="docker compose"; else DC="docker-compose"; fi
+    $DC ps 2>&1 || echo "Docker compose command failed"
     echo ""
     echo "Docker compose logs (last 20 lines):"
-    docker compose logs --tail=20 2>&1 || echo "Could not get logs"
+    $DC logs --tail=20 2>&1 || echo "Could not get logs"
 else
     echo "TOVA directory doesn't exist"
 fi

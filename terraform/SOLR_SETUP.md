@@ -113,7 +113,7 @@ Solr configuration is initialized automatically when the Solr container starts. 
 - Configsets from `solr/config/configsets`
 - Custom plugins from `solr/plugins/`
 
-If you need to run initialization scripts (like `solr_config` from docker-compose), you can:
+If you need to run initialization scripts (like `solr_config` from docker compose), you can:
 
 1. Add an init container to the Solr task definition
 2. Run initialization as part of the Solr startup command

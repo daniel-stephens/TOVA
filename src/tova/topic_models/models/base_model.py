@@ -3,7 +3,7 @@ import logging
 import pathlib
 import shutil
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -85,11 +85,12 @@ class BaseTMModel(ABC):
         self.not_include = self.config.get(
             "general", {}).get("not_include", [])
 
-        # llm params
+        # LLM params (from config; user overrides applied in subclasses e.g. TradTMmodel)
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
         self.llm_model_type = self.config.get(
             "general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
+        self.llm_api_key = self.config.get("general", {}).get("llm_api_key")
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -99,26 +100,25 @@ class BaseTMModel(ABC):
                 return f"<{type(val).__name__}>"
             return val
 
-        result = {
+        return {
             # TODO: make all the "no_include" as start with "_" to simplify this
             k: safe_value(v)
             for k, v in self.__dict__.items()
             if not k.startswith('_') and k not in self.not_include
             and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM, TMmodel))}
-        return result
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
+        # tr_params: effective training params (including LLM options) used for this run; enables reproducibility and loading with same settings
+        tr_params = self.to_dict()
 
-        tr_params_dict = self.to_dict()
-        
         model_info = {
             "corpus_id": self.corpus_id,
             "path": self.model_path.as_posix(),
             "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "location": "temporal",
             "created_at": pd.Timestamp.now().isoformat(),
-            "tr_params": tr_params_dict,
+            "tr_params": tr_params,
         }
 
         with json_path.open('w') as f:
@@ -170,6 +170,9 @@ class BaseTMModel(ABC):
             llm_model_type=self.llm_model_type,
             labeller_prompt=self.labeller_prompt,
             summarizer_prompt=self.summarizer_prompt,
+            llm_server=getattr(self, "llm_server", None),
+            llm_provider=getattr(self, "llm_provider", None),
+            llm_api_key=getattr(self, "llm_api_key", None),
         )
         tm.create(
             betas=betas, thetas=thetas, alphas=alphas, vocab=vocab, tpc_labels=tpc_labels, tpc_summaries=tpc_summaries, add_info=add_info)

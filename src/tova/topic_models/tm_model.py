@@ -80,6 +80,9 @@ class TMmodel(object):
         labeller_prompt: str = "src/prompter/prompts/labelling_dft.txt",
         summarizer_prompt: str = "src/prompter/prompts/summarization_dft.txt",
         logger: logging.Logger = None,
+        llm_server: str = None,
+        llm_provider: str = None,
+        llm_api_key: str = None,
         ):
 
         """Class initializer
@@ -122,6 +125,9 @@ class TMmodel(object):
         self.llm_model_type = llm_model_type
         self._labeller_prompt = labeller_prompt
         self._summarizer_prompt = summarizer_prompt
+        self.llm_server = llm_server
+        self.llm_provider = llm_provider
+        self.llm_api_key = llm_api_key
 
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
@@ -951,11 +957,22 @@ class TMmodel(object):
         with open(prompt_path, "r") as file:
             template_str = file.read()
 
-        prompter = Prompter(
+        # Use user-selected LLM when set; otherwise Prompter falls back to config (model_type + config.yaml)
+        provider = (self.llm_provider or "").strip().lower()
+        kw = dict(
             config_path=self._config_path,
             model_type=self.llm_model_type,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
         )
+        if provider:
+            kw["provider"] = self.llm_provider
+        if provider in ("rchat", "custom") and (self.llm_server or "").strip():
+            kw["custom_endpoint"] = self.llm_server
+            kw["custom_api_key"] = self.llm_api_key
+        elif provider == "ollama" or ((self.llm_server or "").strip() and provider not in ("openai", "gpt")):
+            if (self.llm_server or "").strip():
+                kw["ollama_host"] = self.llm_server
+        prompter = Prompter(**kw)
 
         outputs = []
         for tpc_id, most_repr in enumerate(self._most_representative_docs):

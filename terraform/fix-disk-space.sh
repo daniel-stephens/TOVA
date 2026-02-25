@@ -95,7 +95,7 @@ echo "✅ Cleanup complete! You can now retry the build."
 echo ""
 echo "To retry building, run:"
 echo "  cd ~/TOVA"
-echo "  sudo docker compose build"
-echo "  sudo docker compose up -d"
+echo "  sudo docker compose build   # or: sudo docker-compose build"
+echo "  sudo docker compose up -d   # or: sudo docker-compose up -d"
 EOF
 

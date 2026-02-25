@@ -1,7 +1,9 @@
 # docker/Dockerfile.ui
 # syntax=docker/dockerfile:1.4
 ARG ASSETS_IMAGE=tova-assets:dev
+ARG BUILDER_IMAGE=tova-builder:dev
 FROM ${ASSETS_IMAGE} AS static
+FROM ${BUILDER_IMAGE} AS wheel
 
 FROM python:3.12-slim-bookworm AS builder
 WORKDIR /app
@@ -17,9 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
+# Install tova package and its deps from builder wheels, then UI deps
+COPY --from=wheel /dist /tmp/wheels
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl && \
+    rm -rf /tmp/wheels
 COPY ui/requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
 
 # Copy UI code and templates

@@ -52,7 +52,7 @@ install_docker_compose() {
         sudo chmod +x /usr/local/bin/docker-compose
         echo "Docker Compose installed successfully!"
     fi
-    docker-compose --version
+    (docker compose --version 2>/dev/null || docker-compose --version) || true
 }
 
 # Function to install Git
@@ -112,10 +112,13 @@ check_prerequisites() {
         return 1
     fi
     
-    # Check Docker Compose
-    if command -v docker-compose &> /dev/null; then
-        echo "✅ Docker Compose is installed"
-        docker-compose --version
+    # Check Docker Compose (try plugin first, then standalone)
+    if docker compose version &> /dev/null; then
+        echo "✅ Docker Compose is installed (plugin)"
+        docker compose version
+    elif docker-compose version &> /dev/null; then
+        echo "✅ Docker Compose is installed (standalone)"
+        docker-compose version
     else
         echo "❌ Docker Compose is not installed"
         return 1
@@ -174,11 +177,11 @@ main() {
     echo "   make build-builder"
     echo "   make build-assets"
     echo "4. Start services:"
-    echo "   docker compose up -d"
+    echo "   docker compose up -d   # or: docker-compose up -d"
     echo "5. Check status:"
-    echo "   docker compose ps"
+    echo "   docker compose ps      # or: docker-compose ps"
     echo "6. View logs:"
-    echo "   docker compose logs -f"
+    echo "   docker compose logs -f # or: docker-compose logs -f"
     echo ""
     echo "⚠️  IMPORTANT: You need to log out and log back in for Docker group changes to take effect!"
     echo ""

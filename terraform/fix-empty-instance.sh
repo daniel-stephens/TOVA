@@ -116,17 +116,18 @@ echo "Building and Starting Services"
 echo "=========================================="
 echo "This will take several minutes..."
 ssh -i "$KEY_FILE" ec2-user@$PUBLIC_IP << 'ENDSSH'
+if docker compose version &>/dev/null; then DC="docker compose"; else DC="docker-compose"; fi
 cd ~/TOVA
 echo "Building base images..."
 make build-builder || echo "Note: build-builder may take time"
 make build-assets || echo "Note: build-assets may take time"
 echo ""
 echo "Starting services..."
-docker compose up -d api web postgres || docker compose up -d
+$DC up -d api web postgres || $DC up -d
 echo ""
 echo "Checking service status..."
 sleep 5
-docker compose ps
+$DC ps
 ENDSSH
 
 echo ""
@@ -139,6 +140,6 @@ echo "Access it at: http://$PUBLIC_IP:8080"
 echo ""
 echo "To check status:"
 echo "  ssh -i $KEY_FILE ec2-user@$PUBLIC_IP"
-echo "  cd ~/TOVA && docker compose ps"
+echo "  cd ~/TOVA && (docker compose ps || docker-compose ps)"
 echo ""
 

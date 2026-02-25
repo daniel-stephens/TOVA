@@ -23,7 +23,7 @@ class LLMTModel(BaseTMModel, ABC):
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path(
             "./static/config/config.yaml"),
-        load_model: bool = False
+        load_model: bool = False,
     ) -> None:
         """
         Initialize the LLMTModel class.
