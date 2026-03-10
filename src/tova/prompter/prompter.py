@@ -30,10 +30,6 @@ class Prompter:
         temperature: float = None,
         seed: int = None,
         max_tokens: int = None,
-        ollama_host: str = None,
-        custom_endpoint: str = None,
-        custom_api_key: str = None,
-        provider: str = None,
     ):
         self._logger = logger if logger else init_logger(config_path, __name__)
         self.config = load_yaml_config_file(config_path, "llm", logger)
@@ -46,10 +42,6 @@ class Prompter:
         self.model_type = model_type
         self.context = None
         self.params = self.config.get("parameters", {})
-        self._ollama_host = (ollama_host or "").strip() or None
-        self._custom_endpoint = (custom_endpoint or "").strip() or None
-        self._custom_api_key = (custom_api_key or "").strip() or None
-        self._provider = (provider or "").strip().lower() or None
         
         # We can override the temperature and seed from the config file if given as arguments
         if temperature is not None:
@@ -71,47 +63,9 @@ class Prompter:
                 self.params["num_predict"] = max_tokens
                 self._logger.info(f"Setting num_predict to: {max_tokens}")
             else:
-                self.params["max_tokens"] = max_tokens
+                raise ValueError("Unsupported model_type specified.")
 
-        # Explicit provider (e.g. from training UI) takes precedence over inferring from model_type
-        if self._provider in ("openai", "gpt"):
-            load_dotenv(self.config.get("gpt", {}).get("path_api_key", ".env"))
-            self.backend = "openai"
-            self._logger.info(f"Using OpenAI API (provider={self._provider}): model={model_type}")
-        elif self._provider == "ollama":
-            host = self._ollama_host or self.config.get("ollama", {}).get("host", "http://localhost:11434")
-            self._ollama_host = host
-            os.environ['OLLAMA_HOST'] = host
-            self.backend = "ollama"
-            Prompter.ollama_client = Client(host=host, headers={'x-some-header': 'some-value'})
-            self._logger.info(f"Using OLLAMA API (provider=ollama): host={host}, model={model_type}")
-        elif self._provider == "llama_cpp":
-            self.llama_cpp_host = self._ollama_host or self.config.get("llama_cpp", {}).get(
-                "host", "http://kumo01:11435/v1/chat/completions"
-            )
-            self.backend = "llama_cpp"
-            self._logger.info(f"Using llama_cpp API (provider=llama_cpp): host={self.llama_cpp_host}")
-        elif self._provider in ("rchat", "custom") and self._custom_endpoint:
-            base_url = self._custom_endpoint.rstrip("/")
-            if not base_url.endswith("/v1"):
-                base_url = base_url + "/v1"
-            self.backend = "custom"
-            self._custom_base_url = base_url
-            self._logger.info(f"Using custom API (provider={self._provider}): {base_url}, model={model_type}")
-        # Fall back to host/endpoint and then model_type list membership
-        elif self._custom_endpoint:
-            base_url = self._custom_endpoint.rstrip("/")
-            if not base_url.endswith("/v1"):
-                base_url = base_url + "/v1"
-            self.backend = "custom"
-            self._custom_base_url = base_url
-            self._logger.info(f"Using custom API (user preference): {base_url}, model={model_type}")
-        elif self._ollama_host:
-            os.environ['OLLAMA_HOST'] = self._ollama_host
-            self.backend = "ollama"
-            Prompter.ollama_client = Client(host=self._ollama_host, headers={'x-some-header': 'some-value'})
-            self._logger.info(f"Using OLLAMA API (user preference): host={self._ollama_host}")
-        elif model_type in self.GPT_MODELS:
+        if model_type in self.GPT_MODELS:
             load_dotenv(self.config.get("gpt", {}).get("path_api_key", ".env"))
             self.backend = "openai"
             self._logger.info(f"Using OpenAI API with model: {model_type}")
@@ -121,11 +75,14 @@ class Prompter:
             )
             os.environ['OLLAMA_HOST'] = ollama_host
             self.backend = "ollama"
+            # Initialize as class-level variable to be able to use it in the cache function
             Prompter.ollama_client = Client(
                 host=ollama_host,
                 headers={'x-some-header': 'some-value'}
             )
-            self._logger.info(f"Using OLLAMA API with host: {ollama_host}")
+            self._logger.info(
+                f"Using OLLAMA API with host: {ollama_host}"
+            )
         elif model_type == "llama_cpp":
             self.llama_cpp_host = self.config.get("llama_cpp", {}).get(
                 "host", "http://kumo01:11435/v1/chat/completions"
@@ -135,11 +92,7 @@ class Prompter:
                 f"Using llama_cpp API with host: {self.llama_cpp_host}"
             )
         else:
-            raise ValueError(
-                f"Unsupported model_type: {model_type}. Set provider in config or use custom_endpoint."
-            )
-        if self.backend == "ollama" and "num_predict" not in self.params and "max_tokens" in self.params:
-            self.params["num_predict"] = self.params["max_tokens"]
+            raise ValueError("Unsupported model_type specified.")
 
     @staticmethod
     @memory.cache
@@ -151,29 +104,31 @@ class Prompter:
         params: tuple,
         context=None,
         use_context: bool = False,
-        custom_base_url: str = None,
-        custom_api_key: str = None,
     ) -> dict:
         """Caching setup."""
+
         print("Cache miss: computing results...")
-        p = dict(params)
+        
         if backend == "openai":
             result, logprobs = Prompter._call_openai_api(
-                template=template, question=question, model_type=model_type, params=p
+                template=template,
+                question=question,
+                model_type=model_type,
+                params=dict(params),
             )
         elif backend == "ollama":
             result, logprobs, context = Prompter._call_ollama_api(
-                template=template, question=question, model_type=model_type,
-                params=p, context=context,
+                template=template,
+                question=question,
+                model_type=model_type,
+                params=dict(params),
+                context=context,
             )
         elif backend == "llama_cpp":
             result, logprobs = Prompter._call_llama_cpp_api(
-                template=template, question=question, params=p,
-            )
-        elif backend == "custom":
-            result, logprobs = Prompter._call_custom_api(
-                template=template, question=question, model_type=model_type,
-                params=p, base_url=custom_base_url, api_key=custom_api_key,
+                template=template,
+                question=question,
+                params=dict(params),
             )
         else:
             raise ValueError(f"Unsupported backend: {backend}")
@@ -184,7 +139,7 @@ class Prompter:
                 "question": question,
                 "model_type": model_type,
                 "backend": backend,
-                "params": p,
+                "params": dict(params),
                 "context": context if use_context else None,
                 "use_context": use_context,
             },
@@ -276,28 +231,6 @@ class Prompter:
 
         return result, logprobs
 
-    @staticmethod
-    def _call_custom_api(template, question, model_type, params, base_url, api_key):
-        """OpenAI-compatible API (user preference: custom endpoint + api_key)."""
-        if not base_url:
-            raise ValueError("Custom backend requires base_url.")
-        client = OpenAI(base_url=base_url, api_key=api_key or "not-needed")
-        messages = (
-            [{"role": "system", "content": template}, {"role": "user", "content": question}]
-            if template else [{"role": "user", "content": question}]
-        )
-        kwargs = {
-            "model": model_type, "messages": messages, "stream": False,
-            "temperature": params.get("temperature", 0),
-            "max_tokens": params.get("max_tokens", 1024),
-        }
-        if "seed" in params:
-            kwargs["seed"] = params["seed"]
-        r = client.chat.completions.create(**kwargs)
-        result = r.choices[0].message.content
-        logprobs = getattr(r.choices[0].message, "logprobs", None)
-        return result, logprobs
-
     def prompt(
         self,
         system_prompt_template_path: str,
@@ -306,16 +239,19 @@ class Prompter:
         temperature: float = None,
     ) -> Union[str, List[str]]:
         """Public method to execute a prompt given a system prompt template and a question."""
+
+        # Load the system prompt template
         system_prompt_template = None
         if system_prompt_template_path is not None:
             with open(system_prompt_template_path, "r") as file:
                 system_prompt_template = file.read()
+
+        # Ensure hashable params for caching and get cached data / execute prompt
         if temperature is not None:
             self.params["temperature"] = temperature
         params_tuple = tuple(sorted(self.params.items()))
-        custom_base_url = getattr(self, "_custom_base_url", None)
-        custom_api_key = getattr(self, "_custom_api_key", None)
-        print("Cache key:", hash_input(system_prompt_template, question, self.model_type, self.backend, params_tuple, self.context, use_context, custom_base_url))
+        
+        print("Cache key:", hash_input(system_prompt_template, question, self.model_type, self.backend, params_tuple, self.context, use_context))
         cached_data = self._cached_prompt_impl(
             template=system_prompt_template,
             question=question,
@@ -324,8 +260,6 @@ class Prompter:
             params=params_tuple,
             context=self.context if use_context else None,
             use_context=use_context,
-            custom_base_url=custom_base_url,
-            custom_api_key=custom_api_key,
         )
 
         result = cached_data["outputs"]["result"]

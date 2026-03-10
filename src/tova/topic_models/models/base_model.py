@@ -85,12 +85,11 @@ class BaseTMModel(ABC):
         self.not_include = self.config.get(
             "general", {}).get("not_include", [])
 
-        # LLM params (from config; user overrides applied in subclasses e.g. TradTMmodel)
+        # llm params
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
         self.llm_model_type = self.config.get(
             "general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
-        self.llm_api_key = self.config.get("general", {}).get("llm_api_key")
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -109,8 +108,6 @@ class BaseTMModel(ABC):
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
-        # tr_params: effective training params (including LLM options) used for this run; enables reproducibility and loading with same settings
-        tr_params = self.to_dict()
 
         model_info = {
             "corpus_id": self.corpus_id,
@@ -118,7 +115,7 @@ class BaseTMModel(ABC):
             "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "location": "temporal",
             "created_at": pd.Timestamp.now().isoformat(),
-            "tr_params": tr_params,
+            "tr_params": self.to_dict(),
         }
 
         with json_path.open('w') as f:
@@ -170,9 +167,6 @@ class BaseTMModel(ABC):
             llm_model_type=self.llm_model_type,
             labeller_prompt=self.labeller_prompt,
             summarizer_prompt=self.summarizer_prompt,
-            llm_server=getattr(self, "llm_server", None),
-            llm_provider=getattr(self, "llm_provider", None),
-            llm_api_key=getattr(self, "llm_api_key", None),
         )
         tm.create(
             betas=betas, thetas=thetas, alphas=alphas, vocab=vocab, tpc_labels=tpc_labels, tpc_summaries=tpc_summaries, add_info=add_info)

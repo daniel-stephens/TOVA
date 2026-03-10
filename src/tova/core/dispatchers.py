@@ -63,11 +63,7 @@ def train_model_dispatch(
     if model_cls is None:
         raise ValueError(f"Unknown model: {model}")
 
-    tr_params = dict(tr_params or {})
-
-    # UI sends "llm" for LLM-based models; backend models use "llm_model_type"
-    if "llm" in tr_params and "llm_model_type" not in tr_params:
-        tr_params["llm_model_type"] = tr_params["llm"]
+    tr_params = tr_params or {}
 
     tm_model = model_cls(
         model_name=model_name,
