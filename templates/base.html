@@ -213,9 +213,8 @@
             
             <ul class="nav nav-tabs nav-justified mb-3" id="topicModelSubTabs" role="tablist">
               <li class="nav-item" role="presentation"><button class="nav-link active" id="tm-general-tab" data-bs-toggle="pill" data-bs-target="#tm-general" type="button" role="tab">General Settings</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-traditional-tab" data-bs-toggle="pill" data-bs-target="#tm-traditional" type="button" role="tab">Traditional/DFT</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-traditional-tab" data-bs-toggle="pill" data-bs-target="#tm-traditional" type="button" role="tab">Traditional</button></li>
               <li class="nav-item" role="presentation"><button class="nav-link" id="tm-llm-based-tab" data-bs-toggle="pill" data-bs-target="#tm-llm-based" type="button" role="tab">LLM-based</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" id="tm-bertopic-tab" data-bs-toggle="pill" data-bs-target="#tm-bertopic" type="button" role="tab">BERTopic</button></li>
             </ul>
             
             <div class="tab-content card card-body bg-light" id="topicModelSubTabsContent">
@@ -268,16 +267,10 @@
                     <div class="form-text small">Server URL (only needed for Ollama/Llama.cpp).</div>
                   </div>
                 </div>
-                <hr class="my-3">
-                <div class="mb-3">
-                  <label for="tm-general-not_include" class="form-label">not_include (Variables to exclude from saving)</label>
-                  <textarea class="form-control form-control-sm" id="tm-general-not_include" name="topic_modeling.general.not_include" rows="3" placeholder="Comma-separated list (e.g., train_data, df, embeddings, ...)">train_data, df, embeddings, ids_corpus, _logger, _embedding_model, _umap_model, _hdbscan_model, _vectorizer_model, _ctfidf_model, _representation_model, _model</textarea>
-                  <div class="form-text">These Python objects will be skipped during model saving.</div>
-                </div>
               </div>
 
               <div class="tab-pane fade" id="tm-traditional" role="tabpanel" aria-labelledby="tm-traditional-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">Traditional Topic Modeling (LDA, NMF, etc.)</h6>
+                <h6 class="border-bottom pb-2 mb-3">Traditional Topic Modeling</h6>
                 <div class="row">
                   <div class="col-md-4 mb-3">
                     <label for="tm-trad-num_topics" class="form-label">num_topics</label>
@@ -319,18 +312,6 @@
                     </label>
                   </div>
                 </div>
-                <div class="row" id="tm-trad-llm-settings">
-                  <div class="col-md-6 mb-3">
-                    <label for="tm-trad-llm_model_type" class="form-label">LLM Model</label>
-                    <input type="text" class="form-control" id="tm-trad-llm_model_type" name="topic_modeling.traditional.llm_model_type" value="qwen:32b" placeholder="e.g., qwen:32b, gpt-4o">
-                    <div class="form-text small">Model name (must be available in your LLM provider).</div>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label for="tm-trad-llm_server" class="form-label">LLM Server URL</label>
-                    <input type="url" class="form-control" id="tm-trad-llm_server" name="topic_modeling.traditional.llm_server" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
-                    <div class="form-text small">Server URL (only needed for Ollama/Llama.cpp providers).</div>
-                  </div>
-                </div>
                 <div class="row" id="tm-trad-prompt-settings">
                   <div class="col-md-6 mb-3">
                     <label for="tm-trad-labeller_prompt" class="form-label">Labeller Prompt Path</label>
@@ -353,52 +334,7 @@
                     <strong>LLM Required:</strong> LLM-based topic modeling requires a fully configured LLM provider. Make sure you've set up your LLM provider in the <strong>LLM/Prompter</strong> tab before using these models.
                   </div>
                 </div>
-                <div class="mb-3">
-                  <label for="tm-llm-based-llm" class="form-label">Default LLM Model <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="tm-llm-based-llm" name="topic_modeling.llm-based.llm" value="qwen:32b" placeholder="e.g., qwen:32b, gpt-4o">
-                  <div class="form-text">Model name that matches your configured LLM provider.</div>
-                </div>
-                <div class="mb-3">
-                  <label for="tm-llm-based-llm_server" class="form-label">LLM Server URL</label>
-                  <input type="url" class="form-control" id="tm-llm-based-llm_server" name="topic_modeling.llm-based.llm_server" value="http://kumo01.tsc.uc3m.es:11434" placeholder="http://localhost:11434">
-                  <div class="form-text">Server URL (only needed for Ollama/Llama.cpp providers). Not needed for OpenAI GPT.</div>
-                </div>
               </div>
-              
-              <div class="tab-pane fade" id="tm-bertopic" role="tabpanel" aria-labelledby="tm-bertopic-tab" tabindex="0">
-                <h6 class="border-bottom pb-2 mb-3">BERTopic Configuration</h6>
-                <div class="row">
-                  <div class="col-md-4 mb-3"><label for="tm-bertopic-language" class="form-label">Language</label><input type="text" class="form-control" id="tm-bertopic-language" name="topic_modeling.bertopic.language" value="english"></div>
-                  <div class="col-md-8 mb-3"><label for="tm-bertopic-sbert_model" class="form-label">Sentence-BERT Model</label><input type="text" class="form-control" id="tm-bertopic-sbert_model" name="topic_modeling.bertopic.sbert_model" value="all-MiniLM-L6-v2"></div>
-                </div>
-                <hr>
-                <fieldset class="border p-3 mb-3 bg-white rounded">
-                    <legend class="float-none w-auto px-2 fs-6 fw-bold">UMAP Reduction Settings</legend>
-                    <div class="row">
-                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_n_components" class="form-label">n_components</label><input type="number" class="form-control" id="tm-bertopic-umap_n_components" name="topic_modeling.bertopic.umap_n_components" value="5"></div>
-                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_n_neighbors" class="form-label">n_neighbors</label><input type="number" class="form-control" id="tm-bertopic-umap_n_neighbors" name="topic_modeling.bertopic.umap_n_neighbors" value="15"></div>
-                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_min_dist" class="form-label">min_dist</label><input type="text" class="form-control" id="tm-bertopic-umap_min_dist" name="topic_modeling.bertopic.umap_min_dist" value="0.0"></div>
-                      <div class="col-md-3 mb-3"><label for="tm-bertopic-umap_metric" class="form-label">metric</label><input type="text" class="form-control" id="tm-bertopic-umap_metric" name="topic_modeling.bertopic.umap_metric" value="cosine"></div>
-                    </div>
-                </fieldset>
-                
-                <fieldset class="border p-3 mb-3 bg-white rounded">
-                    <legend class="float-none w-auto px-2 fs-6 fw-bold">HDBSCAN Clustering Settings</legend>
-                    <div class="row">
-                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_min_cluster_size" class="form-label">min_cluster_size</label><input type="number" class="form-control" id="tm-bertopic-hdbscan_min_cluster_size" name="topic_modeling.bertopic.hdbscan_min_cluster_size" value="10"></div>
-                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_metric" class="form-label">metric</label><input type="text" class="form-control" id="tm-bertopic-hdbscan_metric" name="topic_modeling.bertopic.hdbscan_metric" value="euclidean"></div>
-                      <div class="col-md-4 mb-3"><label for="tm-bertopic-hdbscan_cluster_selection_method" class="form-label">selection_method</label><input type="text" class="form-control" id="tm-bertopic-hdbscan_cluster_selection_method" name="topic_modeling.bertopic.hdbscan_cluster_selection_method" value="eom"></div>
-                      <div class="col-md-4 mb-3 form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tm-bertopic-hbdsan_prediction_data" name="topic_modeling.bertopic.hbdsan_prediction_data" checked><label class="form-check-label ms-2" for="tm-bertopic-hbdsan_prediction_data">Enable Prediction Data</label></div>
-                    </div>
-                </fieldset>
-                
-                <hr>
-                <div class="row">
-                  <div class="col-md-6 mb-3"><label for="tm-bertopic-repr_model_diversity" class="form-label">Representation Diversity</label><input type="number" step="0.1" class="form-control" id="tm-bertopic-repr_model_diversity" name="topic_modeling.bertopic.repr_model_diversity" value="0.3"></div>
-                  <div class="col-md-6 mb-3"><label for="tm-bertopic-repr_model_topnwords" class="form-label">Top N Words (Representation)</label><input type="number" class="form-control" id="tm-bertopic-repr_model_topnwords" name="topic_modeling.bertopic.repr_model_topnwords" value="15"></div>
-                </div>
-              </div>
-
             </div>
           </div>
 
@@ -666,11 +602,9 @@
           const llmSection = el.closest(".llm-provider-section");
           if (llmSection && (llmSection.classList.contains("d-none") || !(document.querySelector("#include_llm")?.checked))) return;
 
-          // Skip hidden LLM settings in traditional topic modeling if LLM features are disabled
-          const llmSettingsRow = document.getElementById('tm-trad-llm-settings');
+          // Skip hidden prompt settings in traditional topic modeling if LLM features are disabled
           const promptSettingsRow = document.getElementById('tm-trad-prompt-settings');
-          if ((llmSettingsRow && llmSettingsRow.contains(el) && llmSettingsRow.style.display === 'none') ||
-              (promptSettingsRow && promptSettingsRow.contains(el) && promptSettingsRow.style.display === 'none')) {
+          if (promptSettingsRow && promptSettingsRow.contains(el) && promptSettingsRow.style.display === 'none') {
             return;
           }
 
@@ -714,8 +648,11 @@
             if (!isLLMField) return;
           }
 
-          // Handle text/textarea/select
-          setNestedValue(path, trimmed, out);
+          // Handle text/textarea/select: try JSON.parse so arrays, booleans
+          // and numbers stored as text are sent with the correct type.
+          let val;
+          try { val = JSON.parse(trimmed); } catch { val = trimmed; }
+          setNestedValue(path, val, out);
         });
         return out;
       };
@@ -895,40 +832,29 @@
       // Ensure spinner is hidden if modal is closed while a request is in flight
       configModalEl?.addEventListener('hidden.bs.modal', () => setLoading(false));
 
-      // Handle conditional LLM settings visibility in traditional topic modeling
+      // Handle conditional prompt settings visibility in traditional topic modeling
       const labellerCheckbox = document.getElementById('tm-trad-do_labeller');
       const summarizerCheckbox = document.getElementById('tm-trad-do_summarizer');
-      const llmSettingsRow = document.getElementById('tm-trad-llm-settings');
       const promptSettingsRow = document.getElementById('tm-trad-prompt-settings');
 
-      const updateLLMSettingsVisibility = () => {
+      const updatePromptSettingsVisibility = () => {
         const showLLM = labellerCheckbox?.checked || summarizerCheckbox?.checked;
-        if (llmSettingsRow) {
-          llmSettingsRow.style.display = showLLM ? 'flex' : 'none';
-          // Make fields optional when hidden
-          llmSettingsRow.querySelectorAll('input').forEach(input => {
-            if (!showLLM) {
-              input.removeAttribute('required');
-              input.setAttribute('data-was-optional', 'true');
-            }
-          });
-        }
         if (promptSettingsRow) {
           promptSettingsRow.style.display = showLLM ? 'flex' : 'none';
-          promptSettingsRow.querySelectorAll('input').forEach(input => {
-            if (!showLLM) {
-              input.removeAttribute('required');
-              input.setAttribute('data-was-optional', 'true');
-            }
-          });
         }
       };
 
-      labellerCheckbox?.addEventListener('change', updateLLMSettingsVisibility);
-      summarizerCheckbox?.addEventListener('change', updateLLMSettingsVisibility);
-      
+      labellerCheckbox?.addEventListener('change', updatePromptSettingsVisibility);
+      summarizerCheckbox?.addEventListener('change', updatePromptSettingsVisibility);
+
       // Initialize visibility on load
-      updateLLMSettingsVisibility();
+      updatePromptSettingsVisibility();
+
+      // Sync llm.ollama.host → topic_modeling.general.llm_server
+      document.getElementById('llm-ollama-host')?.addEventListener('input', function () {
+        const generalServer = document.getElementById('tm-general-llm_server');
+        if (generalServer) generalServer.value = this.value;
+      });
     });
   </script>
 {% endif %}

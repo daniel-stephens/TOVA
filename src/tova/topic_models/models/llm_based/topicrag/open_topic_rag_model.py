@@ -178,7 +178,7 @@ class OpenTopicRAGModel(LLMTModel):
         Prepares the data by sampling documents (if needed) and creating embeddings. Saves sampled document IDs to a file.
         """
 
-        df_sample = self.df.copy()
+        df_sample = self._df.copy()
 
         if self.sample:
             if isinstance(self.sample, float):
@@ -793,7 +793,7 @@ class OpenTopicRAGModel(LLMTModel):
             all_results: Detailed results from each iteration.
         """
 
-        if not hasattr(self, "df"):
+        if not hasattr(self, "_df"):
             raise RuntimeError(
                 "Training data not set. Call train_model(data) first.")
 

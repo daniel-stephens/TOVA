@@ -881,7 +881,7 @@ const renderBasicGroupParams = (modelName) => {
     : "Configured via server environment.";
 
   parts.push(`
-    <div class="col-12 mt-3">
+    <div class="col-12 mt-3" id="llm-provider-panel">
       <div class="border rounded p-2 bg-light-subtle">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <span class="small fw-bold text-secondary">
@@ -993,6 +993,19 @@ const renderBasicGroupParams = (modelName) => {
 
   // Wire provider switching
   setupLlmProviderUi(initialProvider);
+
+  // Show/hide LLM panel based on do_labeller / do_summarizer checkboxes
+  const llmPanel = document.getElementById("llm-provider-panel");
+  if (llmPanel && kind === "traditional") {
+    const updateLlmPanelVisibility = () => {
+      const doLabeller = document.getElementById("do_labeller")?.checked ?? true;
+      const doSummarizer = document.getElementById("do_summarizer")?.checked ?? true;
+      llmPanel.style.display = (doLabeller || doSummarizer) ? "" : "none";
+    };
+    document.getElementById("do_labeller")?.addEventListener("change", updateLlmPanelVisibility);
+    document.getElementById("do_summarizer")?.addEventListener("change", updateLlmPanelVisibility);
+    updateLlmPanelVisibility();
+  }
 };
 
 
@@ -1347,7 +1360,9 @@ const renderBasicGroupParams = (modelName) => {
         return;
       }
 
-      out[key] = trimmed;
+      // Try to parse as JSON so arrays, booleans and numbers stored as text
+      // in form fields are sent with the correct type to the backend.
+      try { out[key] = JSON.parse(trimmed); } catch { out[key] = trimmed; }
     });
     return out;
   };

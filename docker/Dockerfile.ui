@@ -29,6 +29,6 @@ COPY ui/ /app
 # Copy shared static assets from the assets stage
 COPY --from=static /static /app/static
 
-ENV API_BASE_URL=http://api:8000
+ENV API_BASE_URL=http://api:11000
 EXPOSE 8080
 CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "app:server"]

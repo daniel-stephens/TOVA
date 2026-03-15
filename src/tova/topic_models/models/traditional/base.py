@@ -82,22 +82,22 @@ class TradTMmodel(BaseTMModel, ABC):
             self._logger.info("Preprocessing training data.")
             df_processed = self._preprocessor.fit_transform(
                 df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings)
-            self.df = df_processed
+            self._df = df_processed
             self._logger.info("Training data preprocessing completed.")
         else:
             # if already preprocessed, lemmas should be present
             if "lemmas" not in df.columns:
                 raise ValueError(
                     "Preprocessing is disabled, but 'lemmas' column is missing in the data.")
-            self.df = df
-        self.train_data = [row["lemmas"] for _, row in df_processed.iterrows()]
-        if "embeddings" in self.df.columns:
-            self.embeddings = np.array(self.df["embeddings"].tolist())
+            self._df = df
+        self._train_data = [row["lemmas"] for _, row in df_processed.iterrows()]
+        if "embeddings" in self._df.columns:
+            self._embeddings = np.array(self._df["embeddings"].tolist())
             self._logger.info(
-                f"Embeddings loaded for {len(self.embeddings)} documents with dimension {self.embeddings.shape}.")
+                f"Embeddings loaded for {len(self._embeddings)} documents with dimension {self._embeddings.shape}.")
 
         self._logger.info(
-            f"Training data set with {len(self.train_data)} documents.")
+            f"Training data set with {len(self._train_data)} documents.")
 
     def prepare_infer_data(self, data: List[Dict]):
         """

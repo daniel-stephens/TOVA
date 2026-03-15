@@ -65,7 +65,7 @@ class TopicGPTTMmodel(LLMTModel):
 
         # Paths to prompts
         cwd = pathlib.Path(os.getcwd())
-        self._p_prompts = cwd / "src/tova/topic_models/models/llm_based/topicGPT/prompt"
+        self._p_prompts = cwd / "src/tova/topic_models/models/llm_based/topicgpt/prompt"
 
         self._generation_prompt = self._p_prompts / "generation_1.txt"
         self._seed_1 = self._p_prompts / "seed_1.md"
@@ -104,11 +104,11 @@ class TopicGPTTMmodel(LLMTModel):
         sample_*.jsonl (sampled docs). Returns paths to (sampled, full).
         """
 
-        df_full = self.df.copy().rename(columns={"raw_text": "text"})
+        df_full = self._df.copy().rename(columns={"raw_text": "text"})
         path_full = model_files / "full.jsonl"
         df_full.to_json(path_full, lines=True, orient="records")
 
-        df_sample = self.df.copy()
+        df_sample = self._df.copy()
         # gpt expects 'text' field
         df_sample = df_sample.rename(columns={"raw_text": "text"})
         if self.sample:
@@ -385,7 +385,7 @@ class TopicGPTTMmodel(LLMTModel):
         so the base class can continue. Also writes the raw TopicGPT artifacts
         to disk and records topic strings for `print_topics`.
         """
-        if not hasattr(self, "df"):
+        if not hasattr(self, "_df"):
             raise RuntimeError(
                 "Training data not set. Call train_model(data) first.")
 
@@ -505,7 +505,7 @@ class TopicGPTTMmodel(LLMTModel):
         with self.model_path.joinpath('orig_tpc_descriptions.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join([topics[k] for k in sorted(topics.keys())]))
 
-        thetas, betas, vocab = self._approximate_distributions(assign_path=outputs['correction_out'], df=self.df)
+        thetas, betas, vocab = self._approximate_distributions(assign_path=outputs['correction_out'], df=self._df)
         
         labels, summaries, add_info = self._format_results_by_topic()
         

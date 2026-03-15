@@ -77,6 +77,8 @@ class TMmodel(object):
         do_labeller: bool = True, 
         do_summarizer: bool = False,
         llm_model_type: str = "qwen:32b",
+        llm_server: Optional[str] = None,
+        llm_provider: Optional[str] = None,
         labeller_prompt: str = "src/prompter/prompts/labelling_dft.txt",
         summarizer_prompt: str = "src/prompter/prompts/summarization_dft.txt",
         logger: logging.Logger = None,
@@ -120,6 +122,8 @@ class TMmodel(object):
         self._do_labeller = do_labeller
         self._do_summarizer = do_summarizer
         self.llm_model_type = llm_model_type
+        self.llm_server = llm_server
+        self.llm_provider = llm_provider
         self._labeller_prompt = labeller_prompt
         self._summarizer_prompt = summarizer_prompt
 
@@ -954,6 +958,8 @@ class TMmodel(object):
         prompter = Prompter(
             config_path=self._config_path,
             model_type=self.llm_model_type,
+            llm_server=self.llm_server,
+            llm_provider=self.llm_provider,
             max_tokens=max_tokens
         )
 

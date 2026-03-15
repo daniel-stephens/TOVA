@@ -64,7 +64,7 @@ def _run_db_init_once():
 _run_db_init_once()
 
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))  # TODO: remove if unused
-API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+API = os.getenv("API_BASE_URL", "http://127.0.0.1:11000")
 
 _CACHE_MODELS: dict = {}
 _CACHE_CORPORA: dict = {}

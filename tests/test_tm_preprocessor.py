@@ -27,7 +27,7 @@ class TestTMPreprocessor(unittest.TestCase):
         result = self.preprocessor.fit_transform(
             self.sample_data, text_col="text", id_col="id")
         self.assertIn("id", result.columns)
-        self.assertIn("text", result.columns)
+        self.assertIn("raw_text", result.columns)
         self.assertIn("lemmas", result.columns)
         self.assertIn("bow", result.columns)
         self.assertIn("tfidf", result.columns)
@@ -65,7 +65,7 @@ class TestTMPreprocessor(unittest.TestCase):
             df, text_col="summary", id_col="id")
 
         self.assertIn("id", result.columns)
-        self.assertIn("text", result.columns)
+        self.assertIn("raw_text", result.columns)
         self.assertIn("lemmas", result.columns)
         self.assertIn("bow", result.columns)
         self.assertIn("tfidf", result.columns)
@@ -90,9 +90,9 @@ class TestTMPreprocessor(unittest.TestCase):
             sample_data, text_col="text", id_col="id", compute_embeddings=True
         )
 
-        self.assertIn("embedding", result.columns)
+        self.assertIn("embeddings", result.columns)
         self.assertEqual(len(result), len(sample_data))
-        self.assertTrue(all(result["embedding"].apply(lambda x: len(x) > 0)))
+        self.assertTrue(all(result["embeddings"].apply(lambda x: len(x) > 0)))
 
 if __name__ == "__main__":
     unittest.main()

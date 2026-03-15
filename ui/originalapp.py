@@ -26,7 +26,7 @@ server.secret_key = 'your-secret-key'
 #with open("static/config/modelRegistry.json", "r") as f:
 #    model_registry = json.load(f)
     
-API = os.getenv("API_BASE_URL", "http://api:8000")
+API = os.getenv("API_BASE_URL", "http://api:11000")
 
 # @daniel-stephens: maybe we can remove this and move to a config or something
 modelurl = f"{API}/model"
