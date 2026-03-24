@@ -152,7 +152,7 @@ else:
     # Default to relative path from project root
     BASE_DIR = Path(__file__).parent.parent
     DRAFTS_SAVE = BASE_DIR / "data" / "drafts"
-API = os.getenv("API_BASE_URL", "http://127.0.0.1:11000")
+API = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
 _CACHE_MODELS: dict = {}
 _CACHE_CORPORA: dict = {}
