@@ -82,14 +82,19 @@ class BaseTMModel(ABC):
         self.topn = int(self.config.get("general", {}).get("topn", 15))
         self.thetas_thr = float(self.config.get(
             "general", {}).get("thetas_thr", 3e-3))
-        self.not_include = self.config.get(
-            "general", {}).get("not_include", [])
+        #self.not_include = self.config.get(
+        #    "general", {}).get("not_include", [])
 
         # llm params
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
         self.llm_model_type = self.config.get(
             "general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
+        
+        # print information about the llm configuration
+        self._logger.info(f"LLM Provider: {self.llm_provider}")
+        self._logger.info(f"LLM Model Type: {self.llm_model_type}")
+        self._logger.info(f"LLM Server: {self.llm_server}")
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -100,11 +105,10 @@ class BaseTMModel(ABC):
             return val
 
         return {
-            # TODO: make all the "no_include" as start with "_" to simplify this
             k: safe_value(v)
             for k, v in self.__dict__.items()
-            if not k.startswith('_') and k not in self.not_include
-            and not k.startswith('_') and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM, TMmodel))}
+            if not k.startswith('_')
+            and not isinstance(v, (np.ndarray, pd.DataFrame, pd.Series, list, dict, pathlib.Path, tp.Document, tp.LDAModel, TopicModelDataPreparation, CombinedTM, TMmodel))}
 
     def save_to_json(self, path: pathlib.Path = None):
         json_path = path or (self.model_path / 'metadata.json')
@@ -161,10 +165,12 @@ class BaseTMModel(ABC):
         tm = TMmodel(
             TMfolder=self.model_path.joinpath('TMmodel'),
             config_path=self._config_path,
-            df_corpus_train=self.df,
+            df_corpus_train=self._df,
             do_labeller=self.do_labeller,
             do_summarizer=self.do_summarizer,
             llm_model_type=self.llm_model_type,
+            llm_server=self.llm_server,
+            llm_provider=self.llm_provider,
             labeller_prompt=self.labeller_prompt,
             summarizer_prompt=self.summarizer_prompt,
         )

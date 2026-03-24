@@ -75,7 +75,7 @@ class TomotopyLDATMmodel(TradTMmodel):
             Time taken to train the model.
         """
 
-        if not hasattr(self, "train_data"):
+        if not hasattr(self, "_train_data"):
             raise RuntimeError("Training data not set. Call train_model(data) with normalized input first.")
 
         t_start = time.time()
@@ -84,15 +84,15 @@ class TomotopyLDATMmodel(TradTMmodel):
         check_cancel(cancel, self._logger)
         prss = prs.report_subrange(0.0, 0.02) if prs else None
         prss.report(0.0, "Creating TomotopyLDA object")
-        self.model = tp.LDAModel(
+        self._model = tp.LDAModel(
             k=self.num_topics, tw=tp.TermWeight.ONE, alpha=self.alpha, eta=self.eta)
         prss.report(1.0, "TomotopyLDA object created")
-        
+
         # 2. ADD DOCUMENTS TO TOMO OBJECT (2-30%)
         check_cancel(cancel, self._logger)
         prss = prs.report_subrange(0.02, 0.3) if prs else None
         prss.report(0.02, "Adding documents to TomotopyLDA object")
-        [self.model.add_doc(doc) for doc in self.train_data]
+        [self._model.add_doc(doc) for doc in self._train_data]
         prss.report(0.3, "Documents added to TomotopyLDA object")
 
         # 3. TRAIN MODEL (30-90%)
@@ -100,9 +100,9 @@ class TomotopyLDATMmodel(TradTMmodel):
         pbar = tqdm(total=self.num_iters, desc='Training Progress')
         for i in range(0, self.num_iters, self.iter_interval):
             check_cancel(cancel, self._logger)
-            self.model.train(self.iter_interval)
+            self._model.train(self.iter_interval)
             pbar.update(self.iter_interval)
-            prss.report(i / self.num_iters, f"Training iteration {i}/{self.num_iters}, Log-likelihood: {self.model.ll_per_word}, Perplexity: {self.model.perplexity}")
+            prss.report(i / self.num_iters, f"Training iteration {i}/{self.num_iters}, Log-likelihood: {self._model.ll_per_word}, Perplexity: {self._model.perplexity}")
         pbar.close()
         prss.report(1.0, "Training complete")
 
@@ -110,11 +110,11 @@ class TomotopyLDATMmodel(TradTMmodel):
         check_cancel(cancel, self._logger)
         prss = prs.report_subrange(0.9, 1.0) if prs else None
         prss.report(0.9, "Calculating topics and distributions...")
-        probs = [d.get_topic_dist() for d in self.model.docs]
+        probs = [d.get_topic_dist() for d in self._model.docs]
         thetas = np.array(probs)
         self._logger.info(f"Thetas shape: {thetas.shape}")
 
-        topic_dist = [self.model.get_topic_word_dist(
+        topic_dist = [self._model.get_topic_word_dist(
             k) for k in range(self.num_topics)]
         betas = np.array(topic_dist)
         self._logger.info(f"Betas shape: {betas.shape}")
@@ -122,8 +122,8 @@ class TomotopyLDATMmodel(TradTMmodel):
         keys = self.print_topics(verbose=False)
         with self.model_path.joinpath('orig_tpc_descriptions.txt').open('w', encoding='utf8') as fout:
             fout.write('\n'.join([' '.join(topic) for topic in keys]))
-        self.maked_docs = [self.model.make_doc(doc) for doc in self.train_data]
-        vocab = [word for word in self.model.used_vocabs]
+        self._maked_docs = [self._model.make_doc(doc) for doc in self._train_data]
+        vocab = [word for word in self._model.used_vocabs]
         prss.report(1.0, "Topics and distributions calculated")
         
         return time.time() - t_start, thetas, betas, vocab
@@ -144,8 +144,8 @@ class TomotopyLDATMmodel(TradTMmodel):
             List with the keywords for each topic.
         """
 
-        keys = [[tup[0] for tup in self.model.get_topic_words(
-            k, self.topn)] for k in range(self.model.k)]
+        keys = [[tup[0] for tup in self._model.get_topic_words(
+            k, self.topn)] for k in range(self._model.k)]
 
         if verbose:
             for k, words in enumerate(keys):
@@ -174,10 +174,10 @@ class TomotopyLDATMmodel(TradTMmodel):
         self._logger.info("Performing inference on unseen documents...")
 
         self._logger.info("Adding docs to TomotopyLDA...")
-        doc_inst = [self.model.make_doc(text) for text in infer_data]
+        doc_inst = [self._model.make_doc(text) for text in infer_data]
 
         self._logger.info("Inferring thetas...")
-        topic_prob, _ = self.model.infer(doc_inst)
+        topic_prob, _ = self._model.infer(doc_inst)
         thetas = np.array(topic_prob)
         self._logger.info(f"Inferred thetas shape {thetas.shape}")
 
@@ -193,7 +193,7 @@ class TomotopyLDATMmodel(TradTMmodel):
         # save model object for later use
         save_path = self.model_path.joinpath('model.bin').as_posix()
         self._logger.info(f"Saving model to {save_path}")
-        self.model.save(save_path)
+        self._model.save(save_path)
         self._logger.info("Model saved successfully!")
 
     @classmethod
@@ -214,6 +214,6 @@ class TomotopyLDATMmodel(TradTMmodel):
         obj = cls(model_path=model_path, load_model=True)
         load_path = pathlib.Path(model_path).joinpath('model.bin').as_posix()
         obj._logger.info(f"Loading Tomotopy model from {load_path}")
-        obj.model = tp.LDAModel.load(load_path)
+        obj._model = tp.LDAModel.load(load_path)
         obj._logger.info("Model loaded successfully!")
         return obj

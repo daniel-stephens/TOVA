@@ -33,8 +33,8 @@ class TestTopicModels(unittest.TestCase):
         }
         cls.sample_file = "data_test/bills_sample_100.csv"
         cls.sample_data = pd.read_csv(cls.sample_file)#.sample(10, random_state=42)
-        cls.train_data = cls.sample_data.rename(columns={"summary": "raw_text"})
-        cls.train_data = cls.train_data[["id", "raw_text"]].to_dict(orient="records")
+        cls._train_data = cls.sample_data.rename(columns={"summary": "raw_text"})
+        cls._train_data = cls._train_data[["id", "raw_text"]].to_dict(orient="records")
 
     @staticmethod
     def load_class_from_path(class_path: str):
@@ -64,7 +64,7 @@ class TestTopicModels(unittest.TestCase):
                 )
 
                 # train
-                model.train_model(self.train_data)
+                model.train_model(self._train_data)
                 
                 self.model_path = model_path
 

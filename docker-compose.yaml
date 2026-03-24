@@ -15,9 +15,9 @@ services:
     #solr-api:
     #  condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_PORT:-11000}:11000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).getcode()==200 else 1)"]
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:11000/health', timeout=2).getcode()==200 else 1)"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -28,6 +28,8 @@ services:
       - DRAFTS_SAVE=/data/drafts
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/data
       - ./static/config:/app/static/config
@@ -45,16 +47,18 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "${WEB_PORT:-8080}:8080"
     environment:
       - FLASK_DEBUG="1"
-      - API_BASE_URL=http://api:8000
+      - API_BASE_URL=http://api:11000
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
       - POSTGRES_USER=${POSTGRES_USER:-user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - TOVA_ADMIN_EMAILS=${TOVA_ADMIN_EMAILS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config

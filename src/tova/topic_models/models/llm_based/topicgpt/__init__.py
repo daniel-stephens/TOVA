@@ -1,3 +1,26 @@
+def stub_vllm_if_missing():
+    """Inject a no-op vllm stub into sys.modules before topicgpt_python imports it. Only injects if vllm is not installed (e.g. ARM/CPU builds); if the real vllm is installed it will be used as-is."""
+    import importlib.util
+    import sys
+    if "vllm" not in sys.modules and importlib.util.find_spec("vllm") is None:
+        from types import ModuleType
+        stub = ModuleType("vllm")
+
+        class LLM:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError(
+                    "vllm is not available in this build. Use ollama or openai.")
+
+        class SamplingParams:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError(
+                    "vllm is not available in this build. Use ollama or openai.")
+
+        stub.LLM = LLM
+        stub.SamplingParams = SamplingParams
+        sys.modules["vllm"] = stub
+
+
 def patch_topicgpt_apiclient():
     import logging
     import os
@@ -10,10 +33,10 @@ def patch_topicgpt_apiclient():
     Original = u.APIClient
 
     def patched_init(
-        self, 
-        api, 
-        model, 
-        host=None, 
+        self,
+        api,
+        model,
+        host=None,
         config_path: pathlib.Path = pathlib.Path(
             "./static/config/config.yaml"),
         logger: logging.Logger = None,
@@ -21,7 +44,7 @@ def patch_topicgpt_apiclient():
         self.api = api
         self.model = model
         self.client = None
-        
+
         self._logger = logger if logger else init_logger(config_path, __name__)
         config = load_yaml_config_file(config_path, "llm", logger)
 
@@ -39,4 +62,5 @@ def patch_topicgpt_apiclient():
     u.APIClient.__init__ = patched_init
 
 
+stub_vllm_if_missing()
 patch_topicgpt_apiclient()

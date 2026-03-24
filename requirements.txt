@@ -23,6 +23,7 @@ python-multipart>=0.0.20
 spacy-download   
 spacy
 sentence-transformers
+torch<2.8
 contextualized_topic_models
 topicgpt-python
 colorama

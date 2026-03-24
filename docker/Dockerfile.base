@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Install build tools & deps for wheel
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     curl \
     gcc \
     g++ \
@@ -26,8 +27,20 @@ COPY src ./src
 # Create the /dist directory
 RUN mkdir /dist
 
+# Build a minimal vllm stub wheel so pip doesn't compile vllm from source
+# (topicgpt-python requires vllm but we never use it; runtime handles it via sys.modules)
+RUN mkdir -p /stub-vllm/vllm && \
+    printf '[build-system]\nrequires=["setuptools"]\nbuild-backend="setuptools.build_meta"\n[project]\nname="vllm"\nversion="0.8.5"\n[tool.setuptools.packages.find]\nwhere=["."]' \
+    > /stub-vllm/pyproject.toml && \
+    printf 'class LLM:\n    def __init__(self,*a,**k): raise RuntimeError("vllm not available; use ollama or openai")\nclass SamplingParams:\n    def __init__(self,*a,**k): raise RuntimeError("vllm not available; use ollama or openai")\n' \
+    > /stub-vllm/vllm/__init__.py && \
+    pip wheel --no-cache-dir --no-deps /stub-vllm -w /dist && \
+    echo "vllm==0.8.5" > /constraints.txt
+
 # Build wheels for all dependencies and put them in /dist
 RUN pip wheel --no-cache-dir \
+    --find-links /dist \
+    -c /constraints.txt \
     -r requirements.txt \
     -r solr/solr-api/requirements.txt \
     -w /dist

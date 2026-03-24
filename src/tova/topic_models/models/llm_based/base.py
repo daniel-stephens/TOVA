@@ -48,7 +48,7 @@ class LLMTModel(BaseTMModel, ABC):
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
 
-        self.df = pd.DataFrame(data)
+        self._df = pd.DataFrame(data)
         
     
     def prepare_infer_data(self, data):
