@@ -41,7 +41,7 @@ topic_modeling:
     token_regexp: "[\\p{L}\\p{N}][\\p{L}\\p{N}\\p{P}]*\\p{L}"
     mallet_path: src/train/Mallet-202108/bin/mallet
   tomotopyLDA:
-    num_iters: 2000
+    num_iters: 1000
     alpha: 5.0
     eta: 0.01
     iter_interval: 10
@@ -97,8 +97,8 @@ tm_preprocessor:
     valid_pos: ["VERB", "NOUN", "ADJ", "PROPN"]
   vectorization:
     max_features: 100000
-    min_df: 1
-    max_df: 1
+    min_df: 10
+    max_df: 0.6
     ngram_range: [1, 2]
     binary: false
   embeddings:
