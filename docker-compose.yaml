@@ -1,3 +1,7 @@
+# Stack roles:
+# - web: Django UI + Postgres (sessions, auth, UI state). Talks to the API only over HTTP (API_BASE_URL).
+# - api: FastAPI backend; optional Solr via API_SOLR_URL / solr-api (not used by the web container).
+# - postgres: shared server; Django and the API use different tables/migrations.
 networks:
   tova-net:
     name: tova_my_network
@@ -49,7 +53,9 @@ services:
     ports:
       - "${WEB_PORT:-8080}:8080"
     environment:
-      - FLASK_DEBUG="1"
+      - DJANGO_SETTINGS_MODULE=tova_site.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-me-in-production}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
       - API_BASE_URL=http://api:11000
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-mydb}
       - POSTGRES_USER=${POSTGRES_USER:-user}
@@ -57,11 +63,18 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - TOVA_ADMIN_EMAILS=${TOVA_ADMIN_EMAILS:-}
+      # Used by `make superuser` (createsuperuser --noinput); optional if you only use superuser-local
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
     - ./data:/data
     - ./static/config:/app/static/config
+    # Match repo UI code + templates at runtime (avoids stale COPY after local edits)
+    - ./ui/web:/app/web
+    - ./ui/tova_site:/app/tova_site
+    - ./templates:/app/templates
     networks:
       - tova-net
 

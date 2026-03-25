@@ -8,7 +8,9 @@ topic
 data
 .vscode
 .venv
+.venv-ui
 cache
+ui/db.sqlite3
 .env
 dashboardData.json
 .venv_kumo
@@ -17,9 +19,10 @@ venv
 src/tova.egg-info
 *.DS_Store
 static/config/users
+ui/staticfiles
 *test_*/
 
-# Terraform private keys
+# PEM keys (e.g. SSH)
 *.pem
-terraform/*.pem
-terraform/**/*.pem
+.cursor/
+__pycache__

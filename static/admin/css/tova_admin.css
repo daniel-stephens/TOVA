@@ -1,0 +1,238 @@
+/* TOVA Django admin — branding and layout (works with admin dark mode) */
+
+:root {
+  --tova-admin-header-from: #0f172a;
+  --tova-admin-header-to: #1e3a8a;
+  --tova-admin-accent: #3b82f6;
+  --tova-admin-surface: #f8fafc;
+  --tova-admin-border: rgba(15, 23, 42, 0.1);
+}
+
+html[data-theme="dark"] {
+  --tova-admin-header-from: #020617;
+  --tova-admin-header-to: #172554;
+  --tova-admin-accent: #60a5fa;
+  --tova-admin-surface: var(--body-bg, #121212);
+  --tova-admin-border: rgba(255, 255, 255, 0.08);
+}
+
+/* Widen admin layout — Django defaults to 600px dashboard + colMS sidebar gutter */
+body {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+#content {
+  padding: 1.5rem clamp(1.25rem, 4vw, 2.5rem) 2rem;
+  max-width: min(1400px, calc(100vw - 48px));
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* Django sets .dashboard #content { width: 600px } — needs this specificity to override */
+.dashboard #content {
+  width: 100%;
+}
+
+#header {
+  background: linear-gradient(
+    135deg,
+    var(--tova-admin-header-from) 0%,
+    var(--tova-admin-header-to) 100%
+  );
+  color: #f1f5f9;
+  border-bottom: 3px solid var(--tova-admin-accent);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.2);
+  padding-left: clamp(1.25rem, 4vw, 2.5rem);
+  padding-right: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+#branding h1,
+#branding h1 a:link,
+#branding h1 a:visited {
+  color: #f8fafc !important;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+#site-name {
+  padding: 0;
+  margin: 0;
+}
+
+#site-name a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  text-decoration: none !important;
+}
+
+#site-name a:hover {
+  opacity: 0.92;
+}
+
+.tova-admin-logo-mark {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.tova-admin-logo-sub {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.85;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+
+.tova-admin-back-link:link,
+.tova-admin-back-link:visited {
+  color: rgba(226, 232, 240, 0.95);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  margin-right: 0.75rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  align-self: center;
+}
+
+.tova-admin-back-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+#user-tools {
+  color: rgba(241, 245, 249, 0.92);
+  font-weight: 500;
+}
+
+#user-tools a:link,
+#user-tools a:visited {
+  color: #e2e8f0;
+}
+
+#user-tools a:hover,
+#user-tools a:focus {
+  color: #fff;
+}
+
+#user-tools button[type="submit"] {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f1f5f9;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#user-tools button[type="submit"]:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.breadcrumbs {
+  background: var(--tova-admin-surface);
+  border-bottom: 1px solid var(--tova-admin-border);
+  padding: 0.65rem clamp(1.25rem, 4vw, 2.5rem);
+  font-size: 0.875rem;
+}
+
+.breadcrumbs a {
+  font-weight: 500;
+}
+
+/* Content area */
+#content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--body-fg, #0f172a);
+  margin-bottom: 0.5rem;
+}
+
+.module {
+  border-radius: 10px;
+  border: 1px solid var(--tova-admin-border);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.module h2,
+.module caption {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #0f172a;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.1rem;
+  border-bottom: 1px solid var(--tova-admin-border);
+}
+
+html[data-theme="dark"] .module h2,
+html[data-theme="dark"] .module caption {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  color: #f1f5f9;
+}
+
+.tova-admin-console-card {
+  border-radius: 12px;
+  border: 1px solid var(--tova-admin-border);
+  background: var(--tova-admin-surface);
+  padding: 1.35rem 1.5rem 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.tova-admin-console-card h2 {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.tova-admin-console-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 1rem;
+}
+
+.tova-admin-console-card li {
+  margin-bottom: 0.5rem;
+}
+
+.tova-admin-console-card a {
+  font-weight: 600;
+}
+
+/* TOVA custom admin tables (corpora / dashboards) */
+.tova-admin-wide-table {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.tova-admin-page-intro {
+  font-size: 1rem;
+  color: var(--body-quiet-color, #64748b);
+  max-width: 50rem;
+  margin: 0 0 0.5rem;
+}
+
+#footer {
+  border-top: 1px solid var(--tova-admin-border);
+  padding: 0.75rem 1rem;
+  margin-top: 2rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  text-align: center;
+}

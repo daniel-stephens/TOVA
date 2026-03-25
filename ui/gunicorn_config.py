@@ -1,6 +1,4 @@
-"""
-Gunicorn configuration file for TOVA Flask application
-"""
+"""Gunicorn configuration for the TOVA UI (Django ``wsgi:application``)."""
 import multiprocessing
 import os
 

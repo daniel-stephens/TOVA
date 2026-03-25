@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}
+  {% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:"TOVA Admin" }}
+{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/tova_admin.css' %}">
+{% endblock %}
+
+{% block branding %}
+  <h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+      <span class="tova-admin-logo-mark">{{ site_header|default:"TOVA" }}</span>
+      <span class="tova-admin-logo-sub">{% translate "Admin" %}</span>
+    </a>
+  </h1>
+  {% if user.is_anonymous %}
+    {% include "admin/color_theme_toggle.html" %}
+  {% endif %}
+{% endblock %}
+
+{% block nav-global %}
+  <a href="{% url 'web:home' %}" class="tova-admin-back-link">{% translate "← Main app" %}</a>
+{% endblock %}
+
+{% block footer %}
+  <div id="footer">
+    {% translate "TOVA administration" %} · {% translate "staff access only" %}
+  </div>
+{% endblock %}

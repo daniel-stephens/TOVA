@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Corpora (all users)</h1>
+
+  <table class="table tova-admin-wide-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Owner</th>
+        <th>Models</th>
+        <th>Draft?</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td><code>{{ r.id }}</code></td>
+          <td>{{ r.name }}</td>
+          <td>{{ r.owner_email }}</td>
+          <td>{{ r.models_count }}</td>
+          <td>{% if r.is_draft %}Yes{% else %}No{% endif %}</td>
+          <td>
+            <form method="post" action="{% url 'tova_admin_corpora_delete' corpus_id=r.id %}" onsubmit="return confirm('Delete corpus? This will also delete associated models.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No corpora found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
+

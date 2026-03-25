@@ -1,3 +1,4 @@
+{% load web_urls %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,12 +6,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TOVA Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
   <style>
 
 body {
   display: flex;
   flex-direction: column;
 }
+
+.navbar-brand.navbar-brand--active {
+  color: #0d6efd !important;
+  font-weight: 800;
+}
+
+.navbar-nav .nav-link.active {
+  font-weight: 600;
+}
+
+.navbar-nav .nav-link:hover {
+  text-decoration: underline;
+}
+
+.navbar-nav .dropdown-item.active {
+  font-weight: 600;
+  background-color: var(--bs-light);
+}
+
+  /* Match base.html account control */
+  .tova-profile-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.6rem 0.25rem 0.35rem;
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+    line-height: 1.2;
+    text-align: left;
+  }
+  .tova-profile-trigger:hover {
+    background: #f8fafc;
+    border-color: rgba(37, 99, 235, 0.55);
+  }
+  .tova-profile-trigger:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+  .tova-profile-trigger::after {
+    display: none;
+  }
+  .tova-profile-avatar {
+    width: 2.875rem;
+    height: 2.875rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.95);
+  }
+  .tova-profile-trigger:hover .tova-profile-avatar {
+    filter: brightness(1.05);
+  }
+  .tova-profile-label .tova-profile-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .tova-profile-label .tova-profile-hint {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 500;
+  }
+  .tova-profile-chevron {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-left: 0.125rem;
+  }
+
 .xsmall {
     font-size: 0.7rem !important;
   }
@@ -826,107 +907,121 @@ footer {
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
     <div class="container">
-      <!-- Brand -->
-      <a class="navbar-brand fw-bold" href="/">TOVA</a>
-  
-      <!-- Mobile toggler -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+      <a class="navbar-brand fw-bold{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
+         href="{% url_for 'home' %}">TOVA</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashNavbar"
+              aria-controls="dashNavbar" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
-  
-      <!-- Content -->
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <!-- Primary flow (left) -->
-        <ul class="navbar-nav me-auto align-items-lg-center gap-lg-2">
+
+      <div class="collapse navbar-collapse justify-content-between" id="dashNavbar">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <li class="nav-item">
-            <a class="nav-link{% if request.path == '/' %} active{% endif %}"
-               {% if request.path == '/' %}aria-current="page"{% endif %} href="/">
-              Upload Data
-            </a>
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_data_page' %}active{% endif %}"
+               href="{% url_for 'load_data_page' %}">Upload Data</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link{% if 'load' in request.path %} active{% endif %}"
-               {% if 'load' in request.path %}aria-current="page"{% endif %} href="/model">
-              Initiate Training
-            </a>
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_corpus_page' %}active{% endif %}"
+               href="{% url_for 'load_corpus_page' %}">Corpus library</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link{% if 'train' in request.path %} active{% endif %}"
-               {% if 'train' in request.path %}aria-current="page"{% endif %} href="/trained-models">
-              Manage Models
-            </a>
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'loadModel' %}active{% endif %}"
+               href="{% url_for 'loadModel' %}">Initiate Training</a>
           </li>
-          {% if user and user.get('is_admin') %}
           <li class="nav-item">
-            <a class="nav-link{% if request.path == '/admin' %} active{% endif %}"
-               {% if request.path == '/admin' %}aria-current="page"{% endif %} href="{{ url_for('admin_page') }}">
-              Admin
-            </a>
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
+               href="{% url_for 'trained_models' %}">Trained topic models</a>
+          </li>
+          {% if user.is_authenticated and user.is_staff %}
+          <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
+               href="{% url 'admin:index' %}">Admin</a>
           </li>
           {% endif %}
         </ul>
-  
-        <!-- Utilities / actions (right) -->
-        <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-          <!-- Current model pill (optional; remove if not needed) -->
-          <li class="nav-item d-none d-lg-block">
-            <!-- <span class="badge text-bg-light border">
-              Model: <span id="navCurrentModel">{{ model_id|e }}</span>
-            </span> -->
-            <!--<span class="badge text-bg-light border">
-              Model: <span id="navCurrentModel">{{ model_name|e }}</span>
-            </span>-->
-          </li>
-  
-          <!-- Model Info (modal) -->
-          <li class="nav-item">
-            <a href="#"
-               class="nav-link"
-               role="button"
-               onclick="event.preventDefault(); showModelDetails('{{ model_id|e }}')">
-              Model Info
-            </a>
-          </li>
-  
-          <!-- Save (modal) -->
-          <li class="nav-item">
-            <a href="#"
-               class="nav-link"
-               role="button"
-               onclick="event.preventDefault(); window.openSaveSettingsModal && window.openSaveSettingsModal();">
-              Save
-            </a>
-          </li>
-  
-          <!-- Help dropdown -->
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="helpDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              Help
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="helpDropdown">
+
+        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+          <button class="btn btn-primary btn-sm order-1 order-sm-0" type="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">
+            <i class="bi bi-lightning-charge-fill me-1"></i>Run inference
+          </button>
+
+          {% if user.is_authenticated %}
+          <div class="dropdown order-2 order-sm-1">
+            <button class="btn tova-profile-trigger dropdown-toggle flex-grow-1 flex-sm-grow-0" type="button" id="dashProfileMenu"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                    aria-label="Account, LLM, configuration, and dashboard tools"
+                    title="Account, LLM settings, config, and this dashboard">
+              <span class="tova-profile-avatar" aria-hidden="true">
+                {% if user.name %}
+                  {{ user.name|slice:":1"|upper }}
+                {% else %}
+                  {{ user.email|slice:":1"|upper }}
+                {% endif %}
+              </span>
+              <span class="tova-profile-label d-none d-md-flex flex-column align-items-start text-start">
+                <span class="tova-profile-title">Account</span>
+                <span class="tova-profile-hint">LLM · config · model</span>
+              </span>
+              <i class="bi bi-chevron-down tova-profile-chevron ms-md-0 ms-auto" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dashProfileMenu" style="min-width: 15rem;">
+              <li class="px-3 py-2 border-bottom">
+                <div class="small text-muted text-uppercase">Signed in</div>
+                <div class="fw-semibold text-truncate">{{ user.name|default:"—" }}</div>
+                <div class="small text-muted text-truncate">{{ user.email }}</div>
+                {% if model_name %}
+                <div class="small fw-semibold text-primary text-truncate mt-2" id="navCurrentModel" title="{{ model_name }}">Model: {{ model_name }}</div>
+                {% elif model_id %}
+                <div class="small font-monospace text-muted text-truncate mt-2" id="navCurrentModel" title="{{ model_id }}">ID: {{ model_id }}</div>
+                {% endif %}
+                <p class="small text-muted mb-0 mt-2" style="font-size: 0.78rem; line-height: 1.35;">
+                  App-wide settings open on Home. Below: tools for this dashboard.
+                </p>
+              </li>
               <li>
-                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#topicModelGuideModal">
-                  Glossary
+                <a class="dropdown-item" href="{% url_for 'home' %}">
+                  <i class="bi bi-sliders me-2"></i>LLM settings <span class="text-muted small">(Home)</span>
                 </a>
               </li>
-              <!-- Add more help links if needed -->
+              <li>
+                <a class="dropdown-item" href="{% url_for 'home' %}">
+                  <i class="bi bi-gear-fill me-2"></i>Config editor <span class="text-muted small">(Home)</span>
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header text-uppercase small mb-0">This dashboard</h6></li>
+              <li>
+                <a class="dropdown-item" href="#" role="button"
+                   onclick="event.preventDefault(); showModelDetails('{{ model_id|escapejs }}');">
+                  <i class="bi bi-info-circle me-2"></i>Model info
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" role="button"
+                   onclick="event.preventDefault(); window.openSaveSettingsModal && window.openSaveSettingsModal();">
+                  <i class="bi bi-floppy me-2"></i>Save layout
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#topicModelGuideModal">
+                  <i class="bi bi-book me-2"></i>Glossary
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item text-danger" href="{% url_for 'logout' %}">
+                  <i class="bi bi-box-arrow-right me-2"></i>Log out
+                </a>
+              </li>
             </ul>
-          </li>
-  
-          <!-- Primary action: Run Inference -->
-          <li class="nav-item ms-lg-2">
-            <button class="btn btn-primary"
-                    type="button"
-                    data-bs-toggle="modal"
-                    data-bs-target="#inferenceModal">
-              Run Inference
-            </button>
-          </li>
-        </ul>
+          </div>
+          {% else %}
+          <a class="btn btn-outline-primary btn-sm" href="{% url_for 'login' %}">Log in</a>
+          {% endif %}
+        </div>
       </div>
     </div>
   </nav>
@@ -1049,7 +1144,7 @@ footer {
   </main>
   
   <footer>
-    &copy; 2025 TOVA | AI-powered Topic Visualizer
+    TOVA 2026 · AI-powered topic visualizer
   </footer>
 
   <!-- Chat Sidebar Backdrop -->

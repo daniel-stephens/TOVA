@@ -2,134 +2,577 @@
 
 {% block title %}TOVA – Topic Visualization & Analysis{% endblock %}
 
+{% block extra_head %}
+<style>
+  .home-public-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem clamp(1rem, 3vw, 1.5rem);
+    background: rgba(248, 250, 252, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .home-public-brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #0f172a;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .home-public-brand:hover {
+    color: #1d4ed8;
+  }
+
+  .home-public-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .home-landing {
+    padding: clamp(0.85rem, 2vw, 1.35rem) 0 clamp(1.25rem, 3vw, 2rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .home-landing > .container {
+    width: 100%;
+    max-width: min(100%, 58rem);
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 0.35rem;
+    padding-bottom: clamp(0.5rem, 1.5vw, 1rem);
+  }
+
+  /* Twin vertical rails — left and right — to frame the main column */
+  .home-content-rails {
+    position: relative;
+    padding-left: clamp(1.2rem, 3.2vw, 2rem);
+    padding-right: clamp(1.2rem, 3.2vw, 2rem);
+  }
+
+  .home-content-rails::before,
+  .home-content-rails::after {
+    content: "";
+    position: absolute;
+    top: 0.25rem;
+    bottom: 0.25rem;
+    width: 1px;
+    border-radius: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(37, 99, 235, 0) 0%,
+      rgba(37, 99, 235, 0.42) 18%,
+      rgba(99, 102, 241, 0.32) 50%,
+      rgba(37, 99, 235, 0.42) 82%,
+      rgba(37, 99, 235, 0) 100%
+    );
+  }
+
+  .home-content-rails::before {
+    left: 2px;
+    box-shadow: 5px 0 0 0 rgba(37, 99, 235, 0.2);
+  }
+
+  .home-content-rails::after {
+    right: 2px;
+    box-shadow: -5px 0 0 0 rgba(37, 99, 235, 0.2);
+  }
+
+  .home-landing.home-landing--public {
+    padding-top: clamp(3.35rem, 7.5vw, 4.25rem);
+  }
+
+  .home-landing .home-lead {
+    font-size: clamp(0.95rem, 2.1vw, 1.125rem);
+    max-width: 42rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .home-intro {
+    text-align: center;
+    margin-bottom: clamp(1.35rem, 3.5vw, 2rem);
+  }
+
+  .home-intro h1.home-tagline {
+    font-size: clamp(1.2rem, 3.4vw, 1.85rem);
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.03em;
+    line-height: 1.25;
+    max-width: 42rem;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 0;
+    margin-bottom: clamp(0.95rem, 2.35vw, 1.45rem);
+    text-align: center;
+  }
+
+  .home-intro .home-lead {
+    line-height: 1.6;
+  }
+
+  .home-workflow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1.15rem;
+    text-align: center;
+  }
+
+  @media (max-width: 991px) {
+    .home-workflow {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .home-workflow {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .home-workflow .home-workflow-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.85rem 0.85rem;
+    text-align: center;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #fff;
+    text-decoration: none;
+    color: #0f172a;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+
+  .home-workflow a.home-workflow-tile:hover {
+    border-color: rgba(29, 78, 216, 0.35);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+    color: #0f172a;
+  }
+
+  .home-workflow .home-workflow-tile.home-workflow-tile--primary {
+    border-color: rgba(29, 78, 216, 0.22);
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 70%);
+  }
+
+  .home-workflow .home-workflow-tile--locked {
+    cursor: default;
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  .home-workflow .home-workflow-tile--locked:hover {
+    border-color: rgba(15, 23, 42, 0.08);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .home-carousel-wrap.home-carousel--preview-only .carousel-control-prev,
+  .home-carousel-wrap.home-carousel--preview-only .carousel-control-next,
+  .home-carousel-wrap.home-carousel--preview-only .carousel-indicators {
+    display: none !important;
+  }
+
+  .home-workflow .wf-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+  }
+
+  .home-workflow .wf-desc {
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  .home-guide-callout {
+    max-width: 28rem;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    padding: 1rem 1.2rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    background: #f1f5f9;
+  }
+
+  .home-guide-callout-title {
+    font-size: 0.9375rem;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+  }
+
+  .home-guide-callout-lead {
+    line-height: 1.45;
+    margin-bottom: 0;
+  }
+
+  .home-carousel-wrap {
+    width: 100%;
+    max-width: min(100%, 52rem);
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.05);
+  }
+
+  .home-carousel {
+    width: 100%;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .home-carousel .carousel-inner {
+    width: 100%;
+  }
+
+  /* Do not set display/transition on .carousel-item — breaks Bootstrap’s slide transforms. */
+  .home-carousel .carousel-item {
+    padding: clamp(1rem, 2.8vw, 1.5rem) clamp(2.35rem, 6vw, 3.15rem);
+  }
+
+  .home-slide {
+    width: 100%;
+    max-width: 38rem;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    min-height: clamp(11.5rem, 26vh, 17rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  @media (min-width: 992px) {
+    .home-slide {
+      min-height: clamp(12.5rem, 24vh, 16.5rem);
+    }
+  }
+
+  .home-slide h2 {
+    font-size: clamp(1.08rem, 2.5vw, 1.48rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.55rem;
+  }
+
+  .home-slide p.lead-slide {
+    font-size: 0.94rem;
+    line-height: 1.5;
+    opacity: 0.95;
+    margin-bottom: 0.65rem;
+    text-align: center;
+  }
+
+  .home-slide-list {
+    list-style: none;
+    width: 100%;
+    max-width: 36rem;
+    padding: 0;
+    margin: 0 auto;
+  }
+
+  .home-slide-list li {
+    font-size: 0.875rem;
+    line-height: 1.45;
+    margin-bottom: 0.45rem;
+    text-align: center;
+  }
+
+  .home-slide-list li:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Slides: neutral stone/slate only — alternating lightness, no saturated hues */
+  .home-carousel .carousel-item.slide-a {
+    background: linear-gradient(160deg, #f8fafc 0%, #eef2f7 45%, #f1f5f9 100%);
+    color: #0f172a;
+  }
+  .home-carousel .carousel-item.slide-a .lead-slide {
+    color: #475569;
+  }
+
+  .home-carousel .carousel-item.slide-b {
+    background: linear-gradient(160deg, #f1f5f9 0%, #e8edf3 40%, #f8fafc 100%);
+    color: #0f172a;
+  }
+  .home-carousel .carousel-item.slide-b .lead-slide {
+    color: #64748b;
+  }
+
+  .home-carousel .carousel-item.slide-c {
+    background: linear-gradient(165deg, #fafafa 0%, #f1f5f9 50%, #f8fafc 100%);
+    color: #0f172a;
+  }
+  .home-carousel .carousel-item.slide-c .lead-slide {
+    color: #64748b;
+  }
+
+  .home-carousel .carousel-item.slide-d {
+    background: linear-gradient(160deg, #f8fafc 0%, #eceff4 45%, #f1f5f9 100%);
+    color: #0f172a;
+  }
+  .home-carousel .carousel-item.slide-d .lead-slide {
+    color: #475569;
+  }
+
+  .home-carousel .carousel-control-prev,
+  .home-carousel .carousel-control-next {
+    width: 2.75rem;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    opacity: 0.55;
+  }
+
+  .home-carousel .carousel-control-prev {
+    left: 0.25rem;
+  }
+
+  .home-carousel .carousel-control-next {
+    right: 0.25rem;
+  }
+
+  .home-carousel .carousel-control-prev:hover,
+  .home-carousel .carousel-control-next:hover {
+    opacity: 0.9;
+  }
+
+  .home-carousel .carousel-indicators {
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0.65rem;
+    padding-top: 0.15rem;
+    justify-content: center;
+  }
+
+  .home-carousel .carousel-indicators [data-bs-target] {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    margin: 0 0.22rem;
+    background-color: #94a3b8;
+    border: none;
+  }
+
+  .home-carousel .carousel-indicators .active {
+    background-color: #334155;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home-workflow .home-workflow-tile {
+      transition: none;
+    }
+
+    .home-workflow a.home-workflow-tile:hover {
+      transform: none;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-5">
-
-  <!-- Hero -->
-  <section class="row align-items-center mb-5">
-    <div class="col-lg-7 mb-4 mb-lg-0">
-      <span class="badge rounded-pill text-bg-primary mb-3">
-        <i class="bi bi-stars"></i> Topic Modeling Workspace
-      </span>
-
-      <h1 class="display-5 fw-bold mb-3">
-        Welcome{% if user %}, {{ user.name }}{% endif %} to TOVA
-      </h1>
-
-      <p class="lead text-muted mb-3">
-        Upload text corpora, train different topic models, and explore
-        interactive dashboards powered by both traditional and LLM-enhanced approaches.
-      </p>
-
-      <p class="text-muted mb-4">
-        Follow a simple workflow: <strong>Upload</strong> your documents,
-        <strong>Train</strong> one or more models, then <strong>Explore</strong>
-        the topics, documents, and summaries.
-      </p>
-
-      <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('load_data_page') }}" class="btn btn-primary">
-          <i class="bi bi-upload"></i> Upload Data
-        </a>
-        <a href="{{ url_for('loadModel') }}" class="btn btn-outline-primary">
-          <i class="bi bi-gear-wide-connected"></i> Initiate Training
-        </a>
-        <a href="{{ url_for('trained_models') }}" class="btn btn-outline-secondary">
-          <i class="bi bi-collection"></i> Model Repository
-        </a>
-      </div>
-
-      <div class="mt-4 small text-muted">
-        <i class="bi bi-lightbulb"></i>
-        Tip: Configure your preferred LLM once, then reuse it across labeling and summarization tasks.
-      </div>
-    </div>
-
-    <div class="col-lg-5">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title mb-2">
-            <i class="bi bi-sliders"></i> LLM Configuration
-          </h5>
-          <p class="card-text text-muted mb-3">
-            Choose which LLM provider and model TOVA should use for topic labels,
-            summaries, and other generated text. 
-          </p>
-
-          <button
-            class="btn btn-success btn-sm align-self-start"
-            data-bs-toggle="modal"
-            data-bs-target="#llmModal"
-          >
-            Open LLM Settings
-          </button>
-
-          <ul class="small text-muted mt-3 mb-0 ps-3">
-            <li>Per-session preferences for provider, model, and host.</li>
-            <li>API keys are treated as sensitive and not sent back to the browser.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Workflow / Features -->
-  <section>
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm border-light-subtle">
-          <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-2">
-              <i class="bi bi-file-earmark-text"></i> Upload &amp; Create Corpora
-            </h5>
-            <p class="card-text text-muted flex-grow-1">
-              Import your text datasets and combine them into corpora for training.
-              Manage corpora, attach or detach datasets, and keep your experiments organized.
-            </p>
-            <a href="{{ url_for('load_corpus_page') }}" class="card-link mt-1">
-              Manage corpora
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm border-light-subtle">
-          <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-2">
-              <i class="bi bi-bar-chart"></i> Train Topic Models
-            </h5>
-            <p class="card-text text-muted flex-grow-1">
-              Run traditional or LLM-enhanced topic models on your corpora via the
-              backend training API. Monitor running jobs and adjust hyperparameters
-              such as number of topics and preprocessing options.
-            </p>
-            <a href="{{ url_for('loadModel') }}" class="card-link mt-1">
-              Go to training
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <div class="card h-100 shadow-sm border-light-subtle">
-          <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-2">
-              <i class="bi bi-grid-3x3-gap"></i> Explore Dashboards
-            </h5>
-            <p class="card-text text-muted flex-grow-1">
-              Browse the model repository, open dashboards, and inspect topic
-              distributions, representative documents, and keyword summaries to
-              better understand your corpus.
-            </p>
-            <a href="{{ url_for('trained_models') }}" class="card-link mt-1">
-              View trained models
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
+{% if not user.is_authenticated %}
+<div class="home-public-bar">
+  <a href="{% url_for 'home' %}" class="home-public-brand">TOVA</a>
+  <div class="home-public-actions">
+    <a href="{% url_for 'login' %}" class="btn btn-outline-secondary btn-sm">Sign in</a>
+    <a href="{% url_for 'signup' %}" class="btn btn-primary btn-sm">Sign up</a>
+  </div>
 </div>
+{% endif %}
+<div class="home-landing{% if not user.is_authenticated %} home-landing--public{% endif %}">
+  <div class="container">
+    <div class="home-content-rails">
+    <div class="home-intro">
+      <h1 class="home-tagline">
+        Topic modeling end to end—your corpus, your models, and dashboards that stay in sync with training.
+      </h1>
+      <p class="home-lead text-muted mb-0">
+        Upload documents, run classical or LLM-assisted pipelines, then explore interactive views built for discovery—not a patchwork of tools.
+      </p>
+    </div>
+
+    <nav class="home-workflow" aria-label="{% if user.is_authenticated %}Workflow shortcuts{% else %}Workflow overview — sign in to use these steps{% endif %}">
+      {% if user.is_authenticated %}
+      <a href="{% url_for 'load_data_page' %}" class="home-workflow-tile home-workflow-tile--primary">
+        <span class="wf-title">Upload data</span>
+        <span class="wf-desc">Bring files in and validate them for the pipeline.</span>
+      </a>
+      <a href="{% url_for 'load_corpus_page' %}" class="home-workflow-tile">
+        <span class="wf-title">Corpus library</span>
+        <span class="wf-desc">Keep versions organized and ready to reuse.</span>
+      </a>
+      <a href="{% url_for 'loadModel' %}" class="home-workflow-tile">
+        <span class="wf-title">Train a model</span>
+        <span class="wf-desc">Choose classical or LLM-backed training flows.</span>
+      </a>
+      <a href="{% url_for 'trained_models' %}" class="home-workflow-tile">
+        <span class="wf-title">Trained topic models</span>
+        <span class="wf-desc">Open dashboards, diagnostics, and results.</span>
+      </a>
+      {% else %}
+      <div class="home-workflow-tile home-workflow-tile--primary home-workflow-tile--locked">
+        <span class="wf-title">Upload data</span>
+        <span class="wf-desc">Sign in to upload and validate files for the pipeline.</span>
+      </div>
+      <div class="home-workflow-tile home-workflow-tile--locked">
+        <span class="wf-title">Corpus library</span>
+        <span class="wf-desc">Sign in to manage corpora and versions.</span>
+      </div>
+      <div class="home-workflow-tile home-workflow-tile--locked">
+        <span class="wf-title">Train a model</span>
+        <span class="wf-desc">Sign in to start classical or LLM-backed training.</span>
+      </div>
+      <div class="home-workflow-tile home-workflow-tile--locked">
+        <span class="wf-title">Trained topic models</span>
+        <span class="wf-desc">Sign in to open dashboards and results.</span>
+      </div>
+      {% endif %}
+    </nav>
+
+    <section class="home-guide-callout mt-3 mb-3" aria-labelledby="home-guide-heading">
+      <h2 class="home-guide-callout-title mb-2" id="home-guide-heading">Step-by-step instructions</h2>
+      <p class="home-guide-callout-lead small text-muted mb-3">
+        How these steps connect—from upload, through your corpus and training, to dashboards and results.
+      </p>
+      <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#howToUseModal">
+        Open instructions
+      </button>
+    </section>
+
+    <div class="home-carousel-wrap{% if not user.is_authenticated %} home-carousel--preview-only{% endif %}">
+      <div id="homeFeatureCarousel"
+           class="carousel slide home-carousel"
+           data-bs-pause="hover"
+           aria-label="Product highlights">
+        <div class="carousel-indicators">
+          <button type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Slide 1"></button>
+          <button type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide-to="1" aria-label="Slide 2"></button>
+          <button type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide-to="2" aria-label="Slide 3"></button>
+          <button type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide-to="3" aria-label="Slide 4"></button>
+        </div>
+
+        <div class="carousel-inner">
+          <!-- Slide 1 -->
+          <div class="carousel-item active slide-a">
+            <div class="home-slide">
+              <h2>From raw text to topics</h2>
+              <p class="lead-slide mb-0">
+                A guided path used in research and analytics: ingest documents, configure preprocessing, pick a model family, then watch training progress with an optional low-latency preview.
+              </p>
+              <ul class="home-slide-list mt-3">
+                <li><strong>Corpus library</strong> keeps versions organized and reusable across training runs.</li>
+                <li><strong>Job-aware UI</strong> resumes the right screen with model and corpus context.</li>
+                <li><strong>Trained models catalog</strong> opens dashboards in one click.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Slide 2 -->
+          <div class="carousel-item slide-b">
+            <div class="home-slide">
+              <h2>Classical &amp; LLM workflows</h2>
+              <p class="lead-slide mb-0">
+                Choose traditional probabilistic models for speed and reproducibility, or LLM-backed pipelines when you need richer labels and narrative structure.
+              </p>
+              <ul class="home-slide-list mt-3 text-body">
+                <li>Classical topic models for scalable inference on large corpora.</li>
+                <li>LLM configurations for summarization and labeling—with keys managed server-side.</li>
+                <li>YAML-backed global config so defaults stay consistent for your team.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Slide 3 -->
+          <div class="carousel-item slide-c">
+            <div class="home-slide">
+              <h2>Dashboards you can explore</h2>
+              <p class="lead-slide mb-0">
+                After training, open a model dashboard for theme overview charts, per-document assignments, search and filters, and optional assistant chat grounded in your project.
+              </p>
+              <ul class="home-slide-list mt-3">
+                <li>Theme distributions and diagnostics at a glance.</li>
+                <li>Document table with themes, text drill-down, and exports.</li>
+                <li>Run inference on new text without leaving the workspace.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Slide 4 -->
+          <div class="carousel-item slide-d">
+            <div class="home-slide">
+              <h2>Ready when you are</h2>
+              <p class="lead-slide mb-0">
+                Sign in to sync preferences, manage corpora and models across sessions, and (for administrators) oversee users and resources from a single console.
+              </p>
+              <ul class="home-slide-list mt-3">
+                <li>Accounts with per-user configuration overlays.</li>
+                <li>Upload and validate files before they enter the pipeline.</li>
+                <li>Use the account menu for global configuration used during training and labeling.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <button class="carousel-control-prev" type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide="prev">
+          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#homeFeatureCarousel" data-bs-slide="next">
+          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Next</span>
+        </button>
+      </div>
+    </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var el = document.getElementById("homeFeatureCarousel");
+  if (!el || typeof bootstrap === "undefined" || !bootstrap.Carousel) return;
+  try {
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      bootstrap.Carousel.getOrCreateInstance(el, { interval: false, wrap: true, touch: true, pause: true });
+    } else {
+      bootstrap.Carousel.getOrCreateInstance(el, {
+        interval: 6200,
+        ride: "carousel",
+        wrap: true,
+        pause: "hover",
+        touch: true,
+      });
+    }
+  } catch (e) {
+    console.warn("Home carousel init:", e);
+  }
+})();
+</script>
 {% endblock %}

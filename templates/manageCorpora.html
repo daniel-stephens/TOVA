@@ -1,414 +1,619 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Manage Corpora - TOVA</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <style>
-      .tableFixHead {
-        overflow-y: auto;
-        max-height: 65vh;
-      }
-      .tableFixHead thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: #f8f9fa;
-      }
-      .badge.rounded-pill {
-        vertical-align: middle;
-      }
-    </style>
-  </head>
-  <body class="bg-light">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-      <div class="container">
-        <a class="navbar-brand fw-bold" href="/">TOVA</a>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarContent"
-          aria-controls="navbarContent"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
+{% extends "base.html" %}
 
-        <div
-          class="collapse navbar-collapse justify-content-between"
-          id="navbarContent"
-        >
-          <ul class="navbar-nav">
-            <li class="nav-item">
-              <a class="nav-link" href="/">Home</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/model">Train Models</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/trained-models">View Models</a>
-            </li>
-          </ul>
+{% block title %}Manage Corpora - TOVA{% endblock %}
 
-          <div class="d-flex gap-2">
-            <a href="/model" class="btn btn-sm btn-outline-primary">Back to Training</a>
-            <button class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
-          </div>
-        </div>
-      </div>
-    </nav>
+{% block extra_head %}
+  <style>
+    .tableFixHead {
+      overflow-y: auto;
+      max-height: 65vh;
+    }
+    .tableFixHead thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f8f9fa;
+    }
+    .badge.rounded-pill {
+      vertical-align: middle;
+    }
+  </style>
+{% endblock %}
 
-    <!-- Main -->
-    <div class="container py-5">
-      <div class="row justify-content-center">
-        <div class="col-lg-10">
-          <div class="card shadow">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                  <h2 class="card-title mb-1">Manage Corpora</h2>
-                  <p class="text-muted mb-0">
-                    Create, review, and delete corpora used for training.
-                  </p>
-                </div>
-                <div class="d-flex gap-2">
-                  <a href="/load-data-page" class="btn btn-sm btn-outline-secondary">Create Corpus</a>
-                </div>
-              </div>
-
-              <hr />
-
-              <!-- Filters -->
-              <div class="row g-2 mb-3">
-                <div class="col-sm-6 col-md-4">
-                  <input
-                    id="searchBox"
-                    type="search"
-                    class="form-control"
-                    placeholder="Search by name..."
-                  />
-                </div>
-                <div class="col-sm-6 col-md-4">
-                  <select id="draftFilter" class="form-select">
-                    <option value="all" selected>All statuses</option>
-                    <option value="draft">Draft only</option>
-                    <option value="final">Final only</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Table -->
-              <div class="tableFixHead table-responsive">
-                <table class="table table-bordered table-hover table-sm mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th style="width: 60px;">#</th>
-                      <th>Corpus Name</th>
-                      <th style="width: 160px;">Status</th>
-                      <th style="width: 200px;">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="corporaTbody">
-                    <tr>
-                      <td colspan="4"><em>Loading...</em></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div
-                class="mt-3 small text-muted d-flex justify-content-between"
-              >
-                <span id="listMeta"></span>
-                <span id="errorMeta" class="text-danger"></span>
-              </div>
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card shadow">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h2 class="card-title mb-1">Manage Corpora</h2>
+              <p class="text-muted mb-0">
+                Create, review, and delete corpora used for training.
+              </p>
+            </div>
+            <div class="d-flex gap-2">
+              <a href="{% url_for 'load_data_page' %}" class="btn btn-sm btn-outline-secondary">Create Corpus</a>
             </div>
           </div>
+
+          <hr />
+
+          <!-- Filters -->
+          <div class="row g-2 mb-3">
+            <div class="col-sm-6 col-md-4">
+              <input
+                id="searchBox"
+                type="search"
+                class="form-control"
+                placeholder="Search by name..."
+              />
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <select id="draftFilter" class="form-select">
+                <option value="all" selected>All statuses</option>
+                <option value="draft">Draft only</option>
+                <option value="final">Final only</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="tableFixHead table-responsive">
+            <table class="table table-bordered table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 60px;">#</th>
+                  <th>Corpus Name</th>
+                  <th style="width: 160px;">Status</th>
+                  <th style="width: 260px;" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="corporaTbody">
+                <tr>
+                  <td colspan="4"><em>Loading...</em></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            class="mt-3 small text-muted d-flex justify-content-between"
+          >
+            <span id="listMeta"></span>
+            <span id="errorMeta" class="text-danger"></span>
+          </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Confirm Delete Modal -->
-    <div
-      class="modal fade"
-      id="confirmDeleteModal"
-      tabindex="-1"
-      aria-hidden="true"
-    >
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h6 class="modal-title">Delete Corpus</h6>
-            <button
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
-          </div>
-          <div class="modal-body">
-            <p class="mb-0">
-              Are you sure you want to delete <strong id="delName"></strong>?
-            </p>
-            <p class="text-muted small mb-0">This action cannot be undone.</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">
-              Cancel
-            </button>
-            <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
-          </div>
-        </div>
+<!-- Corpus details -->
+<div
+  class="modal fade"
+  id="corpusDetailModal"
+  tabindex="-1"
+  aria-labelledby="corpusDetailTitle"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="corpusDetailTitle">Corpus details</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body" id="corpusDetailBody">
+        <p class="text-muted mb-0">Loading…</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
       </div>
     </div>
+  </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-      (function () {
-        "use strict";
+<!-- Confirm Delete Modal -->
+<div
+  class="modal fade"
+  id="confirmDeleteModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Delete Corpus</h6>
+        <button
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">
+          Are you sure you want to delete <strong id="delName"></strong>?
+        </p>
+        <p class="text-muted small mb-0">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-        var dom = {};
-        function $(s, r) {
-          return (r || document).querySelector(s);
-        }
+{% block extra_scripts %}
+<script>
+  (function () {
+    "use strict";
 
-        function escapeHtml(str) {
-          return String(str == null ? "" : str).replace(/[&<>\"']/g, function (
-            m
-          ) {
-            return {
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#39;",
-            }[m];
-          });
-        }
+    var dom = {};
+    function $(s, r) {
+      return (r || document).querySelector(s);
+    }
 
-        function debounce(fn, wait) {
-          if (wait === void 0) wait = 200;
-          var t;
-          return function () {
-            var args = arguments;
-            clearTimeout(t);
-            t = setTimeout(function () {
-              fn.apply(null, args);
-            }, wait);
-          };
-        }
+    function escapeHtml(str) {
+      return String(str == null ? "" : str).replace(/[&<>\"']/g, function (
+        m
+      ) {
+        return {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        }[m];
+      });
+    }
 
-        document.addEventListener("DOMContentLoaded", function () {
-          dom.tbody = $("#corporaTbody");
-          dom.listMeta = $("#listMeta");
-          dom.errorMeta = $("#errorMeta");
-          dom.searchBox = $("#searchBox");
-          dom.draftFilter = $("#draftFilter");
-          dom.confirmDeleteModalEl = $("#confirmDeleteModal");
-          dom.confirmDeleteModal = dom.confirmDeleteModalEl
-            ? new bootstrap.Modal(dom.confirmDeleteModalEl)
-            : null;
-          dom.delNameSpan = $("#delName");
-          dom.confirmDeleteBtn = $("#confirmDeleteBtn");
+    function escapeAttr(str) {
+      return String(str == null ? "" : str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
 
-          loadAndRender();
+    function debounce(fn, wait) {
+      if (wait === void 0) wait = 200;
+      var t;
+      return function () {
+        var args = arguments;
+        clearTimeout(t);
+        t = setTimeout(function () {
+          fn.apply(null, args);
+        }, wait);
+      };
+    }
 
-          if (dom.searchBox) {
-            dom.searchBox.addEventListener(
-              "input",
-              debounce(function () {
-                renderTable(window.__allCorpora || []);
-              }, 180)
-            );
-          }
-          if (dom.draftFilter) {
-            dom.draftFilter.addEventListener("change", function () {
-              renderTable(window.__allCorpora || []);
-            });
-          }
-          if (dom.confirmDeleteBtn) {
-            dom.confirmDeleteBtn.addEventListener("click", onConfirmDelete);
+    document.addEventListener("DOMContentLoaded", function () {
+      dom.tbody = $("#corporaTbody");
+      dom.listMeta = $("#listMeta");
+      dom.errorMeta = $("#errorMeta");
+      dom.searchBox = $("#searchBox");
+      dom.draftFilter = $("#draftFilter");
+      dom.confirmDeleteModalEl = $("#confirmDeleteModal");
+      dom.confirmDeleteModal = dom.confirmDeleteModalEl
+        ? new bootstrap.Modal(dom.confirmDeleteModalEl)
+        : null;
+      dom.delNameSpan = $("#delName");
+      dom.confirmDeleteBtn = $("#confirmDeleteBtn");
+      dom.corpusDetailModalEl = $("#corpusDetailModal");
+      dom.corpusDetailModal = dom.corpusDetailModalEl
+        ? new bootstrap.Modal(dom.corpusDetailModalEl)
+        : null;
+      dom.corpusDetailBody = $("#corpusDetailBody");
+      dom.corpusDetailTitle = $("#corpusDetailTitle");
+
+      loadAndRender();
+
+      if (dom.searchBox) {
+        dom.searchBox.addEventListener(
+          "input",
+          debounce(function () {
+            renderTable(window.__allCorpora || []);
+          }, 180)
+        );
+      }
+      if (dom.draftFilter) {
+        dom.draftFilter.addEventListener("change", function () {
+          renderTable(window.__allCorpora || []);
+        });
+      }
+      if (dom.confirmDeleteBtn) {
+        dom.confirmDeleteBtn.addEventListener("click", onConfirmDelete);
+      }
+    });
+
+    function fetchAllCorpora() {
+      return fetch("/getAllCorpora", {
+        headers: { Accept: "application/json" },
+      })
+        .then(function (res) {
+          if (!res.ok)
+            throw new Error("Failed to load corpora: " + res.status);
+          return res.json();
+        })
+        .then(function (items) {
+          return Array.isArray(items) ? items : [];
+        });
+    }
+
+    function loadAndRender() {
+      if (dom.errorMeta) dom.errorMeta.textContent = "";
+      fetchAllCorpora()
+        .then(function (corpora) {
+          window.__allCorpora = corpora;
+          renderTable(corpora);
+        })
+        .catch(function (e) {
+          console.error(e);
+          if (dom.errorMeta)
+            dom.errorMeta.textContent = "Failed to load corpora.";
+          if (dom.tbody) {
+            dom.tbody.innerHTML =
+              '<tr><td colspan="4" class="text-danger"><em>Failed to load corpora.</em></td></tr>';
           }
         });
+    }
 
-        function fetchAllCorpora() {
-          return fetch("/getAllCorpora", {
-            headers: { Accept: "application/json" },
-          })
-            .then(function (res) {
-              if (!res.ok)
-                throw new Error("Failed to load corpora: " + res.status);
-              return res.json();
-            })
-            .then(function (items) {
-              return Array.isArray(items) ? items : [];
-            });
+    function applyFilters(items) {
+      var q =
+        (dom.searchBox && dom.searchBox.value
+          ? dom.searchBox.value
+          : ""
+        ).trim().toLowerCase();
+      var f =
+        (dom.draftFilter && dom.draftFilter.value
+          ? dom.draftFilter.value
+          : "all");
+      return items.filter(function (it) {
+        var name = String(it && it.name ? it.name : "").toLowerCase();
+        var matchesQ = !q || name.indexOf(q) !== -1;
+        var matchesF = true;
+        if (f === "draft") matchesF = !!(it && it.is_draft);
+        if (f === "final") matchesF = !(it && it.is_draft);
+        return matchesQ && matchesF;
+      });
+    }
+
+    function renderTable(items) {
+      var tbody = dom.tbody;
+      if (!tbody) return;
+
+      var filtered = applyFilters(items);
+
+      if (!filtered.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="4"><em>No corpora found.</em></td></tr>';
+        if (dom.listMeta) dom.listMeta.textContent = "";
+        return;
+      }
+
+      var rows = filtered.map(function (it, idx) {
+        var safeName = escapeHtml(it && it.name ? it.name : "");
+        var status =
+          it && it.is_draft
+            ? '<span class="badge rounded-pill text-bg-warning">Draft</span>'
+            : '<span class="badge rounded-pill text-bg-success">Final</span>';
+
+        var cid = it && it.id != null ? String(it.id) : "";
+        var cname = it && it.name != null ? String(it.name) : "";
+        return (
+          '<tr>' +
+          "  <td>" +
+          (idx + 1) +
+          "</td>" +
+          "  <td>" +
+          safeName +
+          "</td>" +
+          "  <td>" +
+          status +
+          "</td>" +
+          '  <td class="text-end">' +
+          '    <div class="btn-group btn-group-sm" role="group" aria-label="Row actions">' +
+          (cid
+            ? '      <button type="button" class="btn btn-outline-primary" data-corpus-detail="' +
+              escapeAttr(cid) +
+              '" title="View details and structure">Details</button>'
+            : "") +
+          '      <button type="button" class="btn btn-outline-danger" data-delete="' +
+          escapeAttr(cname) +
+          '">Delete</button>' +
+          "    </div>" +
+          "  </td>" +
+          "</tr>"
+        );
+      });
+
+      tbody.innerHTML = rows.join("");
+
+      tbody.onclick = function (e) {
+        var target = e.target || e.srcElement;
+        if (!target || !target.closest) return;
+        var det = target.closest("button[data-corpus-detail]");
+        if (det) {
+          openCorpusDetails(det.getAttribute("data-corpus-detail"));
+          return;
         }
-
-        function loadAndRender() {
-          if (dom.errorMeta) dom.errorMeta.textContent = "";
-          fetchAllCorpora()
-            .then(function (corpora) {
-              window.__allCorpora = corpora;
-              renderTable(corpora);
-            })
-            .catch(function (e) {
-              console.error(e);
-              if (dom.errorMeta)
-                dom.errorMeta.textContent = "Failed to load corpora.";
-              if (dom.tbody) {
-                dom.tbody.innerHTML =
-                  '<tr><td colspan="4" class="text-danger"><em>Failed to load corpora.</em></td></tr>';
-              }
-            });
+        var del = target.closest("button[data-delete]");
+        if (del) {
+          var name = del.getAttribute("data-delete");
+          openDeleteConfirm(name);
         }
+      };
 
-        function applyFilters(items) {
-          var q =
-            (dom.searchBox && dom.searchBox.value
-              ? dom.searchBox.value
-              : ""
-            ).trim().toLowerCase();
-          var f =
-            (dom.draftFilter && dom.draftFilter.value
-              ? dom.draftFilter.value
-              : "all");
-          return items.filter(function (it) {
-            var name = String(it && it.name ? it.name : "").toLowerCase();
-            var matchesQ = !q || name.indexOf(q) !== -1;
-            var matchesF = true;
-            if (f === "draft") matchesF = !!(it && it.is_draft);
-            if (f === "final") matchesF = !(it && it.is_draft);
-            return matchesQ && matchesF;
-          });
-        }
+      if (dom.listMeta) {
+        dom.listMeta.textContent =
+          filtered.length +
+          " corpora shown (" +
+          items.length +
+          " total)";
+      }
+    }
 
-        function renderTable(items) {
-          var tbody = dom.tbody;
-          if (!tbody) return;
+    function renderCorpusDetail(c) {
+      if (!c || typeof c !== "object") {
+        return '<p class="text-danger mb-0">Invalid response.</p>';
+      }
+      var meta = c.metadata && typeof c.metadata === "object" ? c.metadata : {};
+      var name =
+        c.name != null && c.name !== ""
+          ? c.name
+          : meta.name != null
+            ? meta.name
+            : "—";
+      var id = c.id != null ? c.id : "—";
+      var desc =
+        c.description != null && c.description !== ""
+          ? c.description
+          : meta.description != null
+            ? meta.description
+            : "";
+      var created =
+        c.created_at != null && c.created_at !== ""
+          ? c.created_at
+          : meta.created_at != null
+            ? meta.created_at
+            : "—";
+      var loc = c.location != null && c.location !== "" ? c.location : "—";
+      var ownerId =
+        c.owner_id != null && c.owner_id !== ""
+          ? c.owner_id
+          : meta.owner_id != null
+            ? meta.owner_id
+            : "";
+      var ownerHtml =
+        c.owner_display != null && String(c.owner_display).trim() !== ""
+          ? escapeHtml(String(c.owner_display).trim())
+          : ownerId
+            ? '<code class="small">' + escapeHtml(String(ownerId)) + "</code>"
+            : "—";
+      var models = Array.isArray(c.models) ? c.models : [];
+      var linkedModels = Array.isArray(c.linked_models) ? c.linked_models : null;
+      var docsTop = Array.isArray(c.documents) ? c.documents.length : 0;
+      var datasets = Array.isArray(c.datasets) ? c.datasets : [];
 
-          var filtered = applyFilters(items);
-
-          if (!filtered.length) {
-            tbody.innerHTML =
-              '<tr><td colspan="4"><em>No corpora found.</em></td></tr>';
-            if (dom.listMeta) dom.listMeta.textContent = "";
-            return;
-          }
-
-          var rows = filtered.map(function (it, idx) {
-            var safeName = escapeHtml(it && it.name ? it.name : "");
-            var status =
-              it && it.is_draft
-                ? '<span class="badge rounded-pill text-bg-warning">Draft</span>'
-                : '<span class="badge rounded-pill text-bg-success">Final</span>';
-
+      var modelsHtml;
+      if (linkedModels && linkedModels.length) {
+        modelsHtml = linkedModels
+          .map(function (lm) {
+            var id = lm.id != null ? String(lm.id) : "";
+            var nm =
+              lm.name != null && String(lm.name).trim() !== ""
+                ? String(lm.name).trim()
+                : "";
+            if (nm && id && nm !== id) {
+              return (
+                "<div class=\"mb-1\"><span class=\"fw-medium\">" +
+                escapeHtml(nm) +
+                '</span><span class="text-muted small ms-1">(' +
+                escapeHtml(id) +
+                ")</span></div>"
+              );
+            }
+            if (nm) {
+              return (
+                "<div class=\"mb-1\"><span class=\"fw-medium\">" +
+                escapeHtml(nm) +
+                "</span></div>"
+              );
+            }
             return (
-              '<tr>' +
-              "  <td>" +
-              (idx + 1) +
-              "</td>" +
-              "  <td>" +
-              safeName +
-              "</td>" +
-              "  <td>" +
-              status +
-              "</td>" +
-              '  <td class="text-end">' +
-              '    <button class="btn btn-sm btn-outline-danger" data-delete="' +
-              safeName +
-              '">Delete</button>' +
-              "  </td>" +
-              "</tr>"
+              "<div class=\"mb-1\"><code class=\"small\">" +
+              escapeHtml(id || "—") +
+              "</code></div>"
             );
-          });
-
-          tbody.innerHTML = rows.join("");
-
-          tbody.onclick = function (e) {
-            var target = e.target || e.srcElement;
-            var btn =
-              target && target.closest
-                ? target.closest("button[data-delete]")
-                : null;
-            if (!btn) return;
-            var name = btn.getAttribute("data-delete");
-            openDeleteConfirm(name);
-          };
-
-          if (dom.listMeta) {
-            dom.listMeta.textContent =
-              filtered.length +
-              " corpora shown (" +
-              items.length +
-              " total)";
-          }
-        }
-
-        var __nameToDelete = null;
-        function openDeleteConfirm(name) {
-          __nameToDelete = name;
-          if (dom.delNameSpan) dom.delNameSpan.textContent = name;
-          if (dom.confirmDeleteModal) dom.confirmDeleteModal.show();
-        }
-
-        function onConfirmDelete() {
-          if (!__nameToDelete) return;
-          if (dom.confirmDeleteBtn) dom.confirmDeleteBtn.disabled = true;
-          console.log("Deleting corpus:", __nameToDelete);
-          fetch("/delete-corpus/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ corpus_name: __nameToDelete }),
           })
-            .then(function (res) {
-              var ct = res.headers.get("content-type") || "";
-              if (ct.indexOf("application/json") !== -1) {
-                return res.json().then(function (body) {
-                  return {
-                    ok: res.ok,
-                    body: body,
-                    status: res.status,
-                    statusText: res.statusText,
-                  };
-                });
-              }
+          .join("");
+      } else if (models.length) {
+        modelsHtml = models
+          .map(function (m) {
+            return "<code class=\"me-1\">" + escapeHtml(String(m)) + "</code>";
+          })
+          .join("");
+      } else {
+        modelsHtml = '<span class="text-muted">None linked</span>';
+      }
+
+      var dsSection = "";
+      if (datasets.length) {
+        var dsRows = datasets
+          .map(function (ds, i) {
+            var dn = ds.name || ds.id || "Dataset " + (i + 1);
+            var dc = Array.isArray(ds.documents) ? ds.documents.length : 0;
+            return (
+              "<tr><td>" +
+              escapeHtml(String(dn)) +
+              "</td><td>" +
+              dc +
+              "</td></tr>"
+            );
+          })
+          .join("");
+        dsSection =
+          '<h6 class="border-bottom pb-2 mt-4">Datasets</h6>' +
+          '<div class="table-responsive">' +
+          '<table class="table table-sm table-bordered mb-0">' +
+          "<thead class=\"table-light\"><tr><th>Name / ID</th><th>Documents</th></tr></thead>" +
+          "<tbody>" +
+          dsRows +
+          "</tbody></table></div>";
+      } else {
+        dsSection =
+          '<p class="text-muted small mt-3 mb-0">No per-dataset breakdown is included in this corpus record (documents may still be listed at the corpus level).</p>';
+      }
+
+      var descRow = "";
+      if (desc) {
+        descRow =
+          '  <dt class="col-sm-3">Description</dt><dd class="col-sm-9">' +
+          escapeHtml(String(desc)) +
+          "</dd>";
+      }
+
+      return (
+        '<dl class="row mb-0">' +
+        '  <dt class="col-sm-3">Name</dt><dd class="col-sm-9">' +
+        escapeHtml(String(name)) +
+        "</dd>" +
+        '  <dt class="col-sm-3">Corpus ID</dt><dd class="col-sm-9"><code class="small">' +
+        escapeHtml(String(id)) +
+        "</code></dd>" +
+        descRow +
+        '  <dt class="col-sm-3">Created</dt><dd class="col-sm-9">' +
+        escapeHtml(String(created)) +
+        "</dd>" +
+        '  <dt class="col-sm-3">Storage</dt><dd class="col-sm-9">' +
+        escapeHtml(String(loc)) +
+        "</dd>" +
+        '  <dt class="col-sm-3">Owner</dt><dd class="col-sm-9">' +
+        ownerHtml +
+        "</dd>" +
+        '  <dt class="col-sm-3">Linked models</dt><dd class="col-sm-9">' +
+        modelsHtml +
+        "</dd>" +
+        '  <dt class="col-sm-3">Documents</dt><dd class="col-sm-9">' +
+        docsTop +
+        " at corpus level</dd>" +
+        "</dl>" +
+        dsSection
+      );
+    }
+
+    function openCorpusDetails(corpusId) {
+      if (!corpusId) return;
+      var body = dom.corpusDetailBody;
+      var titleEl = dom.corpusDetailTitle;
+      if (titleEl) titleEl.textContent = "Corpus details";
+      if (body) {
+        body.innerHTML =
+          '<div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading…</span></div></div>';
+      }
+      if (dom.corpusDetailModal) dom.corpusDetailModal.show();
+
+      fetch("/getCorpus/" + encodeURIComponent(corpusId), {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.text().then(function (t) {
+              throw new Error(res.status + " " + (t || res.statusText));
+            });
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          var displayName =
+            data &&
+            (data.name ||
+              (data.metadata && data.metadata.name) ||
+              corpusId);
+          if (titleEl) titleEl.textContent = "Corpus: " + String(displayName);
+          if (body) body.innerHTML = renderCorpusDetail(data);
+        })
+        .catch(function (err) {
+          console.error(err);
+          if (body) {
+            body.innerHTML =
+              '<p class="text-danger mb-0">Could not load corpus details.</p>' +
+              '<p class="small text-muted mb-0">' +
+              escapeHtml(err.message || String(err)) +
+              "</p>";
+          }
+        });
+    }
+
+    var __nameToDelete = null;
+    function openDeleteConfirm(name) {
+      __nameToDelete = name;
+      if (dom.delNameSpan) dom.delNameSpan.textContent = name;
+      if (dom.confirmDeleteModal) dom.confirmDeleteModal.show();
+    }
+
+    function onConfirmDelete() {
+      if (!__nameToDelete) return;
+      if (dom.confirmDeleteBtn) dom.confirmDeleteBtn.disabled = true;
+      console.log("Deleting corpus:", __nameToDelete);
+      fetch("/delete-corpus/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corpus_name: __nameToDelete }),
+      })
+        .then(function (res) {
+          var ct = res.headers.get("content-type") || "";
+          if (ct.indexOf("application/json") !== -1) {
+            return res.json().then(function (body) {
               return {
                 ok: res.ok,
-                body: null,
+                body: body,
                 status: res.status,
                 statusText: res.statusText,
               };
-            })
-            .then(function (resp) {
-              if (!resp.ok) {
-                var msg =
-                  (resp.body && (resp.body.message || resp.body.error)) ||
-                  resp.status +
-                    " " +
-                    resp.statusText;
-                alert("Error: " + msg);
-                return;
-              }
-              loadAndRender();
-              if (dom.confirmDeleteModal) dom.confirmDeleteModal.hide();
-            })
-            .catch(function (err) {
-              console.error(err);
-              alert("Failed to delete the corpus.");
-            })
-            .finally(function () {
-              if (dom.confirmDeleteBtn) dom.confirmDeleteBtn.disabled = false;
-              __nameToDelete = null;
             });
-        }
-      })();
-    </script>
-  </body>
-</html>
+          }
+          return {
+            ok: res.ok,
+            body: null,
+            status: res.status,
+            statusText: res.statusText,
+          };
+        })
+        .then(function (resp) {
+          if (!resp.ok) {
+            var msg =
+              (resp.body && (resp.body.message || resp.body.error)) ||
+              resp.status +
+                " " +
+                resp.statusText;
+            alert("Error: " + msg);
+            return;
+          }
+          loadAndRender();
+          if (dom.confirmDeleteModal) dom.confirmDeleteModal.hide();
+        })
+        .catch(function (err) {
+          console.error(err);
+          alert("Failed to delete the corpus.");
+        })
+        .finally(function () {
+          if (dom.confirmDeleteBtn) dom.confirmDeleteBtn.disabled = false;
+          __nameToDelete = null;
+        });
+    }
+  })();
+</script>
+{% endblock %}

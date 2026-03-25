@@ -162,7 +162,7 @@ TOVA_ADMIN_EMAILS=
 | Service | Internal port | Default host port | Description |
 | --- | --- | --- | --- |
 | api | 11000 | `API_PORT` (11000) | FastAPI backend |
-| web | 8080 | `WEB_PORT` (8080) | Flask web UI |
+| web | 8080 | `WEB_PORT` (8080) | Django web UI |
 | postgres | 5432 | 5432 | User and session storage |
 | solr | 8983 | 8983 | Apache Solr search engine |
 | solr-api | 8001 | 8001 | Solr query adapter |

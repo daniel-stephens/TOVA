@@ -71,21 +71,18 @@
         Set up TOVA so you can start organizing and exploring your text data.
       </p>
 
-      <!-- Flash messages (from Flask) -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="mb-3">
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} py-2 mb-2" role="alert">
-                {{ message }}
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
+      {% if messages %}
+        <div class="mb-3">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} py-2 mb-2" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
 
-      <!-- Signup form -->
-      <form method="POST" action="{{ url_for('signup') }}" id="signupForm" novalidate>
+      <form method="POST" action="{% url_for 'signup' %}" id="signupForm" novalidate>
+        {% csrf_token %}
         <!-- Name -->
         <div class="mb-3">
           <label for="signupName" class="form-label">Full name</label>
@@ -183,7 +180,7 @@
         <!-- Login link -->
         <p class="text-center small text-muted mb-0">
           Already have an account?
-          <a href="{{ url_for('login') }}" class="text-decoration-none">Sign in</a>
+          <a href="{% url_for 'login' %}" class="text-decoration-none">Sign in</a>
         </p>
       </form>
     </div>

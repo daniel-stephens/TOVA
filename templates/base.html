@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}TOVA - Topic Visualization{% endblock %}</title>
 
-  {% if csrf_token is defined %}
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% if csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token }}">
   {% endif %}
 
   <link
@@ -24,7 +24,9 @@
       display: flex;
       flex-direction: column;
       min-height: 100vh;
+      background: #f8fafc;
     }
+
     .hero {
       flex: 1;
       display: flex;
@@ -33,18 +35,22 @@
       text-align: left;
       padding: 30px;
     }
+
     .hero img {
       max-width: 40%;
       height: auto;
       border-radius: 10px;
     }
+
     .hero-content {
       max-width: 50%;
       padding-left: 30px;
     }
+
     footer {
       margin-top: auto;
     }
+
     @media (max-width: 576px) {
       .hero h1 {
         font-size: 1.75rem;
@@ -54,11 +60,252 @@
       }
     }
 
+    .navbar-brand.navbar-brand--active {
+      color: #0d6efd !important;
+      font-weight: 800;
+    }
+
     .navbar-nav .nav-link.active {
       font-weight: 600;
     }
+
     .navbar-nav .nav-link:hover {
       text-decoration: underline;
+    }
+
+    .tova-profile-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.6rem 0.25rem 0.35rem;
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      color: #0f172a;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .tova-profile-trigger:hover {
+      background: #f8fafc;
+      border-color: rgba(37, 99, 235, 0.55);
+    }
+
+    .tova-profile-trigger:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+
+    .tova-profile-trigger::after {
+      display: none;
+    }
+
+    .tova-profile-avatar {
+      width: 2.875rem;
+      height: 2.875rem;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%);
+      color: #fff;
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.95);
+    }
+
+    .tova-profile-trigger:hover .tova-profile-avatar {
+      filter: brightness(1.05);
+    }
+
+    .tova-profile-label {
+      min-width: 0;
+    }
+
+    .tova-profile-label .tova-profile-title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .tova-profile-label .tova-profile-hint {
+      font-size: 0.7rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .tova-profile-chevron {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-left: 0.125rem;
+    }
+
+    .tova-profile-trigger .tova-profile-title {
+      max-width: 9.5rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Shrink-wrap the trigger so the menu aligns to the same horizontal bounds as the pill */
+    .tova-account-dropdown {
+      position: relative;
+      width: max-content;
+      max-width: 100%;
+    }
+
+    .tova-account-dropdown > .tova-account-menu.dropdown-menu-end {
+      top: 100%;
+      right: 0;
+      left: auto;
+      margin-top: 0.35rem;
+    }
+
+    @media (max-width: 991.98px) {
+      .navbar-collapse .tova-account-dropdown {
+        width: 100%;
+        max-width: none;
+        margin-top: 0.35rem;
+      }
+
+      .navbar-collapse .tova-account-dropdown .tova-profile-trigger {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .navbar-collapse .tova-account-dropdown > .tova-account-menu {
+        width: 100%;
+        min-width: 0;
+        right: 0;
+        left: 0;
+        top: 100%;
+        margin-top: 0.35rem;
+      }
+    }
+
+    .tova-account-menu {
+      min-width: 17rem;
+      padding: 0.35rem 0;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      border-radius: 0.75rem;
+      box-shadow: 0 14px 44px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.04);
+    }
+
+    .tova-account-menu .tova-account-menu-head {
+      list-style: none;
+      padding: 0.75rem 1rem 0.9rem;
+      margin: 0 0 0.25rem;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+      border-radius: 0.75rem 0.75rem 0 0;
+    }
+
+    .tova-account-menu .tova-account-menu-head .tova-account-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.35rem;
+    }
+
+    .tova-account-menu .tova-account-menu-head .tova-account-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .tova-account-menu .tova-account-menu-head .tova-account-email {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-top: 0.2rem;
+      word-break: break-word;
+    }
+
+    .tova-account-menu .dropdown-header {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #94a3b8 !important;
+      padding: 0.55rem 1rem 0.35rem;
+      margin-bottom: 0;
+    }
+
+    .tova-account-menu .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.85rem;
+      margin: 0 0.35rem;
+      border-radius: 0.45rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #0f172a;
+    }
+
+    .tova-account-menu .dropdown-item i {
+      font-size: 1.05rem;
+      width: 1.4rem;
+      text-align: center;
+      flex-shrink: 0;
+      opacity: 0.88;
+      color: #475569;
+    }
+
+    .tova-account-menu .dropdown-item:hover,
+    .tova-account-menu .dropdown-item:focus {
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+
+    .tova-account-menu .dropdown-item:active {
+      background-color: #e2e8f0;
+    }
+
+    .tova-account-menu .dropdown-item.tova-account-item-danger {
+      color: #b91c1c;
+    }
+
+    .tova-account-menu .dropdown-item.tova-account-item-danger i {
+      color: #dc2626;
+    }
+
+    .tova-account-menu .dropdown-item.tova-account-item-danger:hover,
+    .tova-account-menu .dropdown-item.tova-account-item-danger:focus {
+      background-color: #fef2f2;
+      color: #991b1b;
+    }
+
+    .tova-account-menu .dropdown-divider {
+      margin: 0.35rem 0.65rem;
+      border-color: rgba(15, 23, 42, 0.08);
+    }
+
+    .tova-account-menu .tova-account-item-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
+      min-width: 0;
+    }
+
+    .tova-account-menu .tova-account-item-text .tova-account-item-title {
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .tova-account-menu .tova-account-item-text .tova-account-item-desc {
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: #64748b;
+      line-height: 1.3;
     }
   </style>
 
@@ -66,9 +313,11 @@
 </head>
 <body>
 
+  {% if user.is_authenticated %}
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">TOVA</a>
+      <a class="navbar-brand fw-bold{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
+         href="{% url_for 'home' %}">TOVA</a>
 
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
               aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,79 +325,190 @@
       </button>
 
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <ul class="navbar-nav">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'load_data_page' %}active{% endif %}"
-               href="{{ url_for('load_data_page') }}">
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_data_page' %}active{% endif %}"
+               href="{% url_for 'load_data_page' %}">
               Upload Data
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'loadModel' %}active{% endif %}"
-               href="{{ url_for('loadModel') }}">
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_corpus_page' %}active{% endif %}"
+               href="{% url_for 'load_corpus_page' %}">
+              Corpus library
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'loadModel' %}active{% endif %}"
+               href="{% url_for 'loadModel' %}">
               Initiate Training
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'trained_models' %}active{% endif %}"
-               href="{{ url_for('trained_models') }}">
-              Model Repository
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
+               href="{% url_for 'trained_models' %}">
+              Trained topic models
             </a>
           </li>
-          {% if user and user.get('is_admin') %}
+          {% if user.is_staff %}
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'admin_page' %}active{% endif %}"
-               href="{{ url_for('admin_page') }}">
+            <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
+               href="{% url 'admin:index' %}">
               Admin
             </a>
           </li>
           {% endif %}
+          {# Staff tools page removed; use Django admin /admin/tova/ console instead. #}
         </ul>
 
         <div class="d-flex align-items-center gap-2">
-          {% if user %}
-            <span class="navbar-text small text-muted d-none d-md-inline">
-              Hi, {{ user.name }}
-            </span>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#llmSettingsModal">
-              <i class="bi bi-cpu me-1"></i>LLM Settings
+          <div class="dropdown tova-account-dropdown">
+            <button class="btn tova-profile-trigger dropdown-toggle" type="button" id="profileMenu"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                    aria-label="Account menu"
+                    title="Open account menu">
+              <span class="tova-profile-avatar" aria-hidden="true">
+                {% if user.name %}
+                  {{ user.name|slice:":1"|upper }}
+                {% else %}
+                  {{ user.email|slice:":1"|upper }}
+                {% endif %}
+              </span>
+              <span class="tova-profile-label d-none d-md-flex flex-column align-items-start text-start">
+                <span class="tova-profile-title">{{ user.name|default:user.email }}</span>
+                <span class="tova-profile-hint">Settings &amp; sign out</span>
+              </span>
+              <i class="bi bi-chevron-down tova-profile-chevron" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#configModal">
-              Config Editor
-            </button>
-            <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
-              Logout
-            </a>
-          {% else %}
-            <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">
-              Login
-            </a>
-            <a href="{{ url_for('signup') }}" class="btn btn-success btn-sm">
-              Sign up
-            </a>
-          {% endif %}
+            <ul class="dropdown-menu dropdown-menu-end tova-account-menu" aria-labelledby="profileMenu">
+              <li class="tova-account-menu-head">
+                <div class="tova-account-label">Signed in</div>
+                {% if user.name %}
+                <div class="tova-account-name">{{ user.name }}</div>
+                <div class="tova-account-email">{{ user.email }}</div>
+                {% else %}
+                <div class="tova-account-name">{{ user.email }}</div>
+                {% endif %}
+                {% if user.is_staff %}
+                <div class="mt-2"><span class="badge rounded-pill text-bg-primary text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.04em;">Admin</span></div>
+                {% endif %}
+              </li>
+              <li><h6 class="dropdown-header">Models &amp; app</h6></li>
+              <li>
+                <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#llmSettingsModal">
+                  <i class="bi bi-sliders" aria-hidden="true"></i>
+                  <span class="tova-account-item-text">
+                    <span class="tova-account-item-title">LLM settings</span>
+                    <span class="tova-account-item-desc">Providers and models for labeling &amp; chat</span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#configModal">
+                  <i class="bi bi-gear-fill" aria-hidden="true"></i>
+                  <span class="tova-account-item-text">
+                    <span class="tova-account-item-title">Config editor</span>
+                    <span class="tova-account-item-desc">Global YAML defaults and preprocessing</span>
+                  </span>
+                </button>
+              </li>
+              {% if user.is_staff %}
+              <li>
+                <a class="dropdown-item" href="{% url 'admin:index' %}">
+                  <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                  <span class="tova-account-item-text">
+                    <span class="tova-account-item-title">Django admin</span>
+                    <span class="tova-account-item-desc">Users, audit log, and data in the database</span>
+                  </span>
+                </a>
+              </li>
+              {% endif %}
+              {# Staff tools page removed; use Django admin /admin/tova/ console instead. #}
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item tova-account-item-danger" href="{% url_for 'logout' %}">
+                  <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                  <span class="tova-account-item-text">
+                    <span class="tova-account-item-title">Log out</span>
+                    <span class="tova-account-item-desc">End this session on this device</span>
+                  </span>
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
   </nav>
+  {% elif not request.resolver_match or request.resolver_match.url_name != 'home' %}
+  <nav class="navbar navbar-light bg-light border-bottom shadow-sm">
+    <div class="container py-1">
+      <a class="navbar-brand fw-bold mb-0" href="{% url_for 'home' %}">TOVA</a>
+      <div class="d-flex align-items-center gap-2">
+        <a href="{% url_for 'login' %}" class="btn btn-outline-primary btn-sm">Sign in</a>
+        <a href="{% url_for 'signup' %}" class="btn btn-primary btn-sm">Sign up</a>
+      </div>
+    </div>
+  </nav>
+  {% endif %}
 
+  {% if messages %}
   <div class="container mt-3">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} py-2 mb-2" role="alert">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} py-2 mb-2" role="alert">
+        {{ message }}
+      </div>
+    {% endfor %}
   </div>
+  {% endif %}
 
   <main class="flex-grow-1">
     {% block content %}{% endblock %}
   </main>
 
-  {% if user %}
+  <div class="modal fade" id="howToUseModal" tabindex="-1" aria-labelledby="howToUseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5 fw-bold flex-grow-1 text-center pe-4 mb-0" id="howToUseModalLabel">How to use TOVA</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body px-4 pb-4">
+          <p class="text-muted small mb-4 mx-auto text-center" style="max-width: 32rem;">
+            Follow the same order as the shortcuts on the home page and in the top navigation: upload, corpus library, training, then trained models.
+          </p>
+          <ol class="small mx-auto ps-3 mb-0 text-center list-unstyled" style="max-width: 36rem;">
+            <li class="mb-3 text-start">
+              <strong class="d-block">1. Upload Data</strong>
+              <span class="text-muted">Add documents and validate them so they are ready for preprocessing and training jobs.</span>
+            </li>
+            <li class="mb-3 text-start">
+              <strong class="d-block">2. Corpus library</strong>
+              <span class="text-muted">Review saved corpora, versions, and metadata. Pick a corpus when you start training.</span>
+            </li>
+            <li class="mb-3 text-start">
+              <strong class="d-block">3. Initiate Training</strong>
+              <span class="text-muted">Choose a classical or LLM-assisted pipeline, set parameters, and start a training run. Monitor progress from the job view.</span>
+            </li>
+            <li class="text-start">
+              <strong class="d-block">4. Trained topic models</strong>
+              <span class="text-muted">Open a completed model for dashboards, theme summaries, document tables, and exploration.</span>
+            </li>
+          </ol>
+          <p class="text-muted small mt-4 mb-0 mx-auto text-start" style="max-width: 36rem;">
+            <strong class="text-body">LLM configuration</strong>
+            <span class="d-block mt-1">When signed in, open your <strong>account menu</strong> (top right) and choose <strong>LLM settings</strong> to pick providers, models, and API options used for LLM-assisted training, topic labeling, summarization, and chat.</span>
+          </p>
+          <p class="text-muted small mt-3 mb-0 mx-auto text-start" style="max-width: 36rem;">
+            <strong class="text-body">Global app configuration</strong>
+            <span class="d-block mt-1">In the same menu, <strong>Config editor</strong> opens global defaults (preprocessing, classical topic modeling, and related YAML-backed options) stored with your account.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if user.is_authenticated %}
 <div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <form class="modal-content" id="configForm">
@@ -676,15 +1036,21 @@
 </div>
 {% endif %}
 
+  {% if user.is_authenticated or not request.resolver_match or request.resolver_match.url_name != 'home' %}
   <footer class="bg-dark text-white text-center py-2">
-    <p class="mb-0">&copy; 2025 TOVA. Internal Research Tool.</p>
+    <p class="mb-0">TOVA 2026 · Internal research tool</p>
   </footer>
+  {% else %}
+  <footer class="border-top mt-auto py-2 bg-transparent">
+    <p class="mb-0 text-center small text-muted">TOVA 2026 · Internal research tool</p>
+  </footer>
+  {% endif %}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
   
 
-{% if user %}
+{% if user.is_authenticated %}
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const configForm = document.getElementById('configForm');

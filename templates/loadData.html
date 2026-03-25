@@ -70,22 +70,109 @@
     box-shadow: 0 10px 40px rgba(0,0,0,.25);
     display: flex; flex-direction: column; align-items: center;
   }
+
+  /* Let <main> shrink so this page can fill the viewport without double scrollbars */
+  main.flex-grow-1 {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .min-h-0 {
+    min-height: 0;
+  }
+
+  /* Viewport-fit layout: one scroll area inside the card, not the whole page */
+  .load-data-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    --load-data-offset: 10.5rem;
+    max-height: calc(100vh - var(--load-data-offset));
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0 0.75rem;
+    box-sizing: border-box;
+  }
+
+  /* Keep the upload card a readable width on large monitors (fluid row was ~75vw) */
+  .load-data-card-wrap {
+    width: 100%;
+    max-width: 46rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .load-data-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .load-data-card > .card-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0.875rem 1rem;
+    overflow: hidden;
+  }
+  .load-data-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 0.25rem;
+  }
+  .load-data-table-wrap {
+    max-height: min(32vh, 260px);
+    overflow: auto;
+    border-radius: 0.375rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .load-data-table-wrap .table {
+    margin-bottom: 0;
+  }
+  .load-data-actions {
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fff;
+  }
+  @media (max-width: 767.98px) {
+    main.flex-grow-1 {
+      display: block;
+      min-height: unset;
+    }
+    .load-data-shell {
+      flex: unset;
+      min-height: unset;
+      max-height: none;
+    }
+    .load-data-card {
+      min-height: unset;
+    }
+    .load-data-card > .card-body {
+      overflow: visible;
+    }
+    .load-data-scroll {
+      overflow: visible;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="bg-light py-5">
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-md-8">
-        <div class="card shadow">
+<section class="load-data-shell bg-light min-h-0">
+  <div class="container-fluid px-3 flex-grow-1 d-flex flex-column min-h-0">
+    <div class="row justify-content-center flex-grow-1 min-h-0">
+      <div class="col-12 load-data-card-wrap d-flex flex-column min-h-0">
+        <div class="card shadow load-data-card flex-grow-1">
           <div class="card-body">
-            <h2 class="card-title text-center mb-4">Upload Files</h2>
+            <h1 class="h4 card-title text-center mb-2">Upload data</h1>
 
+            <div class="load-data-scroll">
             <!-- Upload form (handled entirely in JS) -->
             <form id="uploadForm" enctype="multipart/form-data">
               <!-- Upload Type -->
-              <div class="mb-3">
+              <div class="mb-2">
                 <label class="form-label">Upload Type <span class="text-danger">*</span></label><br/>
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="uploadType" id="uploadFile" value="file" checked>
@@ -98,7 +185,7 @@
               </div>
 
               <!-- Single file input -->
-              <div class="mb-3">
+              <div class="mb-2">
                 <input 
                   class="form-control" 
                   type="file" 
@@ -109,7 +196,7 @@
               </div>
 
               <!-- Folder input -->
-              <div class="mb-3">
+              <div class="mb-2">
                 <input 
                   class="form-control" 
                   type="file" 
@@ -123,28 +210,28 @@
                 >
               </div>
 
-              <div id="file-feedback" class="text-danger mb-3" aria-live="polite"></div>
+              <div id="file-feedback" class="text-danger mb-2 small" aria-live="polite"></div>
 
               <!-- Single-file mapping -->
-              <div id="dynamicSingle" class="mb-3">
-                <label for="idColumn" class="form-label mt-3">ID Column <span class="text-danger">*</span></label>
+              <div id="dynamicSingle" class="mb-2">
+                <label for="idColumn" class="form-label mt-1 mb-1">ID Column <span class="text-danger">*</span></label>
                 <select class="form-select" id="idColumn" name="id_column" required>
                   <option value="" disabled selected>Select id column</option>
                 </select>
 
-                <label for="textColumn" class="form-label">Text Column Name <span class="text-danger">*</span></label>
+                <label for="textColumn" class="form-label mb-1">Text Column Name <span class="text-danger">*</span></label>
                 <select class="form-select" id="textColumn" name="text_column" required>
                   <option value="" disabled selected>Select text column</option>
                 </select>
 
-                <label for="labelColumn" class="form-label mt-3">Label Column</label>
+                <label for="labelColumn" class="form-label mt-2 mb-1">Label Column</label>
                 <select class="form-select" id="labelColumn" name="label_column">
                   <option value="" disabled selected>Select label column</option>
                 </select>
               </div>
 
               <!-- Folder mapping wizard -->
-              <div id="dynamicFolder" class="mb-3" style="display:none;">
+              <div id="dynamicFolder" class="mb-2" style="display:none;">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                   <div>
                     <span class="badge text-bg-secondary">Mapping</span>
@@ -153,29 +240,29 @@
                   <small id="wizardCounter" class="text-muted">0 / 0</small>
                 </div>
 
-                <div class="progress mb-3" role="progressbar" aria-label="Mapping progress" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress mb-2" style="height:6px" role="progressbar" aria-label="Mapping progress" aria-valuemin="0" aria-valuemax="100">
                   <div class="progress-bar" id="mappingProgress" style="width:0%">0%</div>
                 </div>
 
-                <div class="row g-3">
+                <div class="row g-2">
                   <div class="col-12">
-                    <label for="idColumnFolder" class="form-label">ID Column <span class="text-danger">*</span></label>
+                    <label for="idColumnFolder" class="form-label mb-1">ID Column <span class="text-danger">*</span></label>
                     <select class="form-select" id="idColumnFolder" aria-describedby="idHelp"></select>
                     <div id="idHelp" class="form-text">Unique identifier in this file.</div>
                   </div>
                   <div class="col-12">
-                    <label for="textColumnFolder" class="form-label">Text Column Name <span class="text-danger">*</span></label>
+                    <label for="textColumnFolder" class="form-label mb-1">Text Column Name <span class="text-danger">*</span></label>
                     <select class="form-select" id="textColumnFolder" aria-describedby="textHelp"></select>
                     <div id="textHelp" class="form-text">Column containing the main content.</div>
                   </div>
                   <div class="col-12">
-                    <label for="labelColumnFolder" class="form-label">Label Column (optional)</label>
+                    <label for="labelColumnFolder" class="form-label mb-1">Label Column (optional)</label>
                     <select class="form-select" id="labelColumnFolder" aria-describedby="labelHelp"></select>
                     <div id="labelHelp" class="form-text">Category/label if present.</div>
                   </div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="d-flex justify-content-between align-items-center mt-2">
                   <button type="button" id="prevMapBtn" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Previous
                   </button>
@@ -186,13 +273,13 @@
                   </div>
                 </div>
 
-                <div class="form-text mt-2" id="wizardHint">
+                <div class="form-text mt-1 small" id="wizardHint">
                   Fill the required fields for each file. Continue will unlock once all files are mapped.
                 </div>
               </div>
 
-              <div class="mb-3">
-                <label for="corpusName" class="form-label">Corpus Name</label>
+              <div class="mb-2">
+                <label for="corpusName" class="form-label mb-1">Corpus Name</label>
                 <input
                   type="text"
                   class="form-control"
@@ -205,10 +292,11 @@
             </form>
 
             <!-- Selected Files Table -->
-            <div class="mt-4">
-              <h4>Selected Files:</h4>
-              <table class="table table-bordered table-striped">
-                <thead>
+            <div class="mt-3">
+              <h2 class="h6 text-secondary mb-2">Selected files</h2>
+              <div class="load-data-table-wrap table-responsive">
+              <table class="table table-sm table-bordered table-striped align-middle">
+                <thead class="table-light sticky-top">
                   <tr>
                     <th>#</th>
                     <th>File Name</th>
@@ -218,19 +306,28 @@
                   </tr>
                 </thead>
                 <tbody id="selected-files-body">
-                  <tr><td colspan="5" class="text-center">No files selected yet.</td></tr>
+                  <tr><td colspan="5" class="text-center small text-muted py-3">No files selected yet.</td></tr>
                 </tbody>
               </table>
+              </div>
             </div>
+            </div><!-- /.load-data-scroll -->
 
-            <div class="d-flex justify-content-end">
-              <!-- JS enables/disables this + handles click -->
-              <a href="{{ url_for('loadModel') }}"
+            <div class="load-data-actions d-flex justify-content-end gap-2 flex-wrap">
+              <!-- JS enables/disables these + handles click -->
+              <a href="{% url_for 'load_corpus_page' %}"
+                 class="btn btn-outline-secondary disabled"
+                 id="saveCorpusBtn"
+                 tabindex="-1"
+                 aria-disabled="true">
+                Save corpus only
+              </a>
+              <a href="{% url_for 'loadModel' %}"
                  class="btn btn-primary disabled"
                  id="continueBtn"
                  tabindex="-1"
                  aria-disabled="true">
-                Continue
+                Save and train
               </a>
             </div>
 
@@ -335,6 +432,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const selectedTbody = document.getElementById('selected-files-body');
   const continueBtn   = document.getElementById("continueBtn");
+  const saveCorpusBtn = document.getElementById("saveCorpusBtn");
   const feedback      = document.getElementById('file-feedback');
 
   const prevMapBtn  = document.getElementById('prevMapBtn');
@@ -374,6 +472,19 @@ document.addEventListener("DOMContentLoaded", function () {
       continueBtn.setAttribute("aria-disabled", "true");
       continueBtn.setAttribute("tabindex", "-1");
     }
+    setSaveOnlyEnabled(enabled);
+  }
+  function setSaveOnlyEnabled(enabled) {
+    if (!saveCorpusBtn) return;
+    if (enabled) {
+      saveCorpusBtn.classList.remove("disabled");
+      saveCorpusBtn.removeAttribute("aria-disabled");
+      saveCorpusBtn.removeAttribute("tabindex");
+    } else {
+      saveCorpusBtn.classList.add("disabled");
+      saveCorpusBtn.setAttribute("aria-disabled", "true");
+      saveCorpusBtn.setAttribute("tabindex", "-1");
+    }
   }
   setContinueEnabled(false);
 
@@ -402,7 +513,7 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
   function clearSelectedTable() {
-    selectedTbody.innerHTML = '<tr><td colspan="5" class="text-center">No files selected yet.</td></tr>';
+    selectedTbody.innerHTML = '<tr><td colspan="5" class="text-center small text-muted py-3">No files selected yet.</td></tr>';
   }
   function resetSingleSelects() {
     textSelectSingle.innerHTML  = '<option value="" disabled selected>Select text column</option>';
@@ -902,7 +1013,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ===============================
   const SAVE_DATASET_URL = "/data/create/dataset/"; 
   const SAVE_CORPUS_URL  = "/data/create/corpus/";  
-  window.currentUserId = {{ current_user_id|tojson }};
+  window.currentUserId = {{ current_user_id_js|safe }};
 
   function setBusy(on, message = "Processing... Please wait.") {
     const overlay = document.getElementById('loader-overlay');
@@ -986,7 +1097,7 @@ document.addEventListener("DOMContentLoaded", function () {
     };
   }
 
-  async function onContinueClick(e) {
+  async function onContinueClick(e, redirectUrl = "{% url_for 'loadModel' %}") {
     e.preventDefault();
     if (continueBtn.classList.contains('disabled')) return;
 
@@ -1090,7 +1201,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       setBusy(false);
-      window.location.href = "{{ url_for('loadModel') }}";
+      window.location.href = redirectUrl;
     } catch (err) {
       console.error(err);
       setBusy(false);
@@ -1237,6 +1348,15 @@ document.addEventListener("DOMContentLoaded", function () {
       const ok = await validateCorpusNameOnSubmit();
       if (!ok) return;
       await onContinueClick(e);
+    }, { passive: false });
+  }
+
+  if (saveCorpusBtn) {
+    saveCorpusBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const ok = await validateCorpusNameOnSubmit();
+      if (!ok) return;
+      await onContinueClick(e, "{% url_for 'load_corpus_page' %}");
     }, { passive: false });
   }
 }); // DOMContentLoaded

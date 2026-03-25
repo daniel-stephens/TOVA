@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Trained Models - TOVA{% endblock %}
+{% block title %}Trained Topic Models - TOVA{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -55,18 +55,30 @@
     border: 1px solid #e7ebf0;
     background: linear-gradient(135deg, #ffffff, #f6f9fc);
   }
+  .xsmall { font-size: 0.75rem; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-sm py-4">
   <div class="mb-4">
-    <h2 class="mb-2 fw-bold">Model Repository</h2>
+    <h2 class="mb-2 fw-bold">Trained Topic Models</h2>
     <p class="text-muted mb-2">Browse and manage your trained topic models. Open dashboards to explore topics, view visualizations, and analyze results.</p>
     <div class="d-flex flex-wrap gap-2">
       <span class="pill"><span id="modelCount">0</span> models</span>
       <span class="pill"><span id="corpusCount">0</span> corpora</span>
     </div>
+  </div>
+
+  <div id="trainingJobsCard" class="container-sm mb-3 p-3 bg-white rounded shadow-sm border border-light-subtle d-none">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0 fw-semibold">Training in progress</h6>
+      <button id="clearJobsBtn" class="btn btn-outline-secondary btn-sm">Clear finished</button>
+    </div>
+    <div class="small text-muted mb-2">
+      Track background training jobs while exploring trained models.
+    </div>
+    <div id="trainingJobsList" class="d-flex flex-column gap-2"></div>
   </div>
 
   <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
@@ -82,7 +94,7 @@
         </select>
       </div>
       <div class="col-sm-12 col-lg-auto ms-lg-auto">
-        <a class="btn btn-primary btn-sm" href="{{ url_for('loadModel') }}">
+        <a class="btn btn-primary btn-sm" href="{% url_for 'loadModel' %}">
           Train new model
         </a>
       </div>
@@ -97,7 +109,7 @@
     <div id="noModels" class="alert alert-warning text-center mt-5 d-none">
       No trained models found.
       <div class="mt-2">
-        <a class="btn btn-sm btn-primary" href="{{ url_for('loadModel') }}">Train a model</a>
+        <a class="btn btn-sm btn-primary" href="{% url_for 'loadModel' %}">Train a model</a>
       </div>
     </div>
   </div>
@@ -112,8 +124,12 @@
   const noModels     = document.getElementById("noModels");
   const searchInput  = document.getElementById("modelSearch");
   const corpusFilter = document.getElementById("corpusFilter");
+  const jobsCard = document.getElementById("trainingJobsCard");
+  const jobsList = document.getElementById("trainingJobsList");
+  const clearJobsBtn = document.getElementById("clearJobsBtn");
 
   let allModels = [];
+  const JOBS_KEY = "tova_training_jobs";
 
   const escapeHtml = (str) =>
     String(str ?? "").replace(/[&<>\"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
@@ -312,6 +328,91 @@
     wireActions();
   }
 
+  function statusText(job) {
+    const status = String(job?.status || "starting").toLowerCase();
+    const progress = Number(job?.progress);
+    const hasProgress = Number.isFinite(progress);
+    if (status === "queued") return "Queued";
+    if (status === "running" && hasProgress) return `Running (${Math.round(progress <= 1 ? progress * 100 : progress)}%)`;
+    if (status === "running" || status === "starting") return "Running";
+    if (status === "succeeded" || status === "completed" || status === "finished" || status === "success") return "Completed";
+    if (status === "failed" || status === "error") return "Failed";
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+
+  function readJobs() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(JOBS_KEY) || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeJobs(jobs) {
+    localStorage.setItem(JOBS_KEY, JSON.stringify(jobs.slice(0, 25)));
+  }
+
+  function isDoneStatus(s) {
+    const status = String(s || "").toLowerCase();
+    return ["succeeded", "completed", "finished", "success", "failed", "error"].includes(status);
+  }
+
+  function renderJobs(jobs) {
+    if (!jobsCard || !jobsList) return;
+    if (!jobs.length) {
+      jobsCard.classList.add("d-none");
+      jobsList.innerHTML = "";
+      return;
+    }
+    jobsCard.classList.remove("d-none");
+    jobsList.innerHTML = jobs.map((j) => {
+      const st = statusText(j);
+      const created = fmtDate(j.created_at);
+      const badgeClass = isDoneStatus(j.status)
+        ? (String(j.status || "").toLowerCase().includes("fail") || String(j.status || "").toLowerCase() === "error" ? "text-bg-danger" : "text-bg-success")
+        : "text-bg-primary";
+      return `
+        <div class="border rounded p-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <div class="fw-semibold small">${escapeHtml(j.model_name || j.model_id || j.job_id || "Training job")}</div>
+            <div class="text-muted xsmall">Job: <span class="font-monospace">${escapeHtml(j.job_id || "—")}</span> · Started: ${escapeHtml(created)}</div>
+          </div>
+          <span class="badge ${badgeClass}">${escapeHtml(st)}</span>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function refreshJobs() {
+    const jobs = readJobs();
+    if (!jobs.length) {
+      renderJobs([]);
+      return;
+    }
+    const updated = await Promise.all(jobs.map(async (job) => {
+      if (!job?.job_id || isDoneStatus(job.status)) return job;
+      try {
+        const r = await fetch(`/status/jobs/${encodeURIComponent(job.job_id)}`, { cache: "no-store" });
+        if (!r.ok) return job;
+        const d = await r.json().catch(() => ({}));
+        const next = { ...job };
+        if (d.status) next.status = d.status;
+        if (d.progress != null) next.progress = d.progress;
+        if (d.done) next.status = "completed";
+        if (d.error) {
+          next.status = "error";
+          next.error = String(d.error);
+        }
+        return next;
+      } catch {
+        return job;
+      }
+    }));
+    writeJobs(updated);
+    renderJobs(updated);
+  }
+
   async function loadModels() {
     try {
       const res = await fetch("/get-trained-models", { cache: "no-store" });
@@ -363,16 +464,11 @@
       if (useBtn) {
         e.preventDefault();
         const modelId = useBtn.dataset.modelId;
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/dashboard";
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "model_id";
-        input.value = modelId;
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
+        if (!modelId) return;
+        // GET avoids CSRF on POST (dashboard view accepts model_id via GET or POST).
+        const u = new URL("/dashboard", window.location.origin);
+        u.searchParams.set("model_id", modelId);
+        window.location.assign(u.toString());
         return;
       }
       
@@ -429,6 +525,13 @@
 
   searchInput?.addEventListener("input", applyFilters);
   corpusFilter?.addEventListener("change", applyFilters);
+  clearJobsBtn?.addEventListener("click", () => {
+    const jobs = readJobs().filter((j) => !isDoneStatus(j.status));
+    writeJobs(jobs);
+    renderJobs(jobs);
+  });
+  refreshJobs();
+  setInterval(refreshJobs, 3000);
   loadModels();
 })();
 </script>

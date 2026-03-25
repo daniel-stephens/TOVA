@@ -95,7 +95,7 @@
               <li class="mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h6 class="fw-bold mb-0">1. Choose Training Data</h6>
-                  <a href="{{ url_for('load_corpus_page') }}" class="btn btn-sm btn-outline-secondary">
+                  <a href="{% url_for 'load_corpus_page' %}" class="btn btn-sm btn-outline-secondary">
                     Manage corpora
                   </a>
                 </div>
@@ -254,12 +254,12 @@
 
 (() => {
   const URLS = {
-    start: "{{ url_for('training_start') }}",
-    models: "{{ url_for('get_model_registry') }}",
-    corpora: "{{ url_for('getAllCorpora') }}",
-    names: "{{ url_for('get_model_names') }}",
-    config: "{{ url_for('static', filename='config/config.yaml') }}",
-    page: "{{ url_for('training_page_get') }}",
+    start: "{% url_for 'training_start' %}",
+    models: "{% url_for 'get_model_registry' %}",
+    corpora: "{% url_for 'getAllCorpora' %}",
+    names: "{% url_for 'get_model_names' %}",
+    config: "{% url_for 'static' filename='config/config.yaml' %}",
+    page: "{% url_for 'training_page_get' %}",
     userOverrides: "/api/user-config/overrides"
   };
 
@@ -683,7 +683,9 @@ const renderBasicGroupParams = (modelName) => {
     );
   };
 
-  const nonLlmEntries = entries.filter(([key]) => !isLlmField(key));
+  const nonLlmEntries = entries.filter(([key]) =>
+    !isLlmField(key) && key !== "do_labeller" && key !== "do_summarizer"
+  );
 
   const makeFieldHtml = (key, val) => {
     const labelText = key.replace(/_/g, " ");
@@ -768,9 +770,44 @@ const renderBasicGroupParams = (modelName) => {
     parts.push(makeFieldHtml(key, val));
   });
 
-  // 2) LLM settings are now in a separate "LLM Settings" modal
-  // Add a note about LLM settings
-  if (nonLlmEntries.length > 0) {
+  // 2) Explicit LLM post-processing controls for traditional models
+  if (groupKey === "traditional") {
+    const labellerDefault = groupCfg.do_labeller !== undefined ? !!groupCfg.do_labeller : true;
+    const summarizerDefault = groupCfg.do_summarizer !== undefined ? !!groupCfg.do_summarizer : true;
+    parts.push(`
+      <div class="col-12 mt-2">
+        <div class="border rounded p-2 bg-white">
+          <div class="small fw-semibold mb-1">
+            <i class="bi bi-stars me-1 text-primary"></i>LLM Topic Post-Processing
+          </div>
+          <div class="small text-muted mb-2">
+            These options run <strong>after</strong> training to enrich topics with natural-language labels and summaries.
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" id="tm-trad-do_labeller" ${labellerDefault ? "checked" : ""}>
+                <label class="form-check-label small" for="tm-trad-do_labeller">
+                  Generate topic labels with LLM
+                </label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" id="tm-trad-do_summarizer" ${summarizerDefault ? "checked" : ""}>
+                <label class="form-check-label small" for="tm-trad-do_summarizer">
+                  Generate topic summaries with LLM
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  // 3) LLM settings are in "LLM Settings" modal
+  if (nonLlmEntries.length > 0 || groupKey === "traditional") {
     parts.push(`
       <div class="col-12 mt-2">
         <div class="alert alert-info d-flex align-items-center gap-2 py-2" style="font-size: 0.85rem;">
@@ -1424,23 +1461,37 @@ const renderBasicGroupParams = (modelName) => {
 
       toggleLoader(true, "Calculating TF-IDF and initializing...");
 
-      await fetch(
+      const nTopics = Number(training_params.num_topics);
+      const k =
+        Number.isFinite(nTopics) && nTopics >= 2 ? nTopics : 15;
+
+      const tfidfRes = await fetch(
         `/train/corpus/${encodeURIComponent(corpusId)}/tfidf/`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            n_clusters:
-              Number(training_params.num_topics) > 0
-                ? Number(training_params.num_topics)
-                : 15,
-          }),
+          credentials: "same-origin",
+          body: JSON.stringify({ n_clusters: k }),
         }
       );
+      if (!tfidfRes.ok) {
+        const tfidfTxt = await tfidfRes.text().catch(() => "");
+        let detail = tfidfTxt || tfidfRes.statusText || String(tfidfRes.status);
+        try {
+          const j = JSON.parse(tfidfTxt);
+          if (j && (j.detail || j.error)) detail = j.detail || j.error;
+        } catch (_) {
+          /* keep text */
+        }
+        throw new Error(
+          `TF-IDF step failed (${tfidfRes.status}): ${detail}`.slice(0, 500)
+        );
+      }
 
       const res = await fetch(URLS.start, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
 
@@ -1450,6 +1501,25 @@ const renderBasicGroupParams = (modelName) => {
       }
 
       const data = await res.json();
+      try {
+        if (data.job_id) {
+          const key = "tova_training_jobs";
+          const saved = JSON.parse(localStorage.getItem(key) || "[]");
+          const jobs = Array.isArray(saved) ? saved : [];
+          jobs.unshift({
+            job_id: data.job_id,
+            corpus_id: data.corpus_id || corpusId,
+            corpus_name: state.selectedDataset?.name || "",
+            model_id: data.model_id || null,
+            model_name: modelName,
+            created_at: new Date().toISOString(),
+            status: "starting",
+          });
+          localStorage.setItem(key, JSON.stringify(jobs.slice(0, 25)));
+        }
+      } catch (e) {
+        console.warn("Could not persist training job locally:", e);
+      }
       const u = new URL(URLS.page, location.origin);
       if (data.corpus_id) u.searchParams.set("corpus_id", data.corpus_id);
       if (data.model_id) u.searchParams.set("model_id", data.model_id);

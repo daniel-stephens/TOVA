@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1> TOVA admin console </h1>
+  <p class="help">
+    Corpora and dashboards are managed through the TOVA backend, but surfaced here for convenience.
+  </p>
+
+  <div style="margin-top: 20px;">
+    <ul>
+      <li>
+        <a href="{% url 'tova_admin_corpora' %}">Corpora</a>
+      </li>
+      <li>
+        <a href="{% url 'tova_admin_dashboards' %}">Dashboards (models)</a>
+      </li>
+    </ul>
+  </div>
+{% endblock %}
+

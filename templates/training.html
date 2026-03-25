@@ -174,6 +174,29 @@
     flex-grow: 1;
     overflow: auto;
   }
+  .transition-card {
+    border: 1px solid #e7ebf0;
+    background: linear-gradient(135deg, #ffffff, #f8fbff);
+  }
+  .transition-kv {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #f8fafc;
+    font-size: 0.8rem;
+    color: #475569;
+  }
+  .transition-kv .v {
+    color: #0f172a;
+    font-weight: 600;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   @media (max-width: 992px) {
     .training-layout {
@@ -185,55 +208,219 @@
       width: 100%;
     }
   }
+
+  /* Focused transition: dim rest of viewport, hero card centered */
+  .training-page-shell {
+    position: relative;
+    min-height: calc(100vh - 5rem);
+  }
+  .training-focus-scrim {
+    display: none;
+  }
+  .training-page-shell.training--compact .training-focus-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.52);
+    z-index: 1040;
+    pointer-events: auto;
+  }
+  .training-page-shell.training--compact .training-focus-center-wrap {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1050;
+    max-height: min(92vh, 640px);
+    overflow-y: auto;
+    pointer-events: none;
+    padding: 0 0.75rem;
+    box-sizing: border-box;
+  }
+  .training-page-shell.training--compact .training-focus-center-wrap .container-fluid {
+    pointer-events: auto;
+  }
+  .training-page-shell.training--expanded .training-focus-scrim {
+    display: none !important;
+  }
+  .training-page-shell.training--expanded .training-focus-center-wrap {
+    position: static;
+    transform: none;
+    max-height: none;
+    overflow: visible;
+    pointer-events: auto;
+    padding: 0;
+  }
+  .training-hero-card {
+    border-radius: 1rem;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .training-page-shell.training--expanded .training-hero-card {
+    max-width: none;
+    border-radius: 0.5rem;
+  }
+
+  .training-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Slim status strip when preview/dashboard is visible — less vertical push */
+  .training-page-shell.training--expanded #trainingHeroCard .card-body {
+    padding: 0.65rem 1rem !important;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard .training-status-top {
+    margin-bottom: 0.25rem !important;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard .training-progress {
+    margin-top: 0.45rem !important;
+    margin-bottom: 0.45rem !important;
+    height: 0.85rem;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard .training-hero-summary,
+  .training-page-shell.training--expanded #trainingHeroCard #activityLine {
+    display: none !important;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard .training-hero-actions {
+    margin: 0;
+    padding: 0.35rem 0 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard .training-hero-actions .btn {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+  .training-page-shell.training--expanded #trainingHeroCard #previewInfo {
+    margin-top: 0.35rem !important;
+    margin-bottom: 0 !important;
+    font-size: 0.75rem;
+  }
+  .training-page-shell.training--expanded .training-focus-center-wrap .container-fluid.py-3 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  .training-hero-summary {
+    border-radius: 0.85rem;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  }
+  .training-hero-summary .hero-title {
+    font-size: clamp(1.15rem, 3vw, 1.55rem);
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  .training-tech-details summary {
+    user-select: none;
+  }
+  .training-tech-details summary:hover {
+    color: var(--bs-primary);
+  }
+  .training-tech-details dl {
+    font-size: 0.8rem;
+  }
+  .training-tech-details dt {
+    font-weight: 500;
+  }
+  .training-tech-details dd {
+    word-break: break-all;
+  }
+  #trainingCompleteModal.modal {
+    z-index: 1075;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="container-fluid py-3">
+<div class="training-page-shell training--compact" id="trainingPageShell">
+  <div class="training-focus-scrim" id="trainingFocusScrim" aria-hidden="true"></div>
 
-  <!-- Training status card -->
-  <div class="card shadow-sm mb-3 training-status-card">
-    <div class="card-body py-3">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-          <span class="pulse-dot" id="trainingDot" aria-hidden="true"></span>
-          <div id="trainingMessage" class="fw-semibold" aria-live="polite">
-            Initializing training…
+  <div class="training-focus-center-wrap" id="trainingFocusCenterWrap">
+    <div class="container-fluid py-3">
+      <div class="card shadow-lg border-0 training-hero-card training-status-card" id="trainingHeroCard">
+        <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1 training-status-top">
+            <div>
+              <div class="text-uppercase text-muted xsmall mb-1">Training in progress</div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="pulse-dot" id="trainingDot" aria-hidden="true"></span>
+                <div id="trainingMessage" class="fw-semibold fs-6" aria-live="polite">
+                  Initializing training…
+                </div>
+              </div>
+            </div>
+            <small id="etaText" class="text-muted text-end" aria-live="polite">
+              ETA — estimating…
+            </small>
           </div>
-        </div>
 
-        <small id="etaText" class="text-muted" aria-live="polite">
-          ETA — estimating…
-        </small>
-      </div>
+          <div class="progress mt-3 mb-4 training-progress" role="progressbar" aria-label="Training progress">
+            <div id="trainingBar"
+                 class="progress-bar progress-bar-striped"
+                 style="width:0%"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              0%
+            </div>
+            <div id="indeterminateBar" class="indeterminate" aria-hidden="true"></div>
+          </div>
 
-      <div class="progress mt-3 training-progress" role="progressbar" aria-label="Training progress">
-        <div id="trainingBar"
-             class="progress-bar progress-bar-striped"
-             style="width:0%"
-             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          0%
-        </div>
-        <div id="indeterminateBar" class="indeterminate" aria-hidden="true"></div>
-      </div>
+          <div class="training-hero-summary mb-4 p-3 p-sm-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+              <div class="flex-grow-1 min-w-0">
+                <div class="text-uppercase text-muted xsmall mb-1">Now training</div>
+                <h2 class="hero-title fw-bold mb-2 text-dark text-break" id="transitionDisplayTitle">—</h2>
+                <p class="text-muted small mb-0" id="transitionSubtitle">
+                  Linking run to your corpus…
+                </p>
+              </div>
+            </div>
+            <details class="training-tech-details mt-3 pt-2 border-top border-light">
+              <summary class="small text-muted">IDs &amp; job (for support)</summary>
+              <dl class="row g-2 mb-0 mt-2">
+                <dt class="col-sm-3">Model ID</dt>
+                <dd class="col-sm-9 mb-0"><code id="transitionModelIdDetail">—</code></dd>
+                <dt class="col-sm-3">Job</dt>
+                <dd class="col-sm-9 mb-0"><code id="transitionJobId">—</code></dd>
+                <dt class="col-sm-3">Corpus</dt>
+                <dd class="col-sm-9 mb-0"><code id="transitionCorpusId">—</code></dd>
+              </dl>
+            </details>
+          </div>
 
-      <div class="d-flex justify-content-between align-items-center mt-3">
-        <div class="small text-muted mb-0" id="activityLine" aria-live="polite">
-          Preparing…
-        </div>
+          <div class="small text-muted border-top border-light pt-3 mb-3" id="activityLine" aria-live="polite">
+            Preparing…
+          </div>
 
-        <div id="redirectButtonContainer" class="text-end d-none">
-          <button id="goToModelBtn" class="btn btn-success">
-            View Trained Models
-          </button>
+          <div class="training-hero-actions">
+            <button id="openPreviewBtn" class="btn btn-primary btn-sm" type="button">
+              Open low-latency preview
+            </button>
+            <div id="redirectButtonContainer" class="ms-sm-auto d-none">
+              <button id="goToModelBtn" type="button" class="btn btn-success btn-sm">
+                View trained models
+              </button>
+            </div>
+          </div>
+          <div id="previewInfo" class="small text-danger mt-2 mb-0 d-none"></div>
         </div>
       </div>
     </div>
   </div>
 
+  <div class="container-fluid px-3 pb-4">
   <!-- Main training layout -->
-  <div class="training-layout">
+  <div class="training-layout d-none" id="trainingMainLayout">
 
     <!-- LEFT COLUMN -->
     <div class="training-left">
@@ -348,6 +535,7 @@
       </div>
     </div>
 
+  </div>
   </div>
 
   <!-- Modals -->
@@ -474,6 +662,13 @@
 
   let allDocuments = [];
   let filteredDocs = [];
+  let previewLoaded = false;
+  function expandTrainingLayout() {
+    const shell = document.getElementById("trainingPageShell");
+    if (!shell) return;
+    shell.classList.remove("training--compact");
+    shell.classList.add("training--expanded");
+  }
 
   document.addEventListener("DOMContentLoaded", async () => {
     try {
@@ -488,8 +683,9 @@
         return;
       }
 
-      await loadVisualization(corpusId);
       wireUI();
+      await enrichTransitionMeta({ corpusId, jobId, modelId });
+      wirePreviewChoice(corpusId);
 
       if (jobId) {
         startPolling(`/status/jobs/${encodeURIComponent(jobId)}`, 1000);
@@ -520,6 +716,9 @@
       if (DEBUG) console.info("[viz] TF-IDF data:", jsonData);
 
       const docs = Array.isArray(jsonData.documents) ? jsonData.documents : [];
+      if (!docs.length) {
+        return { ok: false, reason: "No preview data is available yet. Training is still running." };
+      }
       renderThemeVisualizations(docs);
       populateThemeDiagnosticsTable(jsonData.per_cluster || {});
       populateThemeInsights(jsonData.global || {});
@@ -528,11 +727,139 @@
       allDocuments = docs;
       populateThemeFilterOptions(allDocuments);
       filterAndRenderDocuments(allDocuments);
+      return { ok: true };
     } catch (err) {
       console.error("[viz] Error:", err);
-      alert("Could not load visualization results.");
+      return { ok: false, reason: "Could not load low-latency preview right now." };
     } finally {
       console.groupEnd();
+    }
+  }
+
+  function wirePreviewChoice(corpusId) {
+    const openBtn = document.getElementById("openPreviewBtn");
+    const mainLayout = document.getElementById("trainingMainLayout");
+    const previewInfo = document.getElementById("previewInfo");
+    if (openBtn && !openBtn.dataset.bound) {
+      openBtn.addEventListener("click", async () => {
+        expandTrainingLayout();
+        if (previewLoaded) {
+          mainLayout?.classList.remove("d-none");
+          return;
+        }
+        openBtn.disabled = true;
+        const oldText = openBtn.textContent;
+        openBtn.textContent = "Loading preview...";
+        if (previewInfo) {
+          previewInfo.classList.add("d-none");
+          previewInfo.textContent = "";
+        }
+        try {
+          const result = await loadVisualization(corpusId);
+          if (result?.ok) {
+            previewLoaded = true;
+            mainLayout?.classList.remove("d-none");
+          } else if (previewInfo) {
+            previewInfo.textContent = result?.reason || "Preview is not available yet.";
+            previewInfo.classList.remove("d-none");
+          }
+        } catch (e) {
+          console.error("Preview load failed:", e);
+          if (previewInfo) {
+            previewInfo.textContent = "Preview is not available yet.";
+            previewInfo.classList.remove("d-none");
+          }
+        } finally {
+          openBtn.textContent = oldText || "Open low-latency preview";
+          openBtn.disabled = false;
+        }
+      });
+      openBtn.dataset.bound = "1";
+    }
+  }
+
+  async function enrichTransitionMeta({ corpusId, jobId, modelId }) {
+    const titleEl = document.getElementById("transitionDisplayTitle");
+    const subEl = document.getElementById("transitionSubtitle");
+    const jobEl = document.getElementById("transitionJobId");
+    const corpusEl = document.getElementById("transitionCorpusId");
+    const modelDetailEl = document.getElementById("transitionModelIdDetail");
+
+    let storedName = "";
+    let storedCorpusName = "";
+    try {
+      const jobs = JSON.parse(localStorage.getItem("tova_training_jobs") || "[]");
+      if (Array.isArray(jobs)) {
+        let match = jobId ? jobs.find((j) => j?.job_id === jobId) : null;
+        if (!match && modelId) {
+          match = jobs.find((j) => j?.model_id === modelId);
+        }
+        if (match) {
+          storedName = String(match.model_name || "").trim();
+          storedCorpusName = String(match.corpus_name || match.corpus_label || "").trim();
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read local training jobs:", e);
+    }
+
+    const looksLikeOpaqueId = (s) => {
+      if (!s || typeof s !== "string") return false;
+      return /^m_[a-z0-9]{8,}$/i.test(s) || /^[a-f0-9-]{24,}$/i.test(s);
+    };
+
+    let displayTitle = storedName;
+    if (!displayTitle && modelId && !looksLikeOpaqueId(modelId)) {
+      displayTitle = String(modelId).trim();
+    }
+    if (!displayTitle) {
+      displayTitle = "Your topic model";
+    }
+
+    if (titleEl) {
+      titleEl.textContent = displayTitle;
+      titleEl.setAttribute("title", displayTitle);
+    }
+
+    const writeSubtitle = (corpusLabel) => {
+      if (!subEl) return;
+      const hasJob = !!jobId;
+      const c = corpusLabel ? String(corpusLabel).trim() : "";
+      if (c) {
+        subEl.textContent = hasJob
+          ? `${c} · Training is in progress—open the preview for an early TF-IDF cluster visualization.`
+          : `${c} · Preparing your training run…`;
+      } else if (corpusId) {
+        subEl.textContent = hasJob
+          ? "Training is in progress. Use the preview below when you want a quick look at emerging themes."
+          : "Preparing your corpus and training run…";
+      } else {
+        subEl.textContent = hasJob ? "Training job is running." : "Preparing…";
+      }
+    };
+
+    writeSubtitle(storedCorpusName || "");
+
+    if (jobEl) jobEl.textContent = jobId || "—";
+    if (corpusEl) corpusEl.textContent = corpusId || "—";
+    if (modelDetailEl) modelDetailEl.textContent = modelId || "—";
+
+    if (!storedCorpusName && corpusId) {
+      try {
+        const r = await fetch(`/getCorpus/${encodeURIComponent(corpusId)}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const cn = j && (j.name || j.title || j.corpus_name);
+          if (cn && String(cn).trim()) {
+            writeSubtitle(String(cn).trim());
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
 
@@ -590,21 +917,35 @@
       }
 
       const data = await response.json().catch(() => ({}));
-      const { done, error, progress } = data || {};
+      const { done, error, progress, status } = data || {};
+      const st = String(status || "").toLowerCase();
 
-      updateTrainingUI(data);
-
-      const finishedStatuses = new Set(["succeeded", "completed", "finished", "success"]);
-      const isFinished =
+      const terminalFailed = new Set(["failed", "cancelled"]);
+      const terminalOk = new Set(["succeeded", "completed", "finished", "success"]);
+      const isTerminal =
         !!done ||
         (typeof progress === "number" && progress >= 1) ||
-        (data.status && finishedStatuses.has(String(data.status).toLowerCase()));
+        (status && (terminalOk.has(st) || terminalFailed.has(st)));
 
-      if (error || isFinished) {
+      const isSuccess =
+        !error &&
+        !terminalFailed.has(st) &&
+        (!!done ||
+          (typeof progress === "number" && progress >= 1) ||
+          (status && terminalOk.has(st)));
+
+      updateTrainingUI({ ...data, done: isSuccess ? true : done });
+
+      if (error || isTerminal) {
         stopPolling();
-        if (isFinished && !COMPLETION_SHOWN) {
+        if (isSuccess && !COMPLETION_SHOWN) {
           COMPLETION_SHOWN = true;
-          await handleTrainingCompletion();
+          handleTrainingCompletion();
+        } else if (terminalFailed.has(st) || error) {
+          updateTrainingUI({
+            ...data,
+            error: error || data.message || "Training did not complete successfully.",
+          });
         }
         return;
       }
@@ -727,6 +1068,7 @@
         }
       } else {
         btnWrap.style.display = "none";
+        btnWrap.classList.add("d-none");
       }
     }
   }
@@ -1109,55 +1451,94 @@
     renderFilteredTable(filtered);
   }
 
-  async function handleTrainingCompletion() {
-    try {
-      const params   = new URLSearchParams(location.search);
-      const corpusId = params.get("corpus_id");
-      const modelId  = params.get("model_id");
+  function handleTrainingCompletion() {
+    expandTrainingLayout();
+    showTrainingCompleteModal();
 
-      if (corpusId && modelId) {
-        const addModelUrl = `/data/corpus/add_model`;
-        console.log("[training] Calling add_model endpoint:", addModelUrl);
-
-        const response = await fetch(addModelUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ corpus_id: corpusId, model_id: modelId }),
-          cache: "no-store"
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log("[training] Successfully added model to corpus:", result);
-        } else {
-          console.warn("[training] Failed to add model to corpus:",
-                       response.status, response.statusText);
+    (async () => {
+      try {
+        const params = new URLSearchParams(location.search);
+        const corpusId = params.get("corpus_id");
+        let modelId = params.get("model_id");
+        const jobId = params.get("job_id");
+        if (!modelId && jobId) {
+          try {
+            const jobs = JSON.parse(localStorage.getItem("tova_training_jobs") || "[]");
+            const match = Array.isArray(jobs) ? jobs.find((j) => j?.job_id === jobId) : null;
+            if (match?.model_id) modelId = match.model_id;
+          } catch (_) {
+            /* ignore */
+          }
         }
-      } else {
-        console.warn("[training] Missing corpus_id or model_id, skipping add_model call",
-                     { corpusId, modelId });
+
+        try {
+          if (jobId) {
+            const key = "tova_training_jobs";
+            const jobs = JSON.parse(localStorage.getItem(key) || "[]");
+            if (Array.isArray(jobs)) {
+              const next = jobs.map((j) =>
+                j?.job_id === jobId
+                  ? { ...j, status: "completed", model_id: modelId || j.model_id }
+                  : j
+              );
+              localStorage.setItem(key, JSON.stringify(next));
+            }
+          }
+        } catch (e) {
+          console.warn("Could not update local training job completion state:", e);
+        }
+
+        if (corpusId && modelId) {
+          const addModelUrl = `/data/corpus/add_model`;
+          const response = await fetch(addModelUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ corpus_id: corpusId, model_id: modelId }),
+            cache: "no-store",
+          });
+          if (response.ok) {
+            const result = await response.json();
+            console.log("[training] add_model:", result);
+          } else {
+            console.warn("[training] add_model failed:", response.status, response.statusText);
+          }
+        } else {
+          console.warn("[training] add_model skipped:", { corpusId, modelId });
+        }
+      } catch (error) {
+        console.error("[training] add_model error:", error);
       }
-    } catch (error) {
-      console.error("[training] Error calling add_model endpoint:", error);
-    } finally {
-      showTrainingCompleteModal();
-    }
+    })();
   }
 
   function showTrainingCompleteModal() {
     const modalEl = document.getElementById("trainingCompleteModal");
     if (!modalEl) return;
-    const modal = new bootstrap.Modal(modalEl, { backdrop: "static", keyboard: true });
-    modal.show();
 
     const btn = document.getElementById("viewModelsBtn");
     if (btn && !btn.dataset.bound) {
       btn.addEventListener("click", () => {
-        modal.hide();
+        try {
+          bootstrap.Modal.getInstance(modalEl)?.hide();
+        } catch (_) {
+          /* ignore */
+        }
         window.location.href = "/trained-models";
       });
       btn.dataset.bound = "1";
     }
+
+    const show = () => {
+      try {
+        bootstrap.Modal.getOrCreateInstance(modalEl, {
+          backdrop: true,
+          keyboard: true,
+        }).show();
+      } catch (e) {
+        console.error("[training] complete modal:", e);
+      }
+    };
+    setTimeout(show, 80);
   }
 </script>
 {% endblock %}

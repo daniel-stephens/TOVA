@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Dashboards (models)</h1>
+
+  <table class="table tova-admin-wide-table">
+    <thead>
+      <tr>
+        <th>Model ID</th>
+        <th>Name</th>
+        <th>Owner</th>
+        <th>Corpus</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models %}
+        <tr>
+          <td><code>{{ m.id }}</code></td>
+          <td>{{ m.name }}</td>
+          <td>{{ m.owner_email }}</td>
+          <td><code>{{ m.corpus_id }}</code></td>
+          <td>{{ m.created_at }}</td>
+          <td>
+            <a href="{{ dashboard_url_base }}?model_id={{ m.id }}" target="_blank">View</a>
+            <form method="post" action="{% url 'tova_admin_dashboards_delete' model_id=m.id %}" style="display:inline;" onsubmit="return confirm('Delete this dashboard/model?');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No models found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
+

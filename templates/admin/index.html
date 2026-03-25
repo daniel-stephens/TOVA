@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+{% block coltype %}colM{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <div class="tova-admin-console-card">
+      <h2>{% translate "TOVA console" %}</h2>
+      <ul>
+        <li><a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a></li>
+        <li><a href="{% url 'tova_admin_dashboards' %}">{% translate "Dashboards (models)" %}</a></li>
+      </ul>
+    </div>
+
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </div>
+{% endblock %}
+
