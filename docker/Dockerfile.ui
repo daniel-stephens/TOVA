@@ -1,9 +1,7 @@
 # docker/Dockerfile.ui
 # syntax=docker/dockerfile:1.4
 ARG ASSETS_IMAGE=tova-assets:dev
-ARG BUILDER_IMAGE=tova-builder:dev
 FROM ${ASSETS_IMAGE} AS static
-FROM ${BUILDER_IMAGE} AS wheel
 
 FROM python:3.12-slim-bookworm AS builder
 WORKDIR /app
@@ -19,25 +17,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install tova package and its deps from builder wheels, then UI deps
-COPY --from=wheel /dist /tmp/wheels
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl && \
-    rm -rf /tmp/wheels
+# Install Python deps
 COPY ui/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir gunicorn
 
 # Copy UI code and templates
 COPY templates /app/templates
 COPY ui/ /app
+# Shared Python package (imports like `tova.core`, `tova.api.models`, used by web views)
+COPY src /app/src
 
 # Copy shared static assets from the assets stage
 COPY --from=static /static /app/static
 
-COPY docker/entrypoint-ui.sh /entrypoint-ui.sh
-RUN chmod +x /entrypoint-ui.sh
-
 ENV API_BASE_URL=http://api:11000
+ENV PYTHONPATH=/app/src
 EXPOSE 8080
-ENTRYPOINT ["/entrypoint-ui.sh"]
+# Django: migrate/collectstatic then WSGI (master uses gunicorn app:server for Flask)
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn -w 2 -b 0.0.0.0:8080 wsgi:application"]

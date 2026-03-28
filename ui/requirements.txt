@@ -2,6 +2,8 @@ Requests==2.32.4
 authlib
 psycopg2-binary==2.9.9
 ruamel.yaml
+PyYAML>=6.0.2
+pydantic>=2.11,<3
 gunicorn==21.2.0
 python-dotenv>=1.0.0
 Django>=4.2,<5

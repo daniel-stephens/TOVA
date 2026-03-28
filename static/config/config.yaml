@@ -20,7 +20,6 @@ topic_modeling:
     n_top_docs_per_topic: 20
     llm_provider: "ollama"
     llm_model_type: "gemma3:4b"
-    # Use localhost when running locally; use host.docker.internal when the app runs in Docker and Ollama is on the host (e.g. host at 0.0.0.0:11434)
     llm_server: "http://host.docker.internal:11434"
   traditional:
     num_topics: 15
@@ -131,7 +130,6 @@ llm:
       "gpt-4o",
       "gpt-3.5-turbo-instruct"
       }
-      
     path_api_key: .env
   ollama:
     available_models: {
@@ -140,7 +138,6 @@ llm:
       "llama3.3:70b",
       "gemma3:4b"
     }
-    # From inside a container, use host.docker.internal to reach Ollama on the host (e.g. host bound to 0.0.0.0:11434)
     host: http://host.docker.internal:11434
   llama_cpp:
     host: http://host.docker.internal:11435/v1/chat/completions

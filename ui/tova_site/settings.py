@@ -124,8 +124,12 @@ if _REPO_STATIC.is_dir():
 elif (BASE_DIR / "static").is_dir():
     STATICFILES_DIRS.append(BASE_DIR / "static")
 
-# Collected for production (Gunicorn + WhiteNoise); see docker/entrypoint-ui.sh
+# Collected for production (Gunicorn + WhiteNoise); see docker/Dockerfile.ui CMD
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Local dev: avoid long-lived Cache-Control on /static/ so CSS updates show up without hard refresh.
+if DEBUG:
+    WHITENOISE_MAX_AGE = 0
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

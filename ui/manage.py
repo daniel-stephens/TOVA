@@ -3,6 +3,15 @@
 
 import os
 import sys
+from pathlib import Path
+
+# Monorepo: ui/…/manage.py → ../src. Docker: /app/manage.py → /app/src.
+_base = Path(__file__).resolve().parent
+for _src in (_base / "src", _base.parent / "src"):
+    if _src.is_dir():
+        s = str(_src)
+        if s not in sys.path:
+            sys.path.insert(0, s)
 
 
 def main():

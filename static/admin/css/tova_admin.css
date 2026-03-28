@@ -4,7 +4,9 @@
   --tova-admin-header-from: #0f172a;
   --tova-admin-header-to: #1e3a8a;
   --tova-admin-accent: #3b82f6;
-  --tova-admin-surface: #f8fafc;
+  /* Use Django tokens so “auto” + prefers-color-scheme: dark keeps contrast
+     (hardcoded #f8fafc with inherited --body-fg looked white-on-white). */
+  --tova-admin-surface: var(--darkened-bg);
   --tova-admin-border: rgba(15, 23, 42, 0.1);
 }
 
@@ -12,8 +14,20 @@ html[data-theme="dark"] {
   --tova-admin-header-from: #020617;
   --tova-admin-header-to: #172554;
   --tova-admin-accent: #60a5fa;
-  --tova-admin-surface: var(--body-bg, #121212);
   --tova-admin-border: rgba(255, 255, 255, 0.08);
+}
+
+/* data-theme="auto": dark_mode.css drives colors via media query, not [data-theme="dark"] */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    --tova-admin-border: rgba(255, 255, 255, 0.08);
+  }
+
+  html[data-theme="auto"] .module h2,
+  html[data-theme="auto"] .module caption {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: #f1f5f9;
+  }
 }
 
 /* Widen admin layout — Django defaults to 600px dashboard + colMS sidebar gutter */
@@ -138,15 +152,25 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.breadcrumbs {
+/* Match `div.breadcrumbs` specificity so we override Django defaults (plain `.breadcrumbs` loses). */
+div.breadcrumbs {
   background: var(--tova-admin-surface);
+  color: var(--body-fg);
   border-bottom: 1px solid var(--tova-admin-border);
   padding: 0.65rem clamp(1.25rem, 4vw, 2.5rem);
   font-size: 0.875rem;
+  text-align: start;
 }
 
-.breadcrumbs a {
+div.breadcrumbs a:link,
+div.breadcrumbs a:visited {
+  color: var(--link-fg);
   font-weight: 500;
+}
+
+div.breadcrumbs a:hover,
+div.breadcrumbs a:focus {
+  color: var(--link-hover-color);
 }
 
 /* Content area */
@@ -164,6 +188,18 @@ body {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   overflow: hidden;
   margin-bottom: 1.25rem;
+  background: var(--body-bg);
+  color: var(--body-fg);
+}
+
+html[data-theme="dark"] .module {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] .module {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .module h2,
@@ -188,8 +224,13 @@ html[data-theme="dark"] .module caption {
   border-radius: 12px;
   border: 1px solid var(--tova-admin-border);
   background: var(--tova-admin-surface);
+  color: var(--body-fg);
   padding: 1.35rem 1.5rem 1.5rem;
   margin-bottom: 1.75rem;
+}
+
+.tova-admin-console-card .tova-admin-console-intro {
+  margin-bottom: 1rem;
 }
 
 .tova-admin-console-card h2 {
@@ -198,7 +239,7 @@ html[data-theme="dark"] .module caption {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--body-quiet-color, #64748b);
 }
 
 .tova-admin-console-card ul {
@@ -219,6 +260,42 @@ html[data-theme="dark"] .module caption {
 .tova-admin-wide-table {
   width: 100%;
   margin-top: 1rem;
+  color: var(--body-fg);
+  border-collapse: collapse;
+}
+
+/* If Bootstrap is ever loaded on the same page, neutralize .table surfaces. */
+table.tova-admin-wide-table.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--body-fg);
+  --bs-table-border-color: var(--hairline-color);
+  color: var(--body-fg);
+  background-color: transparent;
+}
+
+.tova-admin-wide-table th,
+.tova-admin-wide-table td {
+  border-color: var(--hairline-color);
+}
+
+.tova-admin-wide-table code {
+  color: var(--body-fg);
+  background: var(--darkened-bg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+}
+
+#content .button.tova-admin-delete-btn {
+  background: var(--delete-button-bg);
+  color: var(--button-fg);
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+#content .button.tova-admin-delete-btn:hover,
+#content .button.tova-admin-delete-btn:focus {
+  background: var(--delete-button-hover-bg);
 }
 
 .tova-admin-page-intro {
@@ -233,6 +310,6 @@ html[data-theme="dark"] .module caption {
   padding: 0.75rem 1rem;
   margin-top: 2rem;
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--body-quiet-color, #64748b);
   text-align: center;
 }

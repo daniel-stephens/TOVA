@@ -7,7 +7,7 @@
 
 {% block extrastyle %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/tova_admin.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/tova_admin.css' %}{% if tova_admin_css_version %}?v={{ tova_admin_css_version }}{% endif %}">
 {% endblock %}
 
 {% block branding %}

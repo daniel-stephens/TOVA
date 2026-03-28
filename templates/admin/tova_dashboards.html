@@ -3,7 +3,7 @@
 {% block content %}
   <h1>Dashboards (models)</h1>
 
-  <table class="table tova-admin-wide-table">
+  <table class="tova-admin-wide-table">
     <thead>
       <tr>
         <th>Model ID</th>
@@ -26,7 +26,7 @@
             <a href="{{ dashboard_url_base }}?model_id={{ m.id }}" target="_blank">View</a>
             <form method="post" action="{% url 'tova_admin_dashboards_delete' model_id=m.id %}" style="display:inline;" onsubmit="return confirm('Delete this dashboard/model?');">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              <button type="submit" class="button tova-admin-delete-btn">Delete</button>
             </form>
           </td>
         </tr>

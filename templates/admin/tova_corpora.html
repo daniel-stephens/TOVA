@@ -3,7 +3,7 @@
 {% block content %}
   <h1>Corpora (all users)</h1>
 
-  <table class="table tova-admin-wide-table">
+  <table class="tova-admin-wide-table">
     <thead>
       <tr>
         <th>ID</th>
@@ -25,7 +25,7 @@
           <td>
             <form method="post" action="{% url 'tova_admin_corpora_delete' corpus_id=r.id %}" onsubmit="return confirm('Delete corpus? This will also delete associated models.');">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              <button type="submit" class="button tova-admin-delete-btn">Delete</button>
             </form>
           </td>
         </tr>
