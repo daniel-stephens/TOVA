@@ -8,6 +8,7 @@ topic
 data
 .vscode
 .cursor
+cursor/*
 .venv
 cache
 .env

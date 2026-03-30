@@ -105,12 +105,19 @@ def _verify_model_ownership(model_id: str, user_id: str) -> bool:
 
     if not user_id:
         return False
+    uid = str(user_id)
     try:
         response = requests.get(f"{API}/data/models/{model_id}", timeout=5)
         if response.status_code == 200:
             model = response.json()
-            owner = model.get("owner_id") or (model.get("metadata") or {}).get("owner_id")
-            return owner == user_id
+            meta = model.get("metadata") or {}
+            owner = model.get("owner_id") or meta.get("owner_id")
+            if str(owner or "") == uid:
+                return True
+            # Match trained-models list: model may lack owner_id while corpus belongs to the user
+            corpus_id = model.get("corpus_id") or meta.get("corpus_id")
+            if corpus_id:
+                return _verify_corpus_ownership(str(corpus_id), uid)
     except Exception:
         pass
     return False
@@ -126,7 +133,7 @@ def _verify_dataset_ownership(dataset_id: str, user_id: str) -> bool:
         if response.status_code == 200:
             dataset = response.json()
             owner = dataset.get("owner_id") or (dataset.get("metadata") or {}).get("owner_id")
-            return owner == user_id
+            return str(owner or "") == str(user_id or "")
     except Exception:
         pass
     return False

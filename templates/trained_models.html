@@ -490,13 +490,16 @@
           }
           
           try {
-            const res = await fetch("/delete-model", {
+            const res = await fetch("/delete-model/", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ model_id: modelId, model_name: modelName }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.message || `Delete failed (${res.status})`);
+            if (!res.ok) {
+              const msg = data?.error || data?.message || `Delete failed (${res.status})`;
+              throw new Error(msg);
+            }
             
             // Remove card immediately from DOM
             if (cardParent) {
@@ -509,7 +512,7 @@
             await loadModels();
           } catch (err) {
             console.error(err);
-            alert("Failed to delete model.");
+            alert(err?.message || "Failed to delete model.");
             // Restore card on error
             if (card) {
               card.style.opacity = "1";
