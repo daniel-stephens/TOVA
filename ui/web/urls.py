@@ -91,6 +91,7 @@ urlpatterns = [
     path("get-trained-models", views.get_trained_models, name="get_trained_models"),
     path("get-models-names", views.get_model_names, name="get_model_names"),
     path("delete-model", _x(views.delete_model), name="delete_model"),
+    path("delete-model/", _x(views.delete_model), name="delete_model_slash"),
     path("dashboard", _x(views.dashboard), name="dashboard"),
     path("get-dashboard-data", _x(views.proxy_dashboard_data), name="get_dashboard_data"),
     path("text-info", _x(views.text_info), name="text_info"),
