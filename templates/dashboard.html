@@ -878,6 +878,23 @@ footer {
     border: 1px solid rgba(0, 0, 0, 0.05);
   }
 
+  /* Thinking / typing indicator animation */
+  .thinking-dots .dot {
+    display: inline-block;
+    font-size: 1.4rem;
+    line-height: 1;
+    animation: dotPulse 1.2s infinite;
+    opacity: 0.2;
+  }
+  @keyframes dotPulse {
+    0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+  }
+  .thinking-text {
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+
   .chat-bubble-user {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: white;
@@ -3760,35 +3777,153 @@ document.addEventListener("DOMContentLoaded", () => {
       loadChatLlmSettingsFromStorage();
     })();
 
-    // Function to send a message
+    // Show an animated "thinking" indicator while waiting for the LLM
+    function addThinkingIndicator() {
+      const el = document.createElement("div");
+      el.className = "chat-message mb-3";
+      el.id = "chat-thinking";
+      el.innerHTML = `
+        <div class="d-flex align-items-start">
+          <div class="flex-shrink-0 me-2 chat-avatar chat-avatar-bot">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+              <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="flex-grow-1">
+            <div class="chat-bubble chat-bubble-bot">
+              <span class="chat-bubble-label">Model Assistant</span>
+              <div class="chat-bubble-content" style="display:flex;align-items:center;gap:6px;color:#888;">
+                <span class="thinking-dots">
+                  <span class="dot" style="animation-delay:0s">.</span><span class="dot" style="animation-delay:0.3s">.</span><span class="dot" style="animation-delay:0.6s">.</span>
+                </span>
+                <span class="thinking-text">Searching topics &amp; generating response</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      chatMessages.appendChild(el);
+      scrollChatToBottom();
+    }
+
+    function removeThinkingIndicator() {
+      const el = document.getElementById("chat-thinking");
+      if (el) el.remove();
+    }
+
+    // Create an empty bot message bubble and return its content element
+    function addStreamingBubble() {
+      const messageDiv = document.createElement("div");
+      messageDiv.className = "chat-message mb-3";
+      messageDiv.innerHTML = `
+        <div class="d-flex align-items-start">
+          <div class="flex-shrink-0 me-2 chat-avatar chat-avatar-bot">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+              <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="flex-grow-1">
+            <div class="chat-bubble chat-bubble-bot">
+              <span class="chat-bubble-label">Model Assistant</span>
+              <div class="chat-bubble-content streaming-content"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollChatToBottom();
+      return messageDiv.querySelector(".streaming-content");
+    }
+
+    // Debounced markdown re-render while streaming
+    let _renderTimer = null;
+    function scheduleRender(el, fullText) {
+      if (_renderTimer) clearTimeout(_renderTimer);
+      _renderTimer = setTimeout(() => {
+        el.innerHTML = renderMarkdown(fullText);
+        scrollChatToBottom();
+      }, 80);
+    }
+
+    // Function to send a message (streaming via SSE)
     async function sendMessage() {
       const message = chatInput.value.trim();
       if (!message) return;
 
-      // Add user message to chat
       addMessage(message, true);
       chatInput.value = "";
+      chatInput.disabled = true;
+      chatSendBtn.disabled = true;
+
+      addThinkingIndicator();
 
       try {
         const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
         const body = { message: message, model_id: modelId, context: buildChatContext() };
         const llmSettings = getChatLlmSettings();
         if (llmSettings) body.llm_settings = llmSettings;
-        const response = await fetch('/api/chat', {
+
+        const response = await fetch('/api/chat/stream', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
         });
-        
-        if (!response.ok) {
-          throw new Error(`Chat API error: ${response.status}`);
+
+        if (!response.ok) throw new Error(`Chat API error: ${response.status}`);
+
+        removeThinkingIndicator();
+        const contentEl = addStreamingBubble();
+        let fullText = "";
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const payload = trimmed.slice(6);
+            if (payload === "[DONE]") break;
+            try {
+              const chunk = JSON.parse(payload);
+              const token = chunk.token || "";
+              if (token.startsWith("[ERROR]")) {
+                fullText += token.slice(7);
+              } else {
+                fullText += token;
+              }
+              scheduleRender(contentEl, fullText);
+            } catch (_) {}
+          }
         }
-        
-        const data = await response.json();
-        addMessage(data.response || "I'm sorry, I couldn't generate a response.");
+
+        // Final full render
+        if (_renderTimer) clearTimeout(_renderTimer);
+        contentEl.innerHTML = renderMarkdown(fullText || "I'm sorry, I couldn't generate a response.");
+        scrollChatToBottom();
+
       } catch (error) {
         console.error("Chat error:", error);
+        removeThinkingIndicator();
         addMessage("Sorry, I encountered an error. Please try again.");
+      } finally {
+        chatInput.disabled = false;
+        chatSendBtn.disabled = false;
+        chatInput.focus();
       }
     }
 
