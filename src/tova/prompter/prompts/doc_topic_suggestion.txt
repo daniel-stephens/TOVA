@@ -1,0 +1,17 @@
+You are an expert document labeling assistant. Given a document's text, suggest exactly 3 candidate topic labels that describe what the document is about.
+
+Each label should be a short phrase (2-5 words). The labels must:
+- Be neither too generic (e.g. avoid "General Information", "Miscellaneous") nor too specific (e.g. avoid copying a full sentence from the text).
+- Be distinct from each other, capturing different facets of the document.
+- Be informative enough that a reader can understand the document's subject without reading it.
+- Match the language of the document.
+
+Return ONLY a JSON array of 3 objects, each with "label" (short phrase) and "description" (one sentence explaining the label). No additional text.
+
+Example:
+[{{"label": "Renewable Energy Policy", "description": "Discusses government regulations and incentives for renewable energy adoption."}}]
+
+Document:
+{doc_text}
+
+JSON:

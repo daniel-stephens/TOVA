@@ -1,14 +1,17 @@
+import json
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
-from fastapi import APIRouter, HTTPException # type: ignore
+from fastapi import APIRouter, HTTPException  # type: ignore
+from pydantic import BaseModel, Field
 
 from tova.api.models.query_requests import ModelInfoRequest, ThetasByDocsIdsRequest, TopicInfoRequest
 from tova.api.models.rag_schemas import RAGRetrieveRequest, RAGRetrieveResponse, RAGTopic, RAGDocument
 from tova.core.dispatchers import get_model_info_dispatch, get_thetas_documents_by_id_dispatch, get_topic_info_dispatch
 from tova.core.topic_retriever import get_retriever
 from tova.api.logger import logger
+from tova.utils.common import load_yaml_config_file
 
 router = APIRouter()
 
@@ -114,3 +117,109 @@ def rag_retrieve(req: RAGRetrieveRequest):
     except Exception as e:
         logger.exception("RAG retrieval failed for model %s", req.model_id)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------- Document topic suggestion ---------------
+
+_DOC_TOPIC_PROMPT_PATH = Path("src/tova/prompter/prompts/doc_topic_suggestion.txt")
+_MAX_DOC_CHARS = 4000
+
+
+class DocTopicSuggestionRequest(BaseModel):
+    text: str = Field(..., description="Document text to analyze")
+    config_path: Optional[str] = Field(
+        "static/config/config.yaml",
+        description="Path to YAML config file",
+    )
+
+
+class TopicSuggestion(BaseModel):
+    label: str
+    description: str = ""
+
+
+class DocTopicSuggestionResponse(BaseModel):
+    suggestions: List[TopicSuggestion]
+
+
+def _parse_suggestion_json(raw: str) -> list[dict]:
+    """Best-effort extraction of a JSON array from LLM output."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("["), text.rfind("]")
+        if start != -1 and end != -1:
+            try:
+                parsed = json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return []
+        else:
+            return []
+
+    if not isinstance(parsed, list):
+        return []
+    return [
+        {"label": str(item["label"]).strip(), "description": str(item.get("description", "")).strip()}
+        for item in parsed[:3]
+        if isinstance(item, dict) and "label" in item
+    ]
+
+
+@router.post(
+    "/suggest-doc-topics",
+    response_model=DocTopicSuggestionResponse,
+    tags=["Queries"],
+)
+def suggest_doc_topics(req: DocTopicSuggestionRequest):
+    """Use the configured LLM (via Prompter) to suggest 3 candidate topic labels for a document."""
+    from tova.prompter.prompter import Prompter
+
+    config_path = Path(req.config_path or "static/config/config.yaml")
+    try:
+        tm_cfg = load_yaml_config_file(str(config_path), "topic_modeling", logger)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Config error: {e}")
+
+    general = tm_cfg.get("general", {})
+    model_type = general.get("llm_model_type", "gemma3:4b")
+    llm_server = general.get("llm_server")
+    llm_provider = general.get("llm_provider")
+
+    try:
+        prompter = Prompter(
+            config_path=config_path,
+            model_type=model_type,
+            llm_server=llm_server,
+            llm_provider=llm_provider,
+            logger=logger,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"LLM not available: {e}")
+
+    prompt_template = _DOC_TOPIC_PROMPT_PATH.read_text()
+    question = prompt_template.format(doc_text=req.text[:_MAX_DOC_CHARS])
+
+    try:
+        result_text, _ = prompter.prompt(
+            system_prompt_template_path=None,
+            question=question,
+        )
+    except Exception as e:
+        logger.exception("Prompter call failed for suggest-doc-topics")
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {e}")
+
+    suggestions = _parse_suggestion_json(result_text)
+    if not suggestions:
+        logger.warning("Could not parse LLM topic suggestions: %s", result_text[:300])
+        suggestions = [{"label": result_text[:80].strip(), "description": ""}]
+
+    return DocTopicSuggestionResponse(
+        suggestions=[TopicSuggestion(**s) for s in suggestions]
+    )

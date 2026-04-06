@@ -11,6 +11,7 @@ from web.endpoints.chat import (
     chat_openai_key_status,
     get_chat_messages,
 )
+from web.endpoints.doc_topics import suggest_doc_topics
 
 app_name = "web"
 
@@ -102,6 +103,7 @@ urlpatterns = [
     path("api/chat/messages", get_chat_messages, name="get_chat_messages"),
     path("api/chat", _x(chat), name="chat"),
     path("api/chat/stream", _x(chat_stream), name="chat_stream"),
+    path("api/doc-topics", _x(suggest_doc_topics), name="suggest_doc_topics"),
     path(
         "api/models/<str:model_id>/topics/<int:topic_id>/rename",
         _x(views.rename_topic),
