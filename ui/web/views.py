@@ -42,7 +42,9 @@ from tova.core import drafts
 from tova.core import models as models_module
 
 from web import oauth_okta
-from web.middleware import _get_tova_user
+from web.admin_emails import admin_emails_from_env, promote_env_listed_user_to_staff
+from web.authz import get_tova_user_session_dict
+from web.decorators import require_tova_app_admin
 from web.models import AuditLog, ChatMessage, User, UserConfig
 from web.services import runtime as R
 
@@ -85,7 +87,7 @@ def _log_audit(request, action: str, target_type: str = None, target_id: str = N
 
     log = logging.getLogger(__name__)
     try:
-        actor = _get_tova_user(request) or {}
+        actor = get_tova_user_session_dict(request) or {}
         entry = AuditLog(
             actor_id=actor.get("id"),
             action=action,
@@ -182,6 +184,7 @@ def signup(request):
 
         auth_login(request, user)
         _session_permanent(request)
+        promote_env_listed_user_to_staff(user)
 
         messages.success(request, "Account created! Welcome to TOVA.")
         return redirect(reverse("web:home"))
@@ -210,6 +213,7 @@ def login(request):
 
         auth_login(request, user)
         _session_permanent(request)
+        promote_env_listed_user_to_staff(user)
         _log_audit(request, "login", target_type="user", target_id=str(user.pk), details=user.email)
 
         messages.success(request, "Signed in successfully.")
@@ -280,6 +284,7 @@ def auth_okta_callback(request):
 
     auth_login(request, user)
     _session_permanent(request)
+    promote_env_listed_user_to_staff(user)
     _log_audit(request, "login", target_type="user", target_id=str(user.pk), details=user.email)
 
     messages.success(request, "Signed in with Okta.")
@@ -298,26 +303,24 @@ def logout(request):
 # Admin (superuser) page
 # ------------------------------------------------------------------------------
 @login_required
+@require_tova_app_admin(json_response=False)
 def admin_page(request):
-    """Admin page: list users and manage admin status."""
-    tu = _get_tova_user(request)
-    if not tu or not tu.get("is_admin"):
-        messages.error(request, "You do not have access to the admin area.")
-        return redirect(reverse("web:home"))
+    """Admin entry: redirect to the TOVA console inside Django admin."""
     # The legacy Flask-like "staff tools" console is removed from the UI.
     # Instead, surface the corpora + dashboards directly inside Django admin.
     return redirect(reverse("tova_admin_corpora"))
 
 
 @login_required
+@require_tova_app_admin(
+    forbidden_payload={"success": False, "message": "Forbidden"},
+)
 def admin_toggle_user(request, user_id):
     """Toggle is_admin for a user (only admins). Cannot remove your own admin if you're the last admin."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"success": False, "message": "Forbidden"}, status=403)
     target = User.objects.filter(pk=user_id).first()
     if not target:
         return JsonResponse({"success": False, "message": "User not found"}, status=404)
-    admin_emails = R._admin_emails_from_env()
+    admin_emails = admin_emails_from_env()
     db_admin_count = User.objects.filter(is_admin=True).count()
     # If we're demoting ourselves and we're the only DB admin (and not in env list), forbid
     if (
@@ -341,10 +344,11 @@ def admin_toggle_user(request, user_id):
 
 
 @login_required
+@require_tova_app_admin(
+    forbidden_payload={"success": False, "message": "Forbidden"},
+)
 def admin_create_user(request):
     """Create a new user (admin only). JSON: name, email, password."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"success": False, "message": "Forbidden"}, status=403)
     payload = _get_json(request) or {}
     name = (payload.get("name") or "").strip()
     email = (payload.get("email") or "").strip().lower()
@@ -371,10 +375,11 @@ def admin_create_user(request):
 
 
 @login_required
+@require_tova_app_admin(
+    forbidden_payload={"success": False, "message": "Forbidden"},
+)
 def admin_delete_user(request, user_id):
     """Delete a user (admin only). Cannot delete yourself."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"success": False, "message": "Forbidden"}, status=403)
     if user_id == request.tova_user.get("id"):
         return JsonResponse({"success": False, "message": "Cannot delete your own account"}, status=400)
     target = User.objects.filter(pk=user_id).first()
@@ -388,10 +393,9 @@ def admin_delete_user(request, user_id):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_list_corpora(request):
     """List all corpora across all users (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         r = requests.get(f"{R.API}/data/corpora", timeout=15)
         r.raise_for_status()
@@ -413,10 +417,9 @@ def admin_list_corpora(request):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_delete_corpus(request, corpus_id):
     """Delete any corpus (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         r = requests.get(f"{R.API}/data/corpora/{corpus_id}", timeout=10)
         if r.status_code == 404:
@@ -448,10 +451,9 @@ def admin_delete_corpus(request, corpus_id):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_list_models(request):
     """List all models across all users (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         models_drafts = drafts.list_drafts(type=DraftType.model)
     except Exception as e:
@@ -500,10 +502,9 @@ def admin_list_models(request):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_delete_model(request, model_id):
     """Delete any model (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         up = requests.get(f"{R.API}/data/models/{model_id}", timeout=10)
         if up.status_code == 404:
@@ -538,10 +539,9 @@ def admin_delete_model(request, model_id):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_stats(request):
     """System stats (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         r = requests.get(f"{R.API}/data/corpora", timeout=10)
         corpus_count = len(r.json()) if r.ok else None
@@ -563,10 +563,9 @@ def admin_stats(request):
 
 
 @login_required
+@require_tova_app_admin()
 def admin_audit(request):
     """Paginated audit log (admin only)."""
-    if not getattr(request, "tova_user", None) or not request.tova_user.get("is_admin"):
-        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         page = max(1, int(request.GET.get("page", 1)))
     except (TypeError, ValueError):
@@ -2022,6 +2021,7 @@ def delete_model(request):
 def dashboard(request):
     model_id = request.POST.get("model_id") or request.GET.get("model_id", "")
     model_name = ""
+    corpus_id = ""
     if model_id:
         try:
             up = requests.get(
@@ -2031,10 +2031,17 @@ def dashboard(request):
             if up.ok:
                 body = up.json() or {}
                 model_name = (body.get("name") or "").strip()
+                meta = body.get("metadata") or {}
                 if not model_name:
-                    meta = body.get("metadata") or {}
                     tr = meta.get("tr_params") or {}
                     model_name = (tr.get("model_name") or "").strip()
+                corpus_id = (body.get("corpus_id") or "").strip()
+                if not corpus_id:
+                    tr = meta.get("tr_params") or {}
+                    corpus_id = (
+                        (meta.get("corpus_id") or "").strip()
+                        or (tr.get("corpus_id") or "").strip()
+                    )
         except requests.RequestException:
             logger.warning(
                 "dashboard: could not fetch model metadata for %s",
@@ -2045,7 +2052,11 @@ def dashboard(request):
         return render(
             request,
             "dashboard.html",
-            {"model_id": model_id, "model_name": model_name},
+            {
+                "model_id": model_id,
+                "model_name": model_name,
+                "corpus_id": corpus_id,
+            },
         )
     except Exception:
         logger.exception(

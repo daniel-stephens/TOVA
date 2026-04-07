@@ -58,6 +58,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-mydb}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - TOVA_ADMIN_EMAILS=${TOVA_ADMIN_EMAILS:-}
+      - DJANGO_ADMIN_EMAILS=${DJANGO_ADMIN_EMAILS:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

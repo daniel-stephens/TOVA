@@ -350,7 +350,7 @@
               Trained topic models
             </a>
           </li>
-          {% if user.is_staff %}
+          {% if user.is_staff or request.tova_user.is_admin %}
           <li class="nav-item">
             <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
                href="{% url 'admin:index' %}">
@@ -389,7 +389,7 @@
                 {% else %}
                 <div class="tova-account-name">{{ user.email }}</div>
                 {% endif %}
-                {% if user.is_staff %}
+                {% if user.is_staff or request.tova_user.is_admin %}
                 <div class="mt-2"><span class="badge rounded-pill text-bg-primary text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.04em;">Admin</span></div>
                 {% endif %}
               </li>
@@ -412,7 +412,7 @@
                   </span>
                 </button>
               </li>
-              {% if user.is_staff %}
+              {% if user.is_staff or request.tova_user.is_admin %}
               <li>
                 <a class="dropdown-item" href="{% url 'admin:index' %}">
                   <i class="bi bi-shield-lock" aria-hidden="true"></i>

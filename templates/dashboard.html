@@ -14,6 +14,18 @@ body {
   flex-direction: column;
 }
 
+  /* Navbar above sticky document table headers (Bootstrap .sticky-top ≈ 1020; dropdown menus ≈ 1000). */
+  nav.navbar {
+    position: relative;
+    z-index: 1030;
+  }
+
+  /* Keep in-page sticky headers below the navbar stacking context */
+  #mainContent thead.sticky-top,
+  #documentsPanel thead.sticky-top {
+    z-index: 2 !important;
+  }
+
 .navbar-brand.navbar-brand--active {
   color: #0d6efd !important;
   font-weight: 800;
@@ -952,7 +964,7 @@ footer {
             <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
                href="{% url_for 'trained_models' %}">Trained topic models</a>
           </li>
-          {% if user.is_authenticated and user.is_staff %}
+          {% if user.is_authenticated and user.is_staff or user.is_authenticated and request.tova_user.is_admin %}
           <li class="nav-item">
             <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
                href="{% url 'admin:index' %}">Admin</a>
@@ -961,9 +973,19 @@ footer {
         </ul>
 
         <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+          {% comment %}Run inference (navbar) — opens #inferenceModal
           <button class="btn btn-primary btn-sm order-1 order-sm-0" type="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">
             <i class="bi bi-lightning-charge-fill me-1"></i>Run inference
           </button>
+          {% endcomment %}
+
+          {% if user.is_authenticated and model_id and corpus_id %}
+          <a class="btn btn-outline-primary btn-sm order-1 order-sm-0 text-nowrap"
+             href="{% url_for 'training_page_get' %}?corpus_id={{ corpus_id|urlencode }}&amp;model_id={{ model_id|urlencode }}&amp;from_models=1&amp;autopreview=1"
+             title="Open the TF-IDF dashboard (fast TF-IDF / k-means preview for this corpus)">
+            <i class="bi bi-lightning-charge-fill me-1" aria-hidden="true"></i>TF-IDF dashboard
+          </a>
+          {% endif %}
 
           {% if user.is_authenticated %}
           <div class="dropdown order-2 order-sm-1">
@@ -1016,6 +1038,14 @@ footer {
                   <i class="bi bi-info-circle me-2"></i>Model info
                 </a>
               </li>
+              {% if corpus_id %}
+              <li>
+                <a class="dropdown-item"
+                   href="{% url_for 'training_page_get' %}?corpus_id={{ corpus_id|urlencode }}&amp;model_id={{ model_id|urlencode }}&amp;from_models=1&amp;autopreview=1">
+                  <i class="bi bi-lightning-charge me-2"></i>TF-IDF dashboard <span class="text-muted small">(fast)</span>
+                </a>
+              </li>
+              {% endif %}
               <li>
                 <a class="dropdown-item" href="#" role="button"
                    onclick="event.preventDefault(); window.openSaveSettingsModal && window.openSaveSettingsModal();">
