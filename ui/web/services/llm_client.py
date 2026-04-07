@@ -126,6 +126,103 @@ logger.info(
 )
 
 
+def chat_llm_stream(
+    provider: str,
+    model: str,
+    system_content: str,
+    user_content: str,
+    *,
+    host: str | None = None,
+    api_key: str | None = None,
+):
+    """Yield text chunks as the LLM generates them.
+
+    Yields ``str`` tokens on success.  On failure the generator yields a
+    single error string prefixed with ``[ERROR]``.
+    """
+    llm_cfg = R._safe_dict(R.RAW_CONFIG.get("llm"))
+    provider = (provider or "").strip().lower()
+
+    if provider == "ollama":
+        ollama_cfg = R._safe_dict(llm_cfg.get("ollama"))
+        base_url = host or ollama_cfg.get("host", "http://host.docker.internal:11434")
+        base_url = str(base_url).strip().rstrip("/")
+        try:
+            with requests.post(
+                f"{base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "stream": True,
+                },
+                timeout=(5, 120),
+                stream=True,
+            ) as r:
+                r.raise_for_status()
+                import json as _json
+
+                for raw_line in r.iter_lines(decode_unicode=True):
+                    if not raw_line:
+                        continue
+                    try:
+                        chunk = _json.loads(raw_line)
+                    except Exception:
+                        continue
+                    token = (chunk.get("message") or {}).get("content", "")
+                    if token:
+                        yield token
+        except Exception as e:
+            yield f"[ERROR]{e}"
+        return
+
+    if provider in {"gpt", "openai"}:
+        key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
+        if not key:
+            yield "[ERROR]OpenAI API key not set."
+            return
+        try:
+            with requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "max_tokens": 1024,
+                    "stream": True,
+                },
+                timeout=(5, 120),
+                stream=True,
+            ) as r:
+                r.raise_for_status()
+                for raw_line in r.iter_lines(decode_unicode=True):
+                    if not raw_line or not raw_line.startswith("data: "):
+                        continue
+                    payload = raw_line[len("data: "):]
+                    if payload.strip() == "[DONE]":
+                        break
+                    import json as _json
+
+                    try:
+                        chunk = _json.loads(payload)
+                    except Exception:
+                        continue
+                    delta = (chunk.get("choices") or [{}])[0].get("delta", {})
+                    token = delta.get("content", "")
+                    if token:
+                        yield token
+        except Exception as e:
+            yield f"[ERROR]{e}"
+        return
+
+    yield f"[ERROR]Unsupported LLM provider: {provider}"
+
+
 def get_openai_key_from_env() -> str | None:
     """Public wrapper for other modules."""
     return _get_openai_key_from_env()

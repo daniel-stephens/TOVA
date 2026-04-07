@@ -20,6 +20,17 @@ ALLOWED_HOSTS = [
 ]
 
 
+def _int_env(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        val = int(raw)
+        return val if val > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _database_from_env():
     raw = (os.getenv("DATABASE_URL") or "").strip()
     if not raw:
@@ -108,6 +119,11 @@ LOGIN_REDIRECT_URL = reverse_lazy("web:home")
 LOGOUT_REDIRECT_URL = reverse_lazy("web:login")
 
 APPEND_SLASH = False
+
+# The upload page posts parsed dataset JSON (not multipart files), which can exceed
+# Django's default request-body limit for medium/large JSONL inputs.
+DATA_UPLOAD_MAX_MEMORY_SIZE = _int_env("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", 25 * 1024 * 1024)
+FILE_UPLOAD_MAX_MEMORY_SIZE = _int_env("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", 25 * 1024 * 1024)
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_NAME = "sessionid"

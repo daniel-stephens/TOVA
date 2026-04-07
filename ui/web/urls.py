@@ -6,10 +6,12 @@ from django.views.decorators.csrf import csrf_exempt
 from web import views
 from web.endpoints.chat import (
     chat,
+    chat_stream,
     chat_llm_options,
     chat_openai_key_status,
     get_chat_messages,
 )
+from web.endpoints.doc_topics import suggest_doc_topics
 
 app_name = "web"
 
@@ -91,6 +93,7 @@ urlpatterns = [
     path("get-trained-models", views.get_trained_models, name="get_trained_models"),
     path("get-models-names", views.get_model_names, name="get_model_names"),
     path("delete-model", _x(views.delete_model), name="delete_model"),
+    path("delete-model/", _x(views.delete_model), name="delete_model_slash"),
     path("dashboard", _x(views.dashboard), name="dashboard"),
     path("get-dashboard-data", _x(views.proxy_dashboard_data), name="get_dashboard_data"),
     path("text-info", _x(views.text_info), name="text_info"),
@@ -100,6 +103,8 @@ urlpatterns = [
     path("api/chat-llm-options", chat_llm_options, name="chat_llm_options"),
     path("api/chat/messages", get_chat_messages, name="get_chat_messages"),
     path("api/chat", _x(chat), name="chat"),
+    path("api/chat/stream", _x(chat_stream), name="chat_stream"),
+    path("api/doc-topics", _x(suggest_doc_topics), name="suggest_doc_topics"),
     path(
         "api/models/<str:model_id>/topics/<int:topic_id>/rename",
         _x(views.rename_topic),

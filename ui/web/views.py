@@ -25,6 +25,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import RequestDataTooBig
 from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
@@ -512,7 +513,11 @@ def admin_delete_model(request, model_id):
         model_meta = up.json()
     except requests.RequestException as e:
         return JsonResponse({"error": str(e)}, status=502)
-    corpus_id = model_meta.get("corpus_id")
+    corpus_id = (
+        model_meta.get("corpus_id")
+        or (model_meta.get("metadata") or {}).get("corpus_id")
+        or ((model_meta.get("metadata") or {}).get("tr_params") or {}).get("corpus_id")
+    )
     if corpus_id:
         try:
             requests.post(f"{R.API}/data/corpora/{corpus_id}/delete_model", params={"model_id": model_id}, timeout=10)
@@ -993,7 +998,23 @@ def delete_corpus(request):
 
 @login_required
 def create_dataset(request):
-    payload = _get_json(request) or {}
+    try:
+        payload = _get_json(request) or {}
+    except RequestDataTooBig:
+        max_mb = os.getenv("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(25 * 1024 * 1024))
+        try:
+            max_mb = f"{int(max_mb) / (1024 * 1024):.0f}"
+        except (TypeError, ValueError):
+            max_mb = "25"
+        return JsonResponse(
+            {
+                "error": (
+                    "Dataset payload too large. Reduce file size or increase "
+                    f"DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE (currently ~{max_mb}MB)."
+                )
+            },
+            status=413,
+        )
     metadata = payload.get("metadata", {})
     data = payload.get("data", {})
     documents = data.get("documents", [])
@@ -1929,7 +1950,11 @@ def delete_model(request):
         logger.exception("model delete error fetching model: %s", e)
         return JsonResponse({"error": f"Upstream error fetching model: {e}"}, status=502)
 
-    corpus_id = model_metadata.get("corpus_id")
+    corpus_id = (
+        model_metadata.get("corpus_id")
+        or (model_metadata.get("metadata") or {}).get("corpus_id")
+        or ((model_metadata.get("metadata") or {}).get("tr_params") or {}).get("corpus_id")
+    )
     if corpus_id:
         logger.info("Deleting model '%s' from corpus '%s'", model_id, corpus_id)
         # delete model from corpus

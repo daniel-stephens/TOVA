@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse, HttpRequest
+import json
+
+from django.http import JsonResponse, HttpRequest, StreamingHttpResponse
 
 from web import views as views_monolith
-from web.agents.orchestrator import run_chat_assistant
+from web.agents.orchestrator import run_chat_assistant, run_chat_assistant_stream
 from web.models import ChatMessage
 from web.services import runtime as R
 from web.services.llm_client import get_openai_key_from_env
@@ -181,5 +183,52 @@ def chat(request: HttpRequest):
         )
     except Exception as e:
         logger.exception("Chat error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+def chat_stream(request: HttpRequest):
+    """SSE streaming chat endpoint -- tokens are sent as `data:` events."""
+    try:
+        payload = views_monolith._get_json(request) or {}
+        message = payload.get("message", "").strip()
+        model_id = payload.get("model_id", "")
+        context: dict[str, Any] = payload.get("context", {}) or {}
+        llm_settings: dict[str, Any] = R._safe_dict(payload.get("llm_settings"))
+
+        if not message:
+            return JsonResponse({"error": "Message is required"}, status=400)
+
+        user_id = views_monolith._request_user_id(request)
+
+        def event_stream():
+            collected: list[str] = []
+            for token in run_chat_assistant_stream(
+                user_id=user_id,
+                model_id=model_id,
+                message=message,
+                context=context,
+                llm_settings=llm_settings,
+                load_user_config=views_monolith._load_user_config if user_id else None,
+            ):
+                collected.append(token)
+                yield f"data: {json.dumps({'token': token})}\n\n"
+
+            full_text = "".join(collected)
+            if user_id and model_id and full_text and not full_text.startswith("[ERROR]"):
+                try:
+                    ChatMessage(user_id=user_id, model_id=model_id.strip(), role="user", content=message).save()
+                    ChatMessage(user_id=user_id, model_id=model_id.strip(), role="assistant", content=full_text).save()
+                except Exception as save_err:
+                    logger.warning("Failed to save chat messages: %s", save_err)
+
+            yield "data: [DONE]\n\n"
+
+        resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+        resp["Cache-Control"] = "no-cache"
+        resp["X-Accel-Buffering"] = "no"
+        return resp
+    except Exception as e:
+        logger.exception("Chat stream error: %s", e)
         return JsonResponse({"error": str(e)}, status=500)
 
