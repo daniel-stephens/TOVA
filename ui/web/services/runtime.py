@@ -170,10 +170,9 @@ def _cache_set(cache: dict, key, data):
 
 
 def _admin_emails_from_env():
-    raw = os.getenv("TOVA_ADMIN_EMAILS", "").strip()
-    if not raw:
-        return set()
-    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+    from web.admin_emails import admin_emails_from_env
+
+    return admin_emails_from_env()
 
 
 def build_llm_ui_config(config: dict | None = None):

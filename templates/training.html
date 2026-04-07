@@ -300,7 +300,7 @@
     font-size: 0.78rem;
     line-height: 1.3;
   }
-  .training-page-shell.training--expanded #trainingHeroCard #previewInfo {
+  .training-page-shell.training--expanded .training-focus-center-wrap #previewInfo {
     margin-top: 0.35rem !important;
     margin-bottom: 0 !important;
     font-size: 0.75rem;
@@ -338,6 +338,11 @@
   #trainingCompleteModal.modal {
     z-index: 1075;
   }
+
+  .tfidf-lsi-preview-bar .tfidf-lsi-preview-heading {
+    font-size: clamp(0.95rem, 2.5vw, 1.125rem);
+    line-height: 1.3;
+  }
 </style>
 {% endblock %}
 
@@ -347,12 +352,25 @@
   <div class="training-focus-scrim" id="trainingFocusScrim" aria-hidden="true"></div>
 
   <div class="training-focus-center-wrap" id="trainingFocusCenterWrap">
+    <div id="tfidfLsiPreviewBar" class="tfidf-lsi-preview-bar d-none border-bottom bg-white shadow-sm">
+      <div class="container-fluid py-2 px-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h1 class="tfidf-lsi-preview-heading fw-semibold text-dark min-w-0 mb-0" id="tfidfLsiPreviewBarTitle">
+            <span class="text-break" id="tfidfLsiPreviewModelName"></span><span class="text-muted fw-normal"> · TF-IDF – LSI preview</span>
+          </h1>
+          <div class="d-flex flex-wrap align-items-center gap-2 flex-shrink-0">
+            <a class="btn btn-outline-secondary btn-sm" href="/trained-models">Back to trained models</a>
+            <a class="btn btn-primary btn-sm d-none" id="tfidfOpenModelDashboardBtn" href="#">Open model dashboard</a>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="container-fluid py-3">
       <div class="card shadow-lg border-0 training-hero-card training-status-card" id="trainingHeroCard">
         <div class="card-body p-4">
           <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1 training-status-top">
             <div>
-              <div class="text-uppercase text-muted xsmall mb-1">Training in progress</div>
+              <div class="text-uppercase text-muted xsmall mb-1" id="trainingStatusKicker">Training in progress</div>
               <div class="d-flex align-items-center gap-2">
                 <span class="pulse-dot" id="trainingDot" aria-hidden="true"></span>
                 <div id="trainingMessage" class="fw-semibold fs-6" aria-live="polite">
@@ -365,7 +383,7 @@
             </small>
           </div>
 
-          <div class="progress mt-3 mb-4 training-progress" role="progressbar" aria-label="Training progress">
+          <div id="trainingProgressWrap" class="progress mt-3 mb-4 training-progress" role="progressbar" aria-label="Training progress">
             <div id="trainingBar"
                  class="progress-bar progress-bar-striped"
                  style="width:0%"
@@ -378,7 +396,7 @@
           <div class="training-hero-summary mb-4 p-3 p-sm-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
               <div class="flex-grow-1 min-w-0">
-                <div class="text-uppercase text-muted xsmall mb-1">Now training</div>
+                <div class="text-uppercase text-muted xsmall mb-1" id="trainingSummaryKicker">Now training</div>
                 <h2 class="hero-title fw-bold mb-2 text-dark text-break" id="transitionDisplayTitle">—</h2>
                 <p class="text-muted small mb-0" id="transitionSubtitle">
                   Linking run to your corpus…
@@ -403,8 +421,14 @@
           </div>
 
           <div class="training-hero-actions">
+            <a id="backToTrainedModelsBtn"
+               class="btn btn-outline-secondary btn-sm d-none"
+               href="/trained-models">Back to trained models</a>
             <button id="openPreviewBtn" class="btn btn-primary btn-sm" type="button">
               Open low-latency preview
+            </button>
+            <button id="toggleTfidfPreviewBtn" class="btn btn-outline-primary btn-sm d-none" type="button">
+              Hide low-latency preview
             </button>
             <div id="redirectButtonContainer" class="ms-sm-auto d-none">
               <button id="goToModelBtn" type="button" class="btn btn-success btn-sm">
@@ -412,9 +436,9 @@
               </button>
             </div>
           </div>
-          <div id="previewInfo" class="small text-danger mt-2 mb-0 d-none"></div>
         </div>
       </div>
+      <div id="previewInfo" class="small text-danger mt-2 mb-0 d-none"></div>
     </div>
   </div>
 
@@ -429,8 +453,8 @@
       <div class="panel" style="flex: 0 0 50%; min-height: 0;">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="fw-bold mb-0">Theme Overview</h5>
-          <!-- Optional glossary button (uses existing modal if you have it) -->
           <button type="button"
+                  id="trainingThemeGlossaryBtn"
                   class="btn btn-link btn-sm text-decoration-none"
                   data-bs-toggle="modal"
                   data-bs-target="#topicModelGuideModal">
@@ -663,6 +687,48 @@
   let allDocuments = [];
   let filteredDocs = [];
   let previewLoaded = false;
+  let trainingFromModelsEntry = false;
+
+  const OPEN_PREVIEW_LABEL = "Open low-latency preview";
+  const LOADING_PREVIEW_LABEL = "Loading low-latency preview…";
+  const HIDE_PREVIEW_LABEL = "Hide low-latency preview";
+  const SHOW_PREVIEW_LABEL = "Show low-latency preview";
+  const RETRY_PREVIEW_LABEL = "Try loading low-latency preview";
+
+  /**
+   * Trained-models entry (from_models=1): topic dashboard CTA only. Preview loads
+   * automatically—no Open/Hide controls in the hero.
+   * Active training: Open until data exists, then Hide/Show to collapse the panel.
+   */
+  function syncTrainingHeroPreviewControls() {
+    const openBtn = document.getElementById("openPreviewBtn");
+    const toggleBtn = document.getElementById("toggleTfidfPreviewBtn");
+    const backBtn = document.getElementById("backToTrainedModelsBtn");
+    const mainLayout = document.getElementById("trainingMainLayout");
+    if (!openBtn || !toggleBtn || !backBtn) return;
+
+    if (trainingFromModelsEntry) {
+      backBtn.classList.add("d-none");
+      openBtn.classList.add("d-none");
+      toggleBtn.classList.add("d-none");
+      return;
+    }
+
+    backBtn.classList.add("d-none");
+
+    if (!previewLoaded) {
+      openBtn.classList.remove("d-none");
+      toggleBtn.classList.add("d-none");
+      openBtn.textContent = OPEN_PREVIEW_LABEL;
+      return;
+    }
+
+    const previewPanelVisible = mainLayout && !mainLayout.classList.contains("d-none");
+    openBtn.classList.add("d-none");
+    toggleBtn.classList.remove("d-none");
+    toggleBtn.textContent = previewPanelVisible ? HIDE_PREVIEW_LABEL : SHOW_PREVIEW_LABEL;
+  }
+
   function expandTrainingLayout() {
     const shell = document.getElementById("trainingPageShell");
     if (!shell) return;
@@ -676,6 +742,9 @@
       const corpusId = params.get("corpus_id");
       const jobId    = params.get("job_id");
       const modelId  = params.get("model_id");
+      const fromModels = params.get("from_models") === "1";
+      const autopreview = params.get("autopreview") === "1";
+      trainingFromModelsEntry = fromModels;
       console.log("jobId:", jobId, "modelId:", modelId);
 
       if (!corpusId) {
@@ -684,16 +753,20 @@
       }
 
       wireUI();
-      await enrichTransitionMeta({ corpusId, jobId, modelId });
-      wirePreviewChoice(corpusId);
+      await enrichTransitionMeta({
+        corpusId,
+        jobId: fromModels ? null : jobId,
+        modelId,
+      });
 
-      if (jobId) {
-        startPolling(`/status/jobs/${encodeURIComponent(jobId)}`, 1000);
+      if (fromModels) {
+        await enterStaticPreviewMode({ corpusId, modelId, autopreview, fromModels: true });
       } else {
-        // Optional fallback if you ever land here without job_id
-        // (callTrainingInfo would need to be implemented)
-        // const { statusUrl } = await callTrainingInfo(corpusId);
-        // if (statusUrl) startPolling(statusUrl, 1000);
+        wirePreviewChoice(corpusId);
+        if (jobId) {
+          startPolling(`/status/jobs/${encodeURIComponent(jobId)}`, 1000);
+        }
+        syncTrainingHeroPreviewControls();
       }
     } catch (err) {
       console.error("Error during initialization:", err);
@@ -717,7 +790,7 @@
 
       const docs = Array.isArray(jsonData.documents) ? jsonData.documents : [];
       if (!docs.length) {
-        return { ok: false, reason: "No preview data is available yet. Training is still running." };
+        return { ok: false, reason: "No low-latency preview data yet. Training may still be running." };
       }
       renderThemeVisualizations(docs);
       populateThemeDiagnosticsTable(jsonData.per_cluster || {});
@@ -736,6 +809,98 @@
     }
   }
 
+  async function enterStaticPreviewMode({ corpusId, modelId, autopreview, fromModels = false }) {
+    const titleEl = document.getElementById("transitionDisplayTitle");
+    const modelDisplayName = (titleEl?.textContent || "").trim().replace(/^—$/, "") || "Your topic model";
+
+    expandTrainingLayout();
+
+    const topBar = document.getElementById("tfidfLsiPreviewBar");
+    const topBarName = document.getElementById("tfidfLsiPreviewModelName");
+    const openDash = document.getElementById("tfidfOpenModelDashboardBtn");
+    const heroCard = document.getElementById("trainingHeroCard");
+
+    if (topBar) topBar.classList.remove("d-none");
+    if (topBarName) topBarName.textContent = modelDisplayName;
+    if (openDash) {
+      if (modelId) {
+        const u = new URL("/dashboard", window.location.origin);
+        u.searchParams.set("model_id", modelId);
+        openDash.href = u.toString();
+        openDash.classList.remove("d-none");
+      } else {
+        openDash.removeAttribute("href");
+        openDash.classList.add("d-none");
+      }
+    }
+    if (heroCard) heroCard.classList.add("d-none");
+
+    document.getElementById("trainingThemeGlossaryBtn")?.classList.add("d-none");
+    document.title = `TOVA · ${modelDisplayName} · TF-IDF – LSI preview`;
+
+    document.getElementById("redirectButtonContainer")?.classList.add("d-none");
+
+    wirePreviewChoice(corpusId);
+
+    const shouldAutoLoadPreview = autopreview || fromModels;
+    if (shouldAutoLoadPreview) {
+      const mainLayout = document.getElementById("trainingMainLayout");
+      const previewInfo = document.getElementById("previewInfo");
+      const result = await loadVisualization(corpusId);
+      if (result?.ok) {
+        previewLoaded = true;
+        mainLayout?.classList.remove("d-none");
+      } else if (previewInfo) {
+        const msg =
+          result?.reason ||
+          "No saved low-latency preview found. The draft folder may have been removed, or preview was never generated.";
+        previewInfo.replaceChildren();
+        const line = document.createElement("div");
+        line.className = "text-danger";
+        line.textContent = msg;
+        previewInfo.appendChild(line);
+        if (fromModels) {
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.className = "btn btn-sm btn-outline-primary mt-2";
+          retry.textContent = RETRY_PREVIEW_LABEL;
+          retry.addEventListener("click", async () => {
+            retry.disabled = true;
+            const r = await loadVisualization(corpusId);
+            retry.disabled = false;
+            if (r?.ok) {
+              previewLoaded = true;
+              mainLayout?.classList.remove("d-none");
+              previewInfo.classList.add("d-none");
+              previewInfo.replaceChildren();
+            }
+          });
+          previewInfo.appendChild(retry);
+        }
+        previewInfo.classList.remove("d-none");
+      }
+    }
+
+    syncTrainingHeroPreviewControls();
+  }
+
+  function wireTfidfPreviewToggle(mainLayout) {
+    const toggleBtn = document.getElementById("toggleTfidfPreviewBtn");
+    if (!mainLayout || !toggleBtn || trainingFromModelsEntry) {
+      syncTrainingHeroPreviewControls();
+      return;
+    }
+    if (!toggleBtn.dataset.bound) {
+      toggleBtn.dataset.bound = "1";
+      toggleBtn.addEventListener("click", () => {
+        const wasVisible = !mainLayout.classList.contains("d-none");
+        mainLayout.classList.toggle("d-none", wasVisible);
+        syncTrainingHeroPreviewControls();
+      });
+    }
+    syncTrainingHeroPreviewControls();
+  }
+
   function wirePreviewChoice(corpusId) {
     const openBtn = document.getElementById("openPreviewBtn");
     const mainLayout = document.getElementById("trainingMainLayout");
@@ -745,11 +910,12 @@
         expandTrainingLayout();
         if (previewLoaded) {
           mainLayout?.classList.remove("d-none");
+          wireTfidfPreviewToggle(mainLayout);
           return;
         }
         openBtn.disabled = true;
         const oldText = openBtn.textContent;
-        openBtn.textContent = "Loading preview...";
+        openBtn.textContent = LOADING_PREVIEW_LABEL;
         if (previewInfo) {
           previewInfo.classList.add("d-none");
           previewInfo.textContent = "";
@@ -759,19 +925,21 @@
           if (result?.ok) {
             previewLoaded = true;
             mainLayout?.classList.remove("d-none");
+            wireTfidfPreviewToggle(mainLayout);
           } else if (previewInfo) {
-            previewInfo.textContent = result?.reason || "Preview is not available yet.";
+            previewInfo.textContent = result?.reason || "Low-latency preview is not available yet.";
             previewInfo.classList.remove("d-none");
           }
         } catch (e) {
           console.error("Preview load failed:", e);
           if (previewInfo) {
-            previewInfo.textContent = "Preview is not available yet.";
+            previewInfo.textContent = "Low-latency preview is not available yet.";
             previewInfo.classList.remove("d-none");
           }
         } finally {
-          openBtn.textContent = oldText || "Open low-latency preview";
+          openBtn.textContent = oldText || OPEN_PREVIEW_LABEL;
           openBtn.disabled = false;
+          syncTrainingHeroPreviewControls();
         }
       });
       openBtn.dataset.bound = "1";
@@ -968,6 +1136,7 @@
     const detBar      = document.getElementById("trainingBar");
     const indBar      = document.getElementById("indeterminateBar");
     const dot         = document.getElementById("trainingDot");
+    const progressWrap = document.getElementById("trainingProgressWrap");
 
     if (!trainingEl || !etaEl || !activityEl) return;
 
@@ -1045,12 +1214,15 @@
       (status && finishedStatuses.has(String(status).toLowerCase())) ||
       (pct !== null && pct >= 100);
 
+    const hideProgressBar = !!error || isComplete;
+    if (progressWrap) progressWrap.classList.toggle("d-none", hideProgressBar);
+
     if (error) {
       setDotState("err");
       setProgress({ percent: null, running: false });
     } else if (isComplete) {
       setDotState("done");
-      setProgress({ percent: 100, running: true });
+      setProgress({ percent: null, running: false });
     } else {
       setDotState("run");
       setProgress({ percent: pct, running: true });

@@ -188,7 +188,16 @@
 
     const modelName = m.name || "(unnamed)";
     const corpusName = corpus.name || "Corpus";
+    const corpusIdForPreview = corpus.id || "";
     const createdDate = fmtDate(m.created_at);
+    const tfidfPreviewBtn = corpusIdForPreview
+      ? `<button type="button" class="btn btn-outline-secondary dashboard-btn flex-fill tfidf-preview-btn"
+              data-corpus-id="${escapeHtml(corpusIdForPreview)}"
+              data-model-id="${escapeHtml(m.id)}"
+              title="Open the TF-IDF dashboard (same saved view as during training)">
+           TF-IDF dashboard
+         </button>`
+      : "";
 
     // Details section (hidden by default)
     const detailsHtml = `
@@ -271,10 +280,11 @@
               </button>
             </div>
             
-            <div class="d-flex gap-2 mt-auto pt-3 border-top">
+            <div class="d-flex flex-wrap gap-2 mt-auto pt-3 border-top">
               <button class="btn btn-primary dashboard-btn flex-fill use-model-btn" data-model-id="${escapeHtml(m.id)}">
                 Open Dashboard
               </button>
+              ${tfidfPreviewBtn}
               <button class="btn btn-outline-danger btn-sm delete-model" data-model-id="${escapeHtml(m.id)}" data-model-name="${escapeHtml(modelName)}">
                 Delete
               </button>
@@ -468,6 +478,24 @@
         // GET avoids CSRF on POST (dashboard view accepts model_id via GET or POST).
         const u = new URL("/dashboard", window.location.origin);
         u.searchParams.set("model_id", modelId);
+        window.location.assign(u.toString());
+        return;
+      }
+
+      const tfidfBtn = e.target.closest(".tfidf-preview-btn");
+      if (tfidfBtn) {
+        e.preventDefault();
+        const cid = tfidfBtn.dataset.corpusId;
+        const mid = tfidfBtn.dataset.modelId || "";
+        if (!cid) {
+          alert("Corpus id is missing; TF-IDF preview is unavailable for this row.");
+          return;
+        }
+        const u = new URL("/training/", window.location.origin);
+        u.searchParams.set("corpus_id", cid);
+        if (mid) u.searchParams.set("model_id", mid);
+        u.searchParams.set("from_models", "1");
+        u.searchParams.set("autopreview", "1");
         window.location.assign(u.toString());
         return;
       }
