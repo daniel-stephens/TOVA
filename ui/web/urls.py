@@ -6,10 +6,12 @@ from django.views.decorators.csrf import csrf_exempt
 from web import views
 from web.endpoints.chat import (
     chat,
+    chat_stream,
     chat_llm_options,
     chat_openai_key_status,
     get_chat_messages,
 )
+from web.endpoints.doc_topics import suggest_doc_topics
 
 app_name = "web"
 
@@ -101,6 +103,8 @@ urlpatterns = [
     path("api/chat-llm-options", chat_llm_options, name="chat_llm_options"),
     path("api/chat/messages", get_chat_messages, name="get_chat_messages"),
     path("api/chat", _x(chat), name="chat"),
+    path("api/chat/stream", _x(chat_stream), name="chat_stream"),
+    path("api/doc-topics", _x(suggest_doc_topics), name="suggest_doc_topics"),
     path(
         "api/models/<str:model_id>/topics/<int:topic_id>/rename",
         _x(views.rename_topic),
