@@ -79,6 +79,18 @@ def get_thetas_by_docs_ids(req: ThetasByDocsIdsRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/topic-labels/{model_id}", tags=["Queries"])
+def get_topic_labels(model_id: str):
+    """Return the list of topic labels for a trained model (lightweight, no LLM)."""
+    if not DRAFTS_SAVE.joinpath(model_id).is_dir():
+        raise HTTPException(status_code=404, detail="Model not found")
+    try:
+        retriever = get_retriever(model_id)
+        return {"labels": retriever.topic_labels}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/rag-retrieve", response_model=RAGRetrieveResponse, tags=["Queries"])
 def rag_retrieve(req: RAGRetrieveRequest):
     """Retrieve the most relevant topics and documents for a user query.
