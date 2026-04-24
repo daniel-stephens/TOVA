@@ -153,6 +153,13 @@ class TopicRetriever:
     # Retrieval
     # ------------------------------------------------------------------
 
+    SIMILARITY_THRESHOLD = 0.35
+
+    @property
+    def topic_labels(self) -> List[str]:
+        """All topic labels in this model (useful for name verification)."""
+        return list(self._labels)
+
     def retrieve(
         self,
         query: str,
@@ -161,18 +168,12 @@ class TopicRetriever:
     ) -> List[Dict[str, Any]]:
         """Retrieve the top-K topics most similar to *query* with top-N docs each.
 
-        Returns a list of dicts, one per topic, sorted by descending similarity:
-        [
-            {
-                "topic_id": int,
-                "label": str,
-                "keywords": str,
-                "summary": str,
-                "similarity": float,
-                "documents": [{"doc_id": str, "text": str, "score": float}, ...]
-            },
-            ...
-        ]
+        Topics whose similarity to the query falls below
+        ``SIMILARITY_THRESHOLD`` are excluded so the LLM is never fed
+        irrelevant context.
+
+        Returns a list of dicts, one per topic, sorted by descending similarity.
+        An empty list signals that the query does not match any known topic.
         """
         if self._topic_embeddings is None or len(self._topic_embeddings) == 0:
             return []
@@ -182,15 +183,26 @@ class TopicRetriever:
             [query], normalize_embeddings=True, show_progress_bar=False,
         )
 
-        # Cosine similarity (embeddings are already L2-normalised)
         similarities = (self._topic_embeddings @ query_emb.T).flatten()
         top_k = min(top_k_topics, len(similarities))
         top_indices = np.argsort(similarities)[::-1][:top_k]
 
+        logger.info(
+            "RAG similarity scores (top %d): %s",
+            top_k,
+            ", ".join(
+                f"{self._labels[int(i)]}={float(similarities[int(i)]):.3f}"
+                for i in top_indices
+            ),
+        )
+
         results = []
         for idx in top_indices:
             idx = int(idx)
-            # Gather representative docs with text
+            sim = float(similarities[idx])
+            if sim < self.SIMILARITY_THRESHOLD:
+                continue
+
             docs_out = []
             for doc_id, prob in self._representative_docs[idx][:top_n_docs]:
                 text = self._doc_texts.get(doc_id, "")
@@ -205,9 +217,15 @@ class TopicRetriever:
                 "label": self._labels[idx],
                 "keywords": self._descriptions[idx],
                 "summary": self._summaries[idx],
-                "similarity": float(similarities[idx]),
+                "similarity": sim,
                 "documents": docs_out,
             })
+
+        if not results:
+            logger.info(
+                "No topics above threshold %.2f for query: %s",
+                self.SIMILARITY_THRESHOLD, query[:120],
+            )
 
         return results
 
