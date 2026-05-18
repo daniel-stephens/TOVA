@@ -36,6 +36,7 @@
     font-weight: 500;
     padding: 0.4rem 0.8rem;
     font-size: 0.875rem;
+    white-space: nowrap;
   }
   .dashboard-btn:hover {
     transform: translateY(-1px);
@@ -56,32 +57,234 @@
     background: linear-gradient(135deg, #ffffff, #f6f9fc);
   }
   .xsmall { font-size: 0.75rem; }
+  .summary-wrap {
+    border: 1px solid #e6ebf2;
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 0.8rem;
+    align-items: stretch;
+  }
+  .summary-main {
+    border: 1px solid #e6ebf2;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ffffff, #f8fbff);
+    padding: 0.75rem 0.9rem;
+  }
+  .summary-stats {
+    border: 1px solid #e6ebf2;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #ffffff, #f8fafc);
+    padding: 0.65rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+  }
+  .stat-tile {
+    border: 1px solid #dbe4ef;
+    border-radius: 9px;
+    background: #f8fbff;
+    padding: 0.55rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 78px;
+  }
+  .stat-tile .label {
+    font-size: 0.72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.15rem;
+  }
+  .stat-tile .value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+  .stat-tile .suffix {
+    font-size: 0.78rem;
+    color: #334155;
+  }
+  .summary-title {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+  .summary-desc {
+    font-size: 0.85rem;
+    margin-bottom: 0.55rem;
+  }
+  .stat-pill {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1px solid #dbe4ef;
+    color: #334155;
+    font-size: 0.8rem;
+  }
+  .stat-pill .n {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #0f172a;
+    min-width: 1.4rem;
+    text-align: right;
+  }
+  @media (max-width: 992px) {
+    .summary-grid {
+      grid-template-columns: 1fr;
+    }
+    .summary-stats {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 576px) {
+    .summary-stats {
+      grid-template-columns: 1fr;
+    }
+  }
+  #trainingJobsCard {
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  #trainingJobsCard .job-headline {
+    font-size: 0.95rem;
+  }
+  #trainingJobsCard .job-subtext {
+    font-size: 0.75rem;
+    margin-bottom: 0.35rem !important;
+  }
+  #trainingJobsList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+  .training-job-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--bs-border-color-translucent, #dee2e6);
+    border-radius: 0.375rem;
+    background: #fff;
+  }
+  .training-job-item__title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #0f172a;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .training-job-item__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .training-job-item__meta .badge {
+    font-size: 0.68rem;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .training-job-item__link {
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+  .training-job-item__link:hover {
+    text-decoration: underline;
+  }
+  #trainingJobsCard .job-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+  }
+  #trainingJobsCard .job-actions .btn {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
+  }
+  .model-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+  .model-actions .dashboard-btn,
+  .model-actions .delete-model {
+    font-size: 0.78rem;
+    padding: 0.28rem 0.5rem;
+  }
+  .model-actions .use-model-btn,
+  .model-actions .tfidf-preview-btn {
+    flex: 1 1 auto;
+  }
+  .model-actions .delete-model {
+    flex: 0 0 auto;
+  }
+  @media (min-width: 992px) {
+    #trainingJobsCol {
+      max-width: 300px;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-sm py-4">
-  <div class="mb-4">
-    <h2 class="mb-2 fw-bold">Trained Topic Models</h2>
-    <p class="text-muted mb-2">Browse and manage your trained topic models. Open dashboards to explore topics, view visualizations, and analyze results.</p>
-    <div class="d-flex flex-wrap gap-2">
-      <span class="pill"><span id="modelCount">0</span> models</span>
-      <span class="pill"><span id="corpusCount">0</span> corpora</span>
+  <div class="mb-3 summary-grid">
+    <div class="summary-main">
+      <h2 class="mb-1 fw-bold summary-title">Trained Topic Models</h2>
+      <p class="text-muted summary-desc mb-0">Browse and manage trained models. Open dashboards to explore topics and diagnostics.</p>
+    </div>
+    <div class="summary-stats" aria-label="Model and corpus summary">
+      <div class="stat-tile">
+        <div class="label">Models</div>
+        <div><span class="value" id="modelCount">0</span> <span class="suffix" id="modelCountLabel">models</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="label">Corpora</div>
+        <div><span class="value" id="corpusCount">0</span> <span class="suffix" id="corpusCountLabel">corpora</span></div>
+      </div>
     </div>
   </div>
 
-  <div id="trainingJobsCard" class="container-sm mb-3 p-3 bg-white rounded shadow-sm border border-light-subtle d-none">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0 fw-semibold">Training in progress</h6>
-      <button id="clearJobsBtn" class="btn btn-outline-secondary btn-sm">Clear finished</button>
+  <div class="row g-3 align-items-stretch mt-1">
+    <div id="trainingJobsCol" class="col-lg-3 d-none d-flex">
+      <div id="trainingJobsCard" class="p-2 bg-white rounded shadow-sm border border-light-subtle d-none">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <h6 class="mb-0 fw-semibold job-headline">Training in progress</h6>
+          <div class="job-actions flex-shrink-0">
+            <button id="clearJobsBtn" type="button" class="btn btn-outline-secondary btn-sm">Clear finished</button>
+            <button id="clearAllJobsBtn" type="button" class="btn btn-outline-danger btn-sm">Clear all</button>
+          </div>
+        </div>
+        <div class="small text-muted mb-2 job-subtext">
+          Track background training jobs while exploring trained models.
+        </div>
+        <div id="trainingJobsList" class="d-flex flex-column gap-1"></div>
+      </div>
     </div>
-    <div class="small text-muted mb-2">
-      Track background training jobs while exploring trained models.
-    </div>
-    <div id="trainingJobsList" class="d-flex flex-column gap-2"></div>
-  </div>
 
-  <div class="container-sm my-4 p-4 bg-white rounded shadow-sm border border-light-subtle">
+    <div class="col-lg-9 d-flex">
+      <div class="p-4 bg-white rounded shadow-sm border border-light-subtle h-100 w-100">
     <div class="row g-3 align-items-end mb-3">
       <div class="col-sm-6 col-lg-4">
         <label for="modelSearch" class="form-label small text-muted mb-1">Search</label>
@@ -112,6 +315,8 @@
         <a class="btn btn-sm btn-primary" href="{% url_for 'loadModel' %}">Train a model</a>
       </div>
     </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -124,9 +329,11 @@
   const noModels     = document.getElementById("noModels");
   const searchInput  = document.getElementById("modelSearch");
   const corpusFilter = document.getElementById("corpusFilter");
+  const jobsCol = document.getElementById("trainingJobsCol");
   const jobsCard = document.getElementById("trainingJobsCard");
   const jobsList = document.getElementById("trainingJobsList");
   const clearJobsBtn = document.getElementById("clearJobsBtn");
+  const clearAllJobsBtn = document.getElementById("clearAllJobsBtn");
 
   let allModels = [];
   const JOBS_KEY = "tova_training_jobs";
@@ -280,9 +487,9 @@
               </button>
             </div>
             
-            <div class="d-flex flex-wrap gap-2 mt-auto pt-3 border-top">
+            <div class="model-actions mt-auto pt-3 border-top">
               <button class="btn btn-primary dashboard-btn flex-fill use-model-btn" data-model-id="${escapeHtml(m.id)}">
-                Open Dashboard
+                Dashboard
               </button>
               ${tfidfPreviewBtn}
               <button class="btn btn-outline-danger btn-sm delete-model" data-model-id="${escapeHtml(m.id)}" data-model-name="${escapeHtml(modelName)}">
@@ -365,31 +572,45 @@
 
   function isDoneStatus(s) {
     const status = String(s || "").toLowerCase();
-    return ["succeeded", "completed", "finished", "success", "failed", "error"].includes(status);
+    return ["succeeded", "completed", "finished", "success", "failed", "error", "cancelled"].includes(status);
+  }
+
+  function trainingProgressUrl(job) {
+    const u = new URL("/training/", window.location.origin);
+    if (job?.corpus_id) u.searchParams.set("corpus_id", job.corpus_id);
+    if (job?.job_id) u.searchParams.set("job_id", job.job_id);
+    if (job?.model_id) u.searchParams.set("model_id", job.model_id);
+    return u.toString();
   }
 
   function renderJobs(jobs) {
     if (!jobsCard || !jobsList) return;
     if (!jobs.length) {
+      jobsCol?.classList.add("d-none");
       jobsCard.classList.add("d-none");
       jobsList.innerHTML = "";
       return;
     }
+    jobsCol?.classList.remove("d-none");
     jobsCard.classList.remove("d-none");
     jobsList.innerHTML = jobs.map((j) => {
       const st = statusText(j);
-      const created = fmtDate(j.created_at);
-      const badgeClass = isDoneStatus(j.status)
+      const done = isDoneStatus(j.status);
+      const badgeClass = done
         ? (String(j.status || "").toLowerCase().includes("fail") || String(j.status || "").toLowerCase() === "error" ? "text-bg-danger" : "text-bg-success")
         : "text-bg-primary";
+      const jobLabel = j.model_name || j.model_id || j.job_id || "Training job";
+      const progressLink = !done && j?.job_id && j?.corpus_id
+        ? `<a class="training-job-item__link" href="${escapeHtml(trainingProgressUrl(j))}">View progress</a>`
+        : "";
       return `
-        <div class="border rounded p-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div>
-            <div class="fw-semibold small">${escapeHtml(j.model_name || j.model_id || j.job_id || "Training job")}</div>
-            <div class="text-muted xsmall">Job: <span class="font-monospace">${escapeHtml(j.job_id || "—")}</span> · Started: ${escapeHtml(created)}</div>
+        <article class="training-job-item">
+          <div class="training-job-item__title" title="${escapeHtml(jobLabel)}">${escapeHtml(jobLabel)}</div>
+          <div class="training-job-item__meta">
+            <span class="badge ${badgeClass}">${escapeHtml(st)}</span>
+            ${progressLink}
           </div>
-          <span class="badge ${badgeClass}">${escapeHtml(st)}</span>
-        </div>
+        </article>
       `;
     }).join("");
   }
@@ -451,8 +672,12 @@
       // Update summary counts
       const corpusCountEl = document.getElementById("corpusCount");
       const modelCountEl = document.getElementById("modelCount");
+      const corpusCountLabelEl = document.getElementById("corpusCountLabel");
+      const modelCountLabelEl = document.getElementById("modelCountLabel");
       if (corpusCountEl) corpusCountEl.textContent = corpusOptions.length;
       if (modelCountEl) modelCountEl.textContent = allModels.length;
+      if (corpusCountLabelEl) corpusCountLabelEl.textContent = corpusOptions.length === 1 ? "corpus" : "corpora";
+      if (modelCountLabelEl) modelCountLabelEl.textContent = allModels.length === 1 ? "model" : "models";
 
       applyFilters();
     } catch (err) {
@@ -560,6 +785,19 @@
     const jobs = readJobs().filter((j) => !isDoneStatus(j.status));
     writeJobs(jobs);
     renderJobs(jobs);
+  });
+
+  clearAllJobsBtn?.addEventListener("click", () => {
+    const jobs = readJobs();
+    if (!jobs.length) return;
+    const inProgress = jobs.filter((j) => !isDoneStatus(j.status)).length;
+    let msg = "Remove all tracked training jobs from this browser?";
+    if (inProgress > 0) {
+      msg += `\n\n${inProgress} job(s) still appear in progress. Clearing only removes local tracking here; training on the server is not stopped.`;
+    }
+    if (!confirm(msg)) return;
+    writeJobs([]);
+    renderJobs([]);
   });
   refreshJobs();
   setInterval(refreshJobs, 3000);

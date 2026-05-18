@@ -95,6 +95,32 @@ urlpatterns = [
     path("delete-model", _x(views.delete_model), name="delete_model"),
     path("delete-model/", _x(views.delete_model), name="delete_model_slash"),
     path("dashboard", _x(views.dashboard), name="dashboard"),
+    path("active-learning-2", views.active_learning_two, name="active_learning_two"),
+    path(
+        "api/active-learning-2/recommend",
+        views.active_learning_two_recommend,
+        name="active_learning_two_recommend",
+    ),
+    path(
+        "api/active-learning-2/status",
+        views.active_learning_two_status,
+        name="active_learning_two_status",
+    ),
+    path(
+        "api/active-learning-2/label",
+        _x(views.active_learning_two_label),
+        name="active_learning_two_label",
+    ),
+    path(
+        "api/active-learning-2/labels",
+        views.active_learning_two_labels,
+        name="active_learning_two_labels",
+    ),
+    path(
+        "api/active-learning-2/bootstrap",
+        _x(views.active_learning_two_bootstrap),
+        name="active_learning_two_bootstrap",
+    ),
     path("get-dashboard-data", _x(views.proxy_dashboard_data), name="get_dashboard_data"),
     path("text-info", _x(views.text_info), name="text_info"),
     path("infer-text", _x(views.infer_text), name="infer_text"),

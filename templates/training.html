@@ -223,7 +223,8 @@
     inset: 0;
     background: rgba(15, 23, 42, 0.52);
     z-index: 1040;
-    pointer-events: auto;
+    /* Allow navbar and other links above/below to receive clicks */
+    pointer-events: none;
   }
   .training-page-shell.training--compact .training-focus-center-wrap {
     position: fixed;
@@ -423,8 +424,8 @@
           <div class="training-hero-actions">
             <a id="backToTrainedModelsBtn"
                class="btn btn-outline-secondary btn-sm d-none"
-               href="/trained-models">Back to trained models</a>
-            <button id="openPreviewBtn" class="btn btn-primary btn-sm" type="button">
+               href="/trained-models">Continue in background</a>
+            <button id="openPreviewBtn" class="btn btn-outline-primary btn-sm" type="button">
               Open low-latency preview
             </button>
             <button id="toggleTfidfPreviewBtn" class="btn btn-outline-primary btn-sm d-none" type="button">
@@ -467,11 +468,11 @@
       </div>
 
       <!-- Theme diagnostics / model metrics (currently hidden by default) -->
-      <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;" hidden>
+      <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;">
         <div class="d-flex justify-content-between align-items-start mb-3">
           <div>
-            <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">Theme Diagnostics</h6>
-            <p class="text-muted mb-0" style="font-size: 0.75rem;">
+            <h6 id="metricsCardTitle" class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">Theme Diagnostics</h6>
+            <p id="metricsCardSubtitle" class="text-muted mb-0" style="font-size: 0.75rem;">
               Summary of diagnostics for each theme.
             </p>
           </div>
@@ -481,7 +482,7 @@
           </button>
         </div>
 
-        <div id="themeMetricsPanel" class="flex-grow-1 d-flex flex-column" style="max-height: 90%;">
+        <div id="themeMetricsPanel" class="flex-grow-1" style="max-height: 90%;">
           <div class="table-scroll-wrapper flex-grow-1 border rounded overflow-auto">
             <table class="table table-sm table-hover align-middle mb-0" id="themeStatsTable" style="font-size: 0.75rem;">
               <thead class="table-light sticky-top" style="top: 0; z-index: 1;"></thead>
@@ -490,8 +491,8 @@
           </div>
         </div>
 
-        <div id="modelMetricsPanel" class="d-none flex-grow-1 d-flex flex-column">
-          <h6 class="fw-bold mb-3 mt-2">Theme Insights</h6>
+        <div id="modelMetricsPanel" class="d-none flex-grow-1">
+          <h6 class="fw-bold mb-3 mt-2">Model Metrics</h6>
           <div id="themeInsightsGrid" class="row row-cols-2 small g-2 flex-grow-1 overflow-auto"></div>
         </div>
       </div>
@@ -611,7 +612,7 @@
         <div class="modal-body text-center py-4">
           <p class="fs-6 mb-3">
             Your model has finished training successfully!  
-            Click <b>“View Trained Models”</b> to see your models, then select one to open its dashboard.
+            Click <b>"Open Dashboard"</b> to go directly to this model's dashboard.
           </p>
           <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
         </div>
@@ -619,7 +620,7 @@
           <button type="button" class="btn btn-outline-secondary"
                   data-bs-dismiss="modal">Close</button>
           <button type="button" id="viewModelsBtn" class="btn btn-success">
-            View Trained Models
+            Open Dashboard
           </button>
         </div>
       </div>
@@ -688,7 +689,9 @@
   let filteredDocs = [];
   let previewLoaded = false;
   let trainingFromModelsEntry = false;
+  let activeTrainingJobId = null;
 
+  const CONTINUE_BACKGROUND_LABEL = "Continue in background";
   const OPEN_PREVIEW_LABEL = "Open low-latency preview";
   const LOADING_PREVIEW_LABEL = "Loading low-latency preview…";
   const HIDE_PREVIEW_LABEL = "Hide low-latency preview";
@@ -698,7 +701,7 @@
   /**
    * Trained-models entry (from_models=1): topic dashboard CTA only. Preview loads
    * automatically—no Open/Hide controls in the hero.
-   * Active training: Open until data exists, then Hide/Show to collapse the panel.
+   * Active training: show Continue in background; preview Open/Hide is optional.
    */
   function syncTrainingHeroPreviewControls() {
     const openBtn = document.getElementById("openPreviewBtn");
@@ -714,7 +717,12 @@
       return;
     }
 
-    backBtn.classList.add("d-none");
+    if (activeTrainingJobId) {
+      backBtn.classList.remove("d-none");
+      backBtn.textContent = CONTINUE_BACKGROUND_LABEL;
+    } else {
+      backBtn.classList.add("d-none");
+    }
 
     if (!previewLoaded) {
       openBtn.classList.remove("d-none");
@@ -745,6 +753,7 @@
       const fromModels = params.get("from_models") === "1";
       const autopreview = params.get("autopreview") === "1";
       trainingFromModelsEntry = fromModels;
+      activeTrainingJobId = fromModels ? null : (jobId || null);
       console.log("jobId:", jobId, "modelId:", modelId);
 
       if (!corpusId) {
@@ -753,6 +762,7 @@
       }
 
       wireUI();
+      wireContinueInBackground();
       await enrichTransitionMeta({
         corpusId,
         jobId: fromModels ? null : jobId,
@@ -995,11 +1005,11 @@
       const c = corpusLabel ? String(corpusLabel).trim() : "";
       if (c) {
         subEl.textContent = hasJob
-          ? `${c} · Training is in progress—open the preview for an early TF-IDF cluster visualization.`
+          ? `${c} · Training runs in the background—you can leave this page or open the preview for an early look at themes.`
           : `${c} · Preparing your training run…`;
       } else if (corpusId) {
         subEl.textContent = hasJob
-          ? "Training is in progress. Use the preview below when you want a quick look at emerging themes."
+          ? "Training runs in the background. Continue elsewhere or open the preview for emerging themes."
           : "Preparing your corpus and training run…";
       } else {
         subEl.textContent = hasJob ? "Training job is running." : "Preparing…";
@@ -1031,28 +1041,72 @@
     }
   }
 
-  function wireUI() {
-    document.getElementById("filterBtn")?.addEventListener("click", filterAndRenderDocuments);
-    document.getElementById("docSearchInput")?.addEventListener("input", filterAndRenderDocuments);
-    document.getElementById("filteredSearchInput")?.addEventListener("input", (e) => {
-      filterAndRenderThemeDocuments(e);
+  function wireContinueInBackground() {
+    const backBtn = document.getElementById("backToTrainedModelsBtn");
+    if (!backBtn || backBtn.dataset.bound) return;
+    backBtn.addEventListener("click", () => {
+      stopPolling();
     });
-
-    const toggleMetricBtn    = document.getElementById("toggleMetricBtn");
-    const themeMetricsPanel  = document.getElementById("themeMetricsPanel");
-    const modelMetricsPanel  = document.getElementById("modelMetricsPanel");
-    if (toggleMetricBtn && themeMetricsPanel && modelMetricsPanel) {
-      toggleMetricBtn.addEventListener("click", () => {
-        const showingTheme = !themeMetricsPanel.classList.contains("d-none");
-        themeMetricsPanel.classList.toggle("d-none", showingTheme);
-        modelMetricsPanel.classList.toggle("d-none", !showingTheme);
-        toggleMetricBtn.textContent = showingTheme
-          ? "Switch to Theme Metrics"
-          : "Switch to Model Metrics";
-      });
-    }
+    backBtn.dataset.bound = "1";
   }
 
+  function wireUI() {
+  // 1. Wire up search and filter inputs
+  document.getElementById("filterBtn")?.addEventListener("click", filterAndRenderDocuments);
+  document.getElementById("docSearchInput")?.addEventListener("input", filterAndRenderDocuments);
+  document.getElementById("filteredSearchInput")?.addEventListener("input", (e) => {
+    filterAndRenderThemeDocuments(e);
+  });
+
+  // 2. Grab panel and button elements
+  const toggleMetricBtn   = document.getElementById("toggleMetricBtn");
+  const themeMetricsPanel = document.getElementById("themeMetricsPanel");
+  const modelMetricsPanel = document.getElementById("modelMetricsPanel");
+
+  // Debugging: Warn developers if the title elements are missing on load
+  if (!document.getElementById("metricsCardTitle") || !document.getElementById("metricsCardSubtitle")) {
+    console.warn("Metrics title or subtitle elements not found! Check your HTML for IDs: 'metricsCardTitle' and 'metricsCardSubtitle'.");
+  }
+
+  if (toggleMetricBtn && themeMetricsPanel && modelMetricsPanel) {
+    
+    // Define the view-switching logic
+    const setMetricsView = (showModelMetrics) => {
+      // Toggle the panels
+      themeMetricsPanel.classList.toggle("d-none", showModelMetrics);
+      modelMetricsPanel.classList.toggle("d-none", !showModelMetrics);
+
+      // Fetch titles dynamically in case they were re-rendered by another script
+      const titleEl = document.getElementById("metricsCardTitle");
+      const subtitleEl = document.getElementById("metricsCardSubtitle");
+
+      if (titleEl && subtitleEl) {
+        if (showModelMetrics) {
+          titleEl.textContent = "Model Metrics";
+          subtitleEl.textContent = "Average coherence, average entropy, topic diversity, and IRBO.";
+        } else {
+          titleEl.textContent = "Theme Diagnostics";
+          subtitleEl.textContent = "Summary of diagnostics for each theme.";
+        }
+      }
+
+      // Update button text and icon
+      toggleMetricBtn.innerHTML = showModelMetrics
+        ? '<i class="bi bi-bar-chart-line me-1"></i> Switch to Theme Metrics'
+        : '<i class="bi bi-bar-chart-line me-1"></i> Switch to Model Metrics';
+    };
+
+    // Ensure deterministic initial state and labels
+    setMetricsView(false);
+
+    // Bind the click event
+    toggleMetricBtn.addEventListener("click", () => {
+      // If the model metrics panel does NOT have 'd-none', it is currently visible
+      const isShowingModelMetrics = !modelMetricsPanel.classList.contains("d-none");
+      setMetricsView(!isShowingModelMetrics);
+    });
+  }
+}
   function startPolling(statusUrl, intervalMs) {
     stopPolling();
     updateTrainingUI({ status: "starting" });
@@ -1234,7 +1288,7 @@
         btnWrap.classList.remove("d-none", "invisible");
         if (goBtn && !goBtn.dataset.bound) {
           goBtn.addEventListener("click", () => {
-            window.location.href = "/trained-models";
+            window.location.href = getCurrentModelDashboardUrl();
           });
           goBtn.dataset.bound = "1";
         }
@@ -1243,6 +1297,38 @@
         btnWrap.classList.add("d-none");
       }
     }
+  }
+
+  function getCurrentModelDashboardUrl() {
+    const params = new URLSearchParams(location.search);
+    let modelId = params.get("model_id");
+    const corpusId = params.get("corpus_id");
+    const jobId = params.get("job_id");
+
+    if (!modelId && jobId) {
+      try {
+        const jobs = JSON.parse(localStorage.getItem("tova_training_jobs") || "[]");
+        const match = Array.isArray(jobs) ? jobs.find((j) => j?.job_id === jobId) : null;
+        if (match?.model_id) modelId = match.model_id;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    if (modelId) {
+      const dash = new URL("/dashboard", window.location.origin);
+      dash.searchParams.set("model_id", modelId);
+      return dash.toString();
+    }
+
+    if (corpusId) {
+      const training = new URL("/training/", window.location.origin);
+      training.searchParams.set("corpus_id", corpusId);
+      if (jobId) training.searchParams.set("job_id", jobId);
+      return training.toString();
+    }
+
+    return "/trained-models";
   }
 
   function formatETA(sec) {
@@ -1624,6 +1710,8 @@
   }
 
   function handleTrainingCompletion() {
+    activeTrainingJobId = null;
+    syncTrainingHeroPreviewControls();
     expandTrainingLayout();
     showTrainingCompleteModal();
 
@@ -1688,16 +1776,15 @@
     if (!modalEl) return;
 
     const btn = document.getElementById("viewModelsBtn");
-    if (btn && !btn.dataset.bound) {
-      btn.addEventListener("click", () => {
+    if (btn) {
+      btn.onclick = () => {
         try {
           bootstrap.Modal.getInstance(modalEl)?.hide();
         } catch (_) {
           /* ignore */
         }
-        window.location.href = "/trained-models";
-      });
-      btn.dataset.bound = "1";
+        window.location.href = getCurrentModelDashboardUrl();
+      };
     }
 
     const show = () => {

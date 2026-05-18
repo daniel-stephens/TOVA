@@ -1,0 +1,1414 @@
+{% extends "base.html" %}
+
+{% block title %}Active Learning 2 - TOVA{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root {
+    --al2-border: #e3e8ef;
+    --al2-border-soft: #eef2f7;
+    --al2-surface: #ffffff;
+    --al2-surface-soft: #f8fafc;
+    --al2-surface-alt: #f1f5f9;
+    --al2-primary: #1d4ed8;
+    --al2-primary-soft: #eff4ff;
+    --al2-text: #0f172a;
+    --al2-text-muted: #64748b;
+    --al2-success: #047857;
+    --al2-success-soft: #d1fae5;
+    --al2-warning-soft: #fef3c7;
+    --al2-warning-text: #92400e;
+    /* Space reserved from viewport for the queue table pane (chrome above it) */
+    --al2-queue-table-offset: 21rem;
+    /* Larger = shorter document pane — room for model strip, suggested labels, and card footer */
+    --al2-content-area-offset: 31.25rem;
+  }
+
+  .al2-page {
+    background-color: #ffffff;
+  }
+
+  .al2-page-wrap {
+    max-width: 1320px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .al2-main-row > [class*="col-"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  @media (min-width: 992px) {
+    .al2-main-row {
+      align-items: stretch;
+    }
+
+    .al2-main-row > [class*="col-"] {
+      min-width: 0;
+    }
+
+    /* Cards fill the shorter column so left/right outer heights match */
+    .al2-main-row > [class*="col-"] > .card.al2-card {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .al2-review-card > .card-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .al2-review-card .al2-content-toolbar,
+    .al2-review-card .al2-model-label-strip,
+    .al2-review-card .al2-labels-section {
+      flex-shrink: 0;
+    }
+
+    .al2-review-card .al2-content-area {
+      flex: 0 0 auto;
+      height: calc(100vh - var(--al2-content-area-offset));
+      max-height: calc(100vh - var(--al2-content-area-offset));
+      height: calc(100dvh - var(--al2-content-area-offset));
+      max-height: calc(100dvh - var(--al2-content-area-offset));
+      min-height: 9rem;
+      overflow-y: auto;
+    }
+
+    .al2-queue-card > .card-body.p-0 {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .al2-queue-card > .card-body.p-0 > div:first-child {
+      flex-shrink: 0;
+    }
+
+    /* Fixed viewport height: scroll inside the table area only */
+    .al2-table-wrap {
+      flex: 0 0 auto;
+      height: calc(100vh - var(--al2-queue-table-offset));
+      max-height: calc(100vh - var(--al2-queue-table-offset));
+      height: calc(100dvh - var(--al2-queue-table-offset));
+      max-height: calc(100dvh - var(--al2-queue-table-offset));
+      min-height: 11rem;
+      overflow-y: auto;
+    }
+  }
+
+  /* ---------- Page header ---------- */
+  .al2-page-header {
+    background: #ffffff;
+    border: 1px solid var(--al2-border);
+    border-radius: 0.85rem;
+    padding: 0.55rem 0.85rem;
+    box-shadow: none;
+  }
+
+  .al2-page-title {
+    font-size: 1.05rem;
+    line-height: 1.25;
+  }
+
+  .al2-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    background: var(--al2-primary-soft);
+    color: var(--al2-primary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.4rem;
+  }
+
+  .al2-progress {
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .al2-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+    transition: width 0.35s ease;
+    border-radius: 999px;
+  }
+
+  /* ---------- Cards: natural height, no viewport lock ---------- */
+  .al2-card {
+    border: 1px solid var(--al2-border);
+    border-radius: 0.85rem;
+    background: var(--al2-surface);
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .al2-card .card-header {
+    padding: 0.7rem 0.85rem;
+    background: var(--al2-surface);
+    border-bottom: 1px solid var(--al2-border);
+  }
+
+  .al2-card .card-body {
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .al2-card .card-footer {
+    background: var(--al2-surface);
+    border-top: 1px solid var(--al2-border);
+    padding: 0.65rem 0.85rem;
+  }
+
+  /* Left "document review" card: tighter chrome */
+  .al2-review-card .card-header {
+    padding: 0.4rem 0.65rem;
+  }
+
+  .al2-review-card .card-body {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .al2-review-card .card-footer {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .al2-review-card .al2-header-title {
+    font-size: 0.88rem;
+  }
+
+  .al2-review-card .al2-content-toolbar {
+    margin-bottom: 0.35rem;
+    gap: 0.4rem;
+  }
+
+  .al2-review-card .al2-meta-pill {
+    padding: 0.12rem 0.45rem;
+    font-size: 0.68rem;
+  }
+
+  .al2-review-card .al2-view-toggle .btn {
+    padding: 0.15rem 0.45rem;
+    font-size: 0.72rem;
+  }
+
+  .al2-review-card .al2-content-area {
+    padding: 0.5rem 0.65rem;
+    line-height: 1.55;
+    font-size: 0.86rem;
+  }
+
+  .al2-review-card .al2-labels-section {
+    margin-top: 0.35rem;
+  }
+
+  .al2-review-card .al2-section-label {
+    margin-bottom: 0.25rem;
+    font-size: 0.65rem;
+  }
+
+  .al2-review-card #al2LabelSuggestions {
+    flex-wrap: wrap;
+    gap: 0.35rem !important;
+  }
+
+  .al2-review-card .al2-label-chip {
+    padding: 0.28rem 0.55rem;
+    font-size: 0.78rem;
+    border-width: 1px;
+    border-radius: 0.45rem;
+  }
+
+  .al2-review-card .al2-custom-label-wrap {
+    margin-top: 0.3rem;
+  }
+
+  .al2-review-card .al2-custom-label-wrap .form-label {
+    margin-bottom: 0.2rem !important;
+    font-size: 0.72rem;
+  }
+
+  .al2-review-card .al2-custom-label-row {
+    gap: 0.45rem;
+    max-width: 100%;
+  }
+
+  .al2-review-card .al2-custom-label-row .form-control {
+    min-width: 0;
+    height: 34px;
+    font-size: 0.85rem;
+  }
+
+  .al2-review-card .al2-custom-label-row .btn {
+    height: 34px;
+    padding: 0 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .al2-review-card .al2-save-feedback {
+    min-height: 0;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .al2-review-card .al2-applied-label {
+    padding: 0.18rem 0.5rem;
+    font-size: 0.68rem;
+    max-width: 160px;
+  }
+
+  /* Queue card body has p-0 + a search row above the table */
+  .al2-card > .card-body.p-0 {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .al2-header-title {
+    font-weight: 600;
+    color: var(--al2-text);
+    line-height: 1.2;
+    font-size: 0.95rem;
+  }
+
+  .al2-header-subtitle {
+    font-size: 0.74rem;
+    color: var(--al2-text-muted);
+    margin-top: 0.1rem;
+  }
+
+  /* ---------- Content toolbar (meta + view toggle) ---------- */
+  .al2-content-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .al2-meta-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .al2-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.22rem 0.6rem;
+    background: var(--al2-surface-alt);
+    color: #334155;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+
+  .al2-meta-pill.is-primary {
+    background: var(--al2-primary-soft);
+    color: #1e3a8a;
+  }
+
+  /* View toggle (Summary / Full text) */
+  .al2-view-toggle .btn {
+    border-radius: 0.4rem;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.55rem;
+    border-color: var(--al2-border);
+    color: #475569;
+    background: var(--al2-surface);
+  }
+
+  .al2-view-toggle .btn:hover {
+    background: var(--al2-primary-soft);
+    color: var(--al2-primary);
+    border-color: var(--al2-primary-soft);
+  }
+
+  .al2-view-toggle .btn.is-active {
+    background: var(--al2-primary);
+    color: #ffffff;
+    border-color: var(--al2-primary);
+  }
+
+  .al2-view-toggle .btn:focus {
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
+  }
+
+  /* ---------- Content area (text or summary) — height capped per breakpoint; overflow scrolls ---------- */
+  .al2-content-area {
+    border: 1px solid var(--al2-border);
+    border-radius: 0.4rem;
+    background: #ffffff;
+    padding: 0.85rem 0.95rem;
+    line-height: 1.7;
+    font-size: 0.92rem;
+    color: #1f2937;
+    overflow-y: auto;
+  }
+
+  .al2-content-area.is-summary {
+    background: #ffffff;
+  }
+
+  .al2-content-area p {
+    margin-bottom: 0.85rem;
+  }
+
+  .al2-content-area p:last-child {
+    margin-bottom: 0;
+  }
+
+  .al2-content-summary-tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--al2-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .al2-content-area::-webkit-scrollbar,
+  .al2-table-wrap::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .al2-content-area::-webkit-scrollbar-thumb,
+  .al2-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  /* ---------- Applied label ---------- */
+  .al2-applied-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    background: var(--al2-warning-soft);
+    color: var(--al2-warning-text);
+    transition: background 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .al2-applied-label.is-applied {
+    background: var(--al2-success-soft);
+    color: var(--al2-success);
+  }
+
+  /* ---------- Labels section (under content) ---------- */
+  .al2-model-label-strip {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    margin-top: 0.35rem;
+    padding: 0.32rem 0.55rem;
+    background: var(--al2-surface-alt);
+    border: 1px solid var(--al2-border-soft);
+    border-radius: 0.4rem;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .al2-model-label-strip__k {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--al2-text-muted);
+    flex-shrink: 0;
+  }
+
+  .al2-model-label-strip__v {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--al2-text);
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .al2-review-card .al2-model-label-strip {
+    margin-top: 0.3rem;
+    padding: 0.28rem 0.45rem;
+  }
+
+  .al2-review-card .al2-model-label-strip__k {
+    font-size: 0.62rem;
+  }
+
+  .al2-review-card .al2-model-label-strip__v {
+    font-size: 0.78rem;
+  }
+
+  .al2-labels-section {
+    margin-top: 0.6rem;
+  }
+
+  .al2-section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--al2-text-muted);
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .al2-label-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #eff6ff;
+    border: 2px solid #93c5fd;
+    color: #1e3a8a;
+    border-radius: 0.6rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .al2-label-chip:hover {
+    border-color: var(--al2-primary);
+    color: var(--al2-primary);
+    background: var(--al2-primary-soft);
+  }
+
+  .al2-label-chip.is-selected {
+    background: var(--al2-primary);
+    border-color: var(--al2-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+  }
+
+  .al2-label-chip.is-selected:hover {
+    background: #1e40af;
+    color: #ffffff;
+  }
+
+  .al2-custom-label-wrap {
+    margin-top: 0.45rem;
+  }
+
+  .al2-custom-label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: 620px;
+  }
+
+  .al2-custom-label-row .form-control {
+    width: 100%;
+    flex: 1 1 auto;
+    min-width: 320px;
+    height: 42px;
+    font-size: 0.95rem;
+  }
+
+  .al2-custom-label-row .btn {
+    height: 42px;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .al2-save-feedback {
+    min-height: 1.1rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #047857;
+    margin-top: 0.35rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .al2-save-feedback.is-visible {
+    opacity: 1;
+  }
+
+  /* ---------- Footer buttons ---------- */
+  .al2-footer-counter {
+    font-size: 0.78rem;
+    color: var(--al2-text-muted);
+    font-weight: 500;
+  }
+
+  .al2-card .btn {
+    border-radius: 0.5rem;
+  }
+
+  /* ---------- Search ---------- */
+  .al2-search input {
+    border-radius: 0.5rem;
+  }
+
+  .al2-search input:focus {
+    border-color: var(--al2-primary);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  }
+
+  /* ---------- Table: horizontal scroll; vertical scroll when capped (see lg+ rules) ---------- */
+  .al2-table-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .al2-table-wrap table {
+    margin-bottom: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .al2-table-wrap thead th {
+    font-size: 0.75rem;
+    border-bottom: 1px solid var(--al2-border);
+    padding: 0.42rem 0.45rem;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: 0 1px 0 var(--al2-border-soft);
+  }
+
+  .al2-table-wrap tbody tr {
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  .al2-table-wrap tbody tr:hover {
+    background-color: #f8fafc;
+  }
+
+  .al2-table-wrap tbody tr.is-active {
+    background-color: #eef2f7;
+  }
+
+  .al2-table-wrap tbody tr.is-active td {
+    color: #0f172a;
+  }
+
+  .al2-table-wrap tbody td {
+    padding: 0.38rem 0.45rem;
+    font-size: 0.81rem;
+    border-color: var(--al2-border-soft);
+    vertical-align: middle;
+  }
+
+  .al2-text-cell {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #475569;
+  }
+
+  .al2-label-tag {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    background: #f8fafc;
+    color: #334155;
+    border-radius: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .al2-label-tag.is-applied {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  .al2-truncate-cell {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: break-all;
+  }
+
+  .al2-table-wrap th:nth-child(1),
+  .al2-table-wrap td:nth-child(1) {
+    width: 13%;
+  }
+
+  .al2-table-wrap th:nth-child(2),
+  .al2-table-wrap td:nth-child(2) {
+    width: 42%;
+  }
+
+  .al2-table-wrap th:nth-child(3),
+  .al2-table-wrap td:nth-child(3) {
+    width: 22%;
+  }
+
+  .al2-table-wrap th:nth-child(4),
+  .al2-table-wrap td:nth-child(4) {
+    width: 23%;
+  }
+
+  .al2-empty-state {
+    text-align: center;
+    color: var(--al2-text-muted);
+    padding: 2rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .al2-empty-state-note {
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+
+  @media (max-width: 991.98px) {
+    .al2-main-row > [class*="col-"] {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* Stacked layout: shorter document pane so model strip + labels + footer stay reachable */
+    .al2-content-area {
+      flex: 0 0 auto;
+      height: min(14rem, 30dvh);
+      max-height: min(14rem, 30dvh);
+      min-height: 6.5rem;
+    }
+
+    .al2-table-wrap {
+      flex: 0 0 auto;
+      height: min(26rem, 52dvh);
+      max-height: min(26rem, 52dvh);
+      min-height: 10rem;
+    }
+  }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="al2-page py-2 px-2 px-md-3" data-model-id="{{ model_id|default:''|escape }}">
+  <div class="container-fluid">
+    <div class="al2-page-wrap">
+
+      <!-- Page header -->
+      <div class="al2-page-header mb-2">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-1">
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="al2-eyebrow">
+                Active Learning
+              </span>
+            </div>
+            <h4 class="mb-0 fw-bold al2-page-title">Document Review</h4>
+          </div>
+          <div class="d-flex align-items-center gap-3">
+            <a href="{% url_for 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+              Dashboard
+            </a>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+          <div class="flex-grow-1">
+            <div class="al2-progress">
+              <div class="al2-progress-bar" id="al2ProgressBar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <span class="small fw-semibold text-muted text-nowrap" id="al2ProgressLabel">0 of 0 reviewed</span>
+        </div>
+      </div>
+
+      <!-- Main 2-column layout -->
+      <div class="row g-2 al2-main-row">
+
+        <!-- LEFT: Document + labels -->
+        <div class="col-xl-7 col-lg-6">
+          <div class="card al2-card al2-review-card">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <div>
+                    <div class="al2-header-title">Document Review</div>
+                  </div>
+                </div>
+                <span class="al2-applied-label" id="al2AppliedLabel">
+                  <span id="al2AppliedLabelText">Unlabeled</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <!-- Toolbar: meta info + view toggle -->
+              <div class="al2-content-toolbar">
+                <div class="al2-meta-pills" id="al2MetaPills"></div>
+                <div class="btn-group btn-group-sm al2-view-toggle" role="group" id="al2ViewToggle">
+                  <button type="button" class="btn" data-view="text">
+                    Full text
+                  </button>
+                  <button type="button" class="btn" data-view="summary">
+                    Summary
+                  </button>
+                </div>
+              </div>
+
+              <!-- Content area: text or summary -->
+              <div class="al2-content-area" id="al2ContentArea">
+                <p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;"></p>
+              </div>
+
+              <div class="al2-model-label-strip" id="al2ModelLabelStrip" aria-live="polite">
+                <span class="al2-model-label-strip__k">Model label</span>
+                <span class="al2-model-label-strip__v" id="al2ModelLabelText">—</span>
+              </div>
+
+              <!-- Suggested labels -->
+              <div class="al2-labels-section">
+                <div class="al2-section-label">
+                  Suggested labels
+                </div>
+                <div id="al2LabelSuggestions" class="d-flex flex-wrap gap-2"></div>
+                <div class="al2-custom-label-wrap">
+                  <label for="al2CustomLabelInput" class="form-label fw-semibold mb-1">Label</label>
+                  <div class="al2-custom-label-row">
+                    <input type="text" class="form-control form-control-sm" id="al2CustomLabelInput"
+                      placeholder="Type a label" maxlength="120" autocomplete="off">
+                    <button type="button" class="btn btn-success" id="al2ApplyBtn" disabled>
+                      Save Label &amp; Continue
+                    </button>
+                  </div>
+                  <div id="al2SaveFeedback" class="al2-save-feedback" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <div class="d-flex justify-content-between align-items-center gap-2">
+                <span class="al2-footer-counter" id="al2DocCounter">Document 1 of 1</span>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="al2PrevBtn">
+                    Previous
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="al2NextBtn">
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Queue table -->
+        <div class="col-xl-5 col-lg-6">
+          <div class="card al2-card al2-queue-card">
+            <div class="card-header">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <div>
+                    <div class="al2-header-title">Document Queue</div>
+                    <div class="al2-header-subtitle">
+                      <span id="al2QueueCount">0</span> documents
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-body p-0">
+              <div class="px-3 pt-3 pb-2">
+                <div class="al2-search">
+                  <input type="search" class="form-control form-control-sm" id="al2SearchInput"
+                    placeholder="Search ID, text, model label, or human label" autocomplete="off">
+                </div>
+              </div>
+              <div class="al2-table-wrap">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="bg-white">
+                    <tr>
+                      <th>ID</th>
+                      <th>Preview</th>
+                      <th>Model Label</th>
+                      <th>Human Label</th>
+                    </tr>
+                  </thead>
+                  <tbody id="al2DocTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(() => {
+  const pageRoot = document.querySelector(".al2-page");
+  const modelId = (pageRoot?.dataset.modelId || "").trim();
+  const emptySummary = "No summary available.";
+  const defaultSuggestions = ["Security Incident", "Program Management", "Policy Update"];
+
+  const escapeHtml = (str) =>
+    String(str ?? "").replace(/[&<>"']/g, (m) => (
+      {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]
+    ));
+
+  const docsById = new Map();
+  const docOrder = [];
+  /** Doc ids to return to after Apply (stack); Previous consumes. */
+  const navHistory = [];
+  let activeLearningIndex = 0;
+  let selectedSuggestion = null;
+  let searchTerm = "";
+  let statusState = { num_total: 0, num_labeled: 0 };
+  let saveFeedbackTimeout = null;
+  const displayId = (id) => String(id || "").slice(0, Math.max(0, String(id || "").length - 4));
+  const truncate = (str, maxLen) => {
+    const s = String(str ?? "");
+    if (s.length <= maxLen) return s;
+    return `${s.slice(0, Math.max(0, maxLen - 1))}…`;
+  };
+  const buildSummary = (text) => {
+    const firstSentence = String(text || "").split(/(?<=[.?!])\s+/)[0] || "";
+    return firstSentence.trim() || emptySummary;
+  };
+  const getDocs = () => docOrder.map((id) => docsById.get(id)).filter(Boolean);
+  const getCurrentDoc = () => getDocs()[activeLearningIndex] || null;
+
+  const getSuggestionSet = (doc) => {
+    const fromStatus = Object.keys(statusState.class_distribution || {});
+    const merged = [...(doc?.suggestions || []), ...fromStatus, ...defaultSuggestions];
+    return [...new Set(merged.filter(Boolean))].slice(0, 8);
+  };
+
+  const upsertDoc = (doc) => {
+    if (!doc || !doc.id) return;
+    if (!docsById.has(doc.id)) docOrder.push(doc.id);
+    docsById.set(doc.id, { ...(docsById.get(doc.id) || {}), ...doc });
+  };
+
+  const resetDocStore = () => {
+    docsById.clear();
+    docOrder.length = 0;
+    navHistory.length = 0;
+    activeLearningIndex = 0;
+  };
+
+  const loadBootstrap = async () => {
+    const data = await jsonFetch(`{% url_for 'active_learning_two_bootstrap' %}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    resetDocStore();
+    const ml = data.model_label_by_id || {};
+    const hl = data.human_labels || {};
+    for (const row of data.documents || []) {
+      const id = row.id;
+      if (!id) continue;
+      docOrder.push(id);
+      const text = row.text || "";
+      docsById.set(id, {
+        id,
+        text,
+        summary: buildSummary(text),
+        label: ml[id] || "—",
+        suggestions: defaultSuggestions,
+        appliedLabel: hl[id] ?? null,
+        reviewed: Boolean(hl[id]),
+        viewPreference: "text",
+      });
+    }
+    syncLabels(hl);
+  };
+
+  const loadHumanLabels = async () => {
+    const d = await jsonFetch(
+      `{% url_for 'active_learning_two_labels' %}?model_id=${encodeURIComponent(modelId)}`
+    );
+    syncLabels(d.labels || {});
+  };
+
+  const ensureCurrentInRange = () => {
+    const docs = getDocs();
+    if (docs.length === 0) {
+      activeLearningIndex = 0;
+      return;
+    }
+    if (activeLearningIndex > docs.length - 1) {
+      activeLearningIndex = docs.length - 1;
+    }
+  };
+
+  const jsonFetch = async (url, options = {}) => {
+    const resp = await fetch(url, options);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(data?.detail || data?.error || `Request failed (${resp.status})`);
+    }
+    return data;
+  };
+
+  const showSaveFeedback = (message) => {
+    const feedback = document.getElementById("al2SaveFeedback");
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.classList.add("is-visible");
+    if (saveFeedbackTimeout) clearTimeout(saveFeedbackTimeout);
+    saveFeedbackTimeout = setTimeout(() => {
+      feedback.classList.remove("is-visible");
+      feedback.textContent = "";
+    }, 1800);
+  };
+
+  const syncLabels = (labelMap) => {
+    Object.entries(labelMap || {}).forEach(([docId, humanLabel]) => {
+      const existing = docsById.get(docId);
+      if (existing) {
+        existing.appliedLabel = humanLabel;
+        existing.reviewed = true;
+      } else {
+        upsertDoc({
+          id: docId,
+          text: "",
+          summary: emptySummary,
+          label: "—",
+          suggestions: defaultSuggestions,
+          appliedLabel: humanLabel,
+          reviewed: true,
+        });
+      }
+    });
+  };
+
+  const loadStatus = async () => {
+    statusState = await jsonFetch(
+      `{% url_for 'active_learning_two_status' %}?model_id=${encodeURIComponent(modelId)}`
+    );
+  };
+
+  const loadRecommendation = async () => {
+    const rec = await jsonFetch(
+      `{% url_for 'active_learning_two_recommend' %}?model_id=${encodeURIComponent(modelId)}`
+    );
+    syncLabels(rec.current_labels || {});
+    if (rec.doc_id) {
+      const prev = docsById.get(rec.doc_id);
+      const text = rec.text || prev?.text || "";
+      upsertDoc({
+        id: rec.doc_id,
+        text,
+        summary: buildSummary(text),
+        label: prev?.label ?? "—",
+        suggestions: getSuggestionSet(prev || {}),
+        appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? prev?.appliedLabel ?? null,
+        reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
+        viewPreference: prev?.viewPreference || "text",
+      });
+      activeLearningIndex = Math.max(0, docOrder.indexOf(rec.doc_id));
+    } else if (docOrder.length) {
+      activeLearningIndex = 0;
+    }
+  };
+
+
+  const wordCount = (text) => text.trim().split(/\s+/).filter(Boolean).length;
+  const readingTime = (text) => Math.max(1, Math.round(wordCount(text) / 220));
+  const getActiveView = (doc) => doc.viewPreference || "text";
+
+  const renderMetaPills = (doc) => {
+    const bar = document.getElementById("al2MetaPills");
+    if (!bar) return;
+    const wc = wordCount(doc.text);
+    const rt = readingTime(doc.text);
+    bar.innerHTML = `
+      <span class="al2-meta-pill is-primary">
+        ${escapeHtml(displayId(doc.id))}
+      </span>
+      <span class="al2-meta-pill">
+        ${wc.toLocaleString()} words
+      </span>
+      <span class="al2-meta-pill">
+        ~${rt} min
+      </span>
+    `;
+  };
+
+  const renderProgress = () => {
+    const reviewedCount = Number(statusState.num_labeled || getDocs().filter((d) => d.reviewed).length || 0);
+    const total = Number(statusState.num_total || getDocs().length || 0);
+    const pct = total ? (reviewedCount / total) * 100 : 0;
+    const bar = document.getElementById("al2ProgressBar");
+    const label = document.getElementById("al2ProgressLabel");
+    if (bar) bar.style.width = `${pct}%`;
+    if (label) label.textContent = `${reviewedCount} of ${total} reviewed`;
+  };
+
+  const renderAppliedLabel = (doc) => {
+    const wrap = document.getElementById("al2AppliedLabel");
+    const text = document.getElementById("al2AppliedLabelText");
+    if (!wrap || !text) return;
+    if (doc.appliedLabel) {
+      wrap.classList.add("is-applied");
+      text.textContent = doc.appliedLabel;
+    } else {
+      wrap.classList.remove("is-applied");
+      text.textContent = "Unlabeled";
+    }
+  };
+
+  const renderModelLabelStrip = (doc) => {
+    const el = document.getElementById("al2ModelLabelText");
+    if (!el) return;
+    if (!doc) {
+      el.textContent = "—";
+      el.title = "";
+      return;
+    }
+    const raw = doc.label != null ? String(doc.label) : "—";
+    el.textContent = raw || "—";
+    el.title = raw && raw !== "—" ? raw : "";
+  };
+
+  const renderViewToggle = (doc) => {
+    const toggle = document.getElementById("al2ViewToggle");
+    if (!toggle) return;
+    const activeView = getActiveView(doc);
+    toggle.querySelectorAll(".btn").forEach((btn) => {
+      if (btn.dataset.view === activeView) btn.classList.add("is-active");
+      else btn.classList.remove("is-active");
+    });
+  };
+
+  const renderContent = (doc) => {
+    const area = document.getElementById("al2ContentArea");
+    if (!area) return;
+    const view = getActiveView(doc);
+
+    if (view === "summary") {
+      area.classList.add("is-summary");
+      area.innerHTML = `
+        <div class="al2-content-summary-tag">
+          Summary
+        </div>
+        <p class="mb-0">${escapeHtml(doc.summary)}</p>
+      `;
+    } else {
+      area.classList.remove("is-summary");
+      area.innerHTML = `<p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;">${escapeHtml(doc.text)}</p>`;
+    }
+    area.scrollTop = 0;
+  };
+
+  const renderTable = () => {
+    const tbody = document.getElementById("al2DocTableBody");
+    const countEl = document.getElementById("al2QueueCount");
+    if (!tbody) return;
+
+    const term = searchTerm.toLowerCase().trim();
+    const filtered = getDocs()
+      .map((doc, idx) => ({ doc, idx }))
+      .filter(({ doc }) => {
+        if (!term) return true;
+        return (
+          doc.id.toLowerCase().includes(term) ||
+          doc.text.toLowerCase().includes(term) ||
+          doc.label.toLowerCase().includes(term) ||
+          (doc.appliedLabel || "").toLowerCase().includes(term)
+        );
+      });
+
+    if (countEl) countEl.textContent = String(statusState.num_total || filtered.length);
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="4" class="al2-empty-state">
+          No documents match your search.
+          <div class="al2-empty-state-note">Try a different keyword.</div>
+        </td></tr>
+      `;
+      return;
+    }
+
+    const currentId = getCurrentDoc()?.id;
+    tbody.innerHTML = filtered
+      .map(({ doc, idx }) => {
+        const humanLabel = doc.appliedLabel || "Unlabeled";
+        const humanClass = doc.appliedLabel ? "al2-label-tag is-applied" : "al2-label-tag";
+        const isActive = currentId && doc.id === currentId;
+        const idShort = truncate(displayId(doc.id), 20);
+        const preview = truncate(doc.text, 72);
+        const modelLab = truncate(doc.label, 36);
+        const humanDisp = truncate(humanLabel, 36);
+        return `
+          <tr class="${isActive ? "is-active" : ""}" data-index="${idx}">
+            <td class="font-monospace small al2-truncate-cell" title="${escapeHtml(doc.id)}">${escapeHtml(idShort)}</td>
+            <td class="al2-text-cell" title="${escapeHtml(doc.text)}">${escapeHtml(preview)}</td>
+            <td class="al2-truncate-cell" title="${escapeHtml(doc.label)}"><span class="al2-label-tag">${escapeHtml(modelLab)}</span></td>
+            <td class="al2-truncate-cell" title="${escapeHtml(humanLabel)}"><span class="${humanClass}">${escapeHtml(humanDisp)}</span></td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    // Scroll the active row into view inside the table
+    const activeRow = tbody.querySelector("tr.is-active");
+    if (activeRow) activeRow.scrollIntoView({ block: "nearest" });
+  };
+
+  const renderLabelChips = (doc) => {
+    const labelsEl = document.getElementById("al2LabelSuggestions");
+    if (!labelsEl) return;
+    labelsEl.innerHTML = getSuggestionSet(doc)
+      .map((label) => {
+        const selected = selectedSuggestion === label;
+        return `
+          <button type="button" class="al2-label-chip ${selected ? "is-selected" : ""}"
+            data-label="${escapeHtml(label)}">
+            ${escapeHtml(label)}
+          </button>
+        `;
+      })
+      .join("");
+  };
+
+  const renderActiveLearningTwo = () => {
+    ensureCurrentInRange();
+    const docs = getDocs();
+    const doc = docs[activeLearningIndex];
+    const counterEl = document.getElementById("al2DocCounter");
+    const prevBtn = document.getElementById("al2PrevBtn");
+    const nextBtn = document.getElementById("al2NextBtn");
+    const applyBtn = document.getElementById("al2ApplyBtn");
+
+    if (!doc || !counterEl || !prevBtn || !nextBtn) {
+      renderModelLabelStrip(null);
+      return;
+    }
+
+    selectedSuggestion = doc.appliedLabel;
+    const customLabelInput = document.getElementById("al2CustomLabelInput");
+    if (customLabelInput) customLabelInput.value = selectedSuggestion || "";
+
+    counterEl.textContent =
+      `Document ${activeLearningIndex + 1} of ${Math.max(docs.length, Number(statusState.num_total || 0))} · ${displayId(doc.id)}`;
+    prevBtn.disabled = activeLearningIndex === 0 && navHistory.length === 0;
+    nextBtn.disabled = activeLearningIndex === docs.length - 1;
+    if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+
+    renderMetaPills(doc);
+    renderViewToggle(doc);
+    renderContent(doc);
+    renderModelLabelStrip(doc);
+    renderAppliedLabel(doc);
+    renderLabelChips(doc);
+    renderTable();
+    renderProgress();
+  };
+
+  const goTo = (newIndex) => {
+    if (newIndex < 0 || newIndex >= getDocs().length) return;
+    activeLearningIndex = newIndex;
+    renderActiveLearningTwo();
+  };
+
+  const goBack = () => {
+    if (navHistory.length > 0) {
+      const target = navHistory.pop();
+      const ix = docOrder.indexOf(target);
+      if (ix >= 0) {
+        activeLearningIndex = ix;
+        renderActiveLearningTwo();
+        return;
+      }
+    }
+    goTo(activeLearningIndex - 1);
+  };
+
+  const applyAndContinue = async () => {
+    const input = document.getElementById("al2CustomLabelInput");
+    const labelToApply = input ? input.value.trim() : "";
+    if (!labelToApply) return;
+    const doc = getCurrentDoc();
+    if (!doc?.id || !modelId) return;
+    const submittedDocId = doc.id;
+    try {
+      const rec = await jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model_id: modelId,
+          doc_id: doc.id,
+          label: labelToApply,
+        }),
+      });
+      syncLabels(rec.current_labels || {});
+      navHistory.push(submittedDocId);
+      await loadStatus();
+      await loadHumanLabels();
+      if (rec.doc_id) {
+        const existing = docsById.get(rec.doc_id);
+        if (existing) {
+          Object.assign(existing, {
+            text: rec.text || existing.text,
+            summary: buildSummary(rec.text || existing.text),
+            appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? existing.appliedLabel,
+            reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
+          });
+        } else {
+          upsertDoc({
+            id: rec.doc_id,
+            text: rec.text || "",
+            summary: buildSummary(rec.text || ""),
+            label: "—",
+            suggestions: getSuggestionSet({}),
+            appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? null,
+            reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
+            viewPreference: "text",
+          });
+        }
+        activeLearningIndex = Math.max(0, docOrder.indexOf(rec.doc_id));
+        showSaveFeedback(`Saved ${displayId(submittedDocId)}. Moved to ${displayId(rec.doc_id)}.`);
+      } else {
+        showSaveFeedback(`Saved ${displayId(submittedDocId)}. No more documents remaining.`);
+      }
+      renderActiveLearningTwo();
+    } catch (err) {
+      alert(err.message || "Failed to save label.");
+    }
+  };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const prevBtn = document.getElementById("al2PrevBtn");
+    const nextBtn = document.getElementById("al2NextBtn");
+    const applyBtn = document.getElementById("al2ApplyBtn");
+    const labelsEl = document.getElementById("al2LabelSuggestions");
+    const tableBody = document.getElementById("al2DocTableBody");
+    const searchInput = document.getElementById("al2SearchInput");
+    const viewToggle = document.getElementById("al2ViewToggle");
+    const customLabelInput = document.getElementById("al2CustomLabelInput");
+
+    if (prevBtn) prevBtn.addEventListener("click", () => { goBack(); });
+    if (nextBtn) nextBtn.addEventListener("click", () => { goTo(activeLearningIndex + 1); });
+    if (applyBtn) applyBtn.addEventListener("click", () => { applyAndContinue(); });
+    if (customLabelInput) {
+      customLabelInput.addEventListener("input", (e) => {
+        selectedSuggestion = e.target.value.trim() || null;
+        if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+        const current = getCurrentDoc();
+        if (current) renderLabelChips(current);
+      });
+      customLabelInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !applyBtn?.disabled) {
+          e.preventDefault();
+          applyAndContinue();
+        }
+      });
+    }
+
+    // View toggle: explicit user choice persists per doc
+    if (viewToggle) {
+      viewToggle.addEventListener("click", (e) => {
+        const btn = e.target.closest(".btn[data-view]");
+        if (!btn) return;
+        const doc = getCurrentDoc();
+        if (!doc) return;
+        doc.viewPreference = btn.dataset.view;
+        renderViewToggle(doc);
+        renderContent(doc);
+      });
+    }
+
+    // Toggle label chip selection
+    if (labelsEl) {
+      labelsEl.addEventListener("click", (e) => {
+        const chip = e.target.closest(".al2-label-chip");
+        if (!chip) return;
+        const label = chip.dataset.label;
+        selectedSuggestion = label;
+        if (customLabelInput) customLabelInput.value = label;
+        const doc = getCurrentDoc();
+        if (!doc) return;
+        renderLabelChips(doc);
+        if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+      });
+    }
+
+    // Click row to jump to that doc
+    if (tableBody) {
+      tableBody.addEventListener("click", (e) => {
+        const row = e.target.closest("tr[data-index]");
+        if (!row) return;
+        const idx = Number(row.dataset.index);
+        if (Number.isFinite(idx)) goTo(idx);
+      });
+    }
+
+    // Search filter
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        searchTerm = e.target.value;
+        renderTable();
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goBack();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goTo(activeLearningIndex + 1);
+      } else if (e.key === "Enter" && selectedSuggestion) {
+        e.preventDefault();
+        applyAndContinue();
+      }
+    });
+
+    if (!modelId) {
+      const content = document.getElementById("al2ContentArea");
+      if (content) {
+        content.innerHTML = "<p class=\"mb-0\">Select a model from the dashboard first, then open Active Learning.</p>";
+      }
+      return;
+    }
+
+    loadStatus()
+      .then(() => loadBootstrap())
+      .then(() => loadRecommendation())
+      .then(() => renderActiveLearningTwo())
+      .catch((err) => {
+        const content = document.getElementById("al2ContentArea");
+        if (content) {
+          content.innerHTML = `<p class="mb-0">${escapeHtml(err.message || "Failed to load active-learning data.")}</p>`;
+        }
+      });
+  });
+})();
+</script>
+{% endblock %}

@@ -44,6 +44,19 @@ body {
   background-color: var(--bs-light);
 }
 
+.dashboard-actions {
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  padding: 0.25rem;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-actions .btn {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
   /* Match base.html account control */
   .tova-profile-trigger {
     display: inline-flex;
@@ -973,11 +986,14 @@ footer {
         </ul>
 
         <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
-          {% comment %}Run inference (navbar) — opens #inferenceModal
-          <button class="btn btn-primary btn-sm order-1 order-sm-0" type="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">
-            <i class="bi bi-lightning-charge-fill me-1"></i>Run inference
-          </button>
-          {% endcomment %}
+          <!-- <div class="dashboard-actions d-flex flex-wrap align-items-center gap-2 order-1 order-sm-0">
+            <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">
+              Run inference
+            </button>
+            <a class="btn btn-outline-secondary btn-sm text-nowrap" href="{% url_for 'active_learning_two' %}{% if model_id %}?model_id={{ model_id|urlencode }}{% endif %}">
+              Active Learning
+            </a>
+          </div> -->
 
           {% if user.is_authenticated and model_id and corpus_id %}
           <a class="btn btn-outline-primary btn-sm order-1 order-sm-0 text-nowrap"
@@ -1104,8 +1120,8 @@ footer {
         <div class="panel d-flex flex-column" style="flex: 1 1 0; min-height: 0;" hidden>
           <div class="d-flex justify-content-between align-items-start mb-3">
             <div>
-              <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">Theme Diagnostics</h6>
-              <p class="text-muted mb-0" style="font-size: 0.75rem;">
+              <h6 id="metricsCardTitle" class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">Theme Diagnostics</h6>
+              <p id="metricsCardSubtitle" class="text-muted mb-0" style="font-size: 0.75rem;">
                 Summary of diagnostics for each theme.
               </p>
             </div>
@@ -1117,7 +1133,7 @@ footer {
           
       
           <!-- Theme Metrics Table -->
-          <div id="themeMetricsPanel" class="flex-grow-1 d-flex flex-column" style="max-height: 90%;">
+          <div id="themeMetricsPanel" class="flex-grow-1" style="max-height: 90%;">
             <div class="table-scroll-wrapper flex-grow-1 border rounded overflow-auto">
               <table class="table table-sm table-hover align-middle mb-0" id="themeStatsTable" style="font-size: 0.75rem;">
                 <thead class="table-light sticky-top" style="top: 0; z-index: 1;"></thead>
@@ -1127,8 +1143,8 @@ footer {
           </div>
       
           <!-- Theme Insights Grid -->
-          <div id="modelMetricsPanel" class="d-none flex-grow-1 d-flex flex-column">
-            <h6 class="fw-bold mb-3 mt-2">Theme Insights</h6>
+          <div id="modelMetricsPanel" class="d-none flex-grow-1">
+            <h6 class="fw-bold mb-3 mt-2">Model Metrics</h6>
             <div id="themeInsightsGrid" class="row row-cols-2 small g-2 flex-grow-1 overflow-auto"></div>
           </div>
         </div>
@@ -3240,8 +3256,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
+              const responseText = await response.text();
+              console.log("Inference response status:", response.status);
+              console.log("Inference response body:", responseText);
+              let rawResult = {};
+              try {
+                rawResult = responseText ? JSON.parse(responseText) : {};
+              } catch {
+                rawResult = { raw: responseText };
+              }
               if (!response.ok) throw new Error(`Failed to fetch inference (${response.status})`);
-              const rawResult = await response.json();
               console.log(rawResult)
               const result = rawResult?.results || rawResult?.result || rawResult || {};
 
@@ -3264,13 +3288,26 @@ document.addEventListener("DOMContentLoaded", () => {
         const btn   = document.getElementById("toggleMetricBtn");
         const theme = document.getElementById("themeMetricsPanel");
         const model = document.getElementById("modelMetricsPanel");
+        const title = document.getElementById("metricsCardTitle");
+        const subtitle = document.getElementById("metricsCardSubtitle");
         if (!btn || !theme || !model) return;
 
         let isThemeView = !theme.classList.contains("d-none");
         function render() {
           theme.classList.toggle("d-none", !isThemeView);
           model.classList.toggle("d-none",  isThemeView);
-          btn.textContent = isThemeView ? "Switch to Model Metrics" : "Switch to Theme Metrics";
+          if (title && subtitle) {
+            if (isThemeView) {
+              title.textContent = "Theme Diagnostics";
+              subtitle.textContent = "Summary of diagnostics for each theme.";
+            } else {
+              title.textContent = "Model Metrics";
+              subtitle.textContent = "Average coherence, average entropy, topic diversity, and IRBO.";
+            }
+          }
+          btn.innerHTML = isThemeView
+            ? '<i class="bi bi-bar-chart-line me-1"></i> Switch to Model Metrics'
+            : '<i class="bi bi-bar-chart-line me-1"></i> Switch to Theme Metrics';
           btn.setAttribute("aria-pressed", String(!isThemeView));
         }
         btn.addEventListener("click", () => { isThemeView = !isThemeView; render(); });
@@ -3465,13 +3502,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn   = document.getElementById("toggleMetricBtn");
     const theme = document.getElementById("themeMetricsPanel");
     const model = document.getElementById("modelMetricsPanel");
+    const title = document.getElementById("metricsCardTitle");
+    const subtitle = document.getElementById("metricsCardSubtitle");
     if (!btn || !theme || !model) return;
 
     let isThemeView = !theme.classList.contains("d-none");
     function render() {
       theme.classList.toggle("d-none", !isThemeView);
       model.classList.toggle("d-none",  isThemeView);
-      btn.textContent = isThemeView ? "Switch to Model Metrics" : "Switch to Theme Metrics";
+      if (title && subtitle) {
+        if (isThemeView) {
+          title.textContent = "Theme Diagnostics";
+          subtitle.textContent = "Summary of diagnostics for each theme.";
+        } else {
+          title.textContent = "Model Metrics";
+          subtitle.textContent = "Average coherence, average entropy, topic diversity, and IRBO.";
+        }
+      }
+      btn.innerHTML = isThemeView
+        ? '<i class="bi bi-bar-chart-line me-1"></i> Switch to Model Metrics'
+        : '<i class="bi bi-bar-chart-line me-1"></i> Switch to Theme Metrics';
       btn.setAttribute("aria-pressed", String(!isThemeView));
     }
     btn.addEventListener("click", () => { isThemeView = !isThemeView; render(); });
@@ -4022,6 +4072,5 @@ document.addEventListener("DOMContentLoaded", () => {
   })();
 });
 </script>
-
 </body>
 </html>
