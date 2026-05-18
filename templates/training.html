@@ -1165,10 +1165,12 @@
           COMPLETION_SHOWN = true;
           handleTrainingCompletion(data);
         } else if (terminalFailed.has(st) || error) {
-          updateTrainingUI({
-            ...data,
-            error: error || data.message || "Training did not complete successfully.",
-          });
+          const errMsg = error || data.message || "Training did not complete successfully.";
+          updateTrainingUI({ ...data, error: errMsg });
+          // Show a push notification when the configured model is not available on the server
+          if (errMsg.toLowerCase().includes('not available') && typeof window.showGlobalToast === 'function') {
+            window.showGlobalToast(errMsg, 'danger');
+          }
         }
         return;
       }

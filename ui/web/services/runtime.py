@@ -181,18 +181,10 @@ def build_llm_ui_config(config: dict | None = None):
     ui: dict[str, dict] = {}
 
     gpt_cfg = llm.get("gpt") or {}
-    if gpt_cfg:
-        models_raw = gpt_cfg.get("available_models") or []
-        if isinstance(models_raw, (set, list, tuple)):
-            models = sorted(models_raw)
-        elif isinstance(models_raw, dict):
-            models = sorted(models_raw.keys())
-        else:
-            models = []
+    if gpt_cfg is not None:
         ui["gpt"] = {
             "label": "OpenAI (GPT)",
             "form_value": "openai",
-            "models": models,
             "show_api_key": True,
             "show_host": False,
             "default_host": "",
@@ -203,17 +195,9 @@ def build_llm_ui_config(config: dict | None = None):
 
     ollama_cfg = llm.get("ollama") or {}
     if ollama_cfg:
-        models_raw = ollama_cfg.get("available_models") or []
-        if isinstance(models_raw, (set, list, tuple)):
-            models = sorted(models_raw)
-        elif isinstance(models_raw, dict):
-            models = sorted(models_raw.keys())
-        else:
-            models = []
         ui["ollama"] = {
             "label": "Ollama",
             "form_value": "ollama",
-            "models": models,
             "show_api_key": False,
             "show_host": True,
             "default_host": ollama_cfg.get("host", ""),
@@ -225,11 +209,24 @@ def build_llm_ui_config(config: dict | None = None):
         ui["llama_cpp"] = {
             "label": "llama.cpp",
             "form_value": "llama_cpp",
-            "models": [],
             "show_api_key": False,
             "show_host": True,
             "default_host": llama_cfg.get("host", ""),
-            "host_help": "Base URL of your llama.cpp server.",
+            "host_help": "Full endpoint URL of your llama.cpp server.",
+        }
+
+    vllm_cfg = llm.get("vllm") or {}
+    if vllm_cfg is not None:
+        ui["vllm"] = {
+            "label": "vLLM",
+            "form_value": "vllm",
+            "show_api_key": True,
+            "show_host": True,
+            "default_host": vllm_cfg.get("host", "") if isinstance(vllm_cfg, dict) else "",
+            "api_key_label": "API key (optional)",
+            "api_key_placeholder": "EMPTY or your token",
+            "api_key_help": "Leave blank if the server requires no authentication.",
+            "host_help": "Base URL of the vLLM service, e.g. https://rchat.nist.gov/api",
         }
 
     return ui

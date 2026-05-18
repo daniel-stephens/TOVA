@@ -78,6 +78,8 @@ topic_modeling:
   OpenTopicRAG:
     run_from_web: True # @Daniel, I'm not entirely sure how to display this. This parameter shouldn't be visible to the user in the web interface and should be set to True by default. However, if it's not provided through the web, I need to request the input from the user via stdin.
     embedding_model: Qwen/Qwen3-Embedding-0.6B
+    embedding_device: auto # auto|cuda|cpu
+    preload_embedding_on_startup: true
     tp_generation_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/tp_generation_dft.txt
     doc_labelling_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/doc_labelling_dft.txt
     inference_prompt_path: src/tova/topic_models/models/llm_based/topicrag/prompts/inference_dft.txt
@@ -85,7 +87,7 @@ topic_modeling:
     max_feat_tfidf: 1000
     user_preferences: 
     sample: 100
-    nr_iterations: 2
+    nr_iterations: 5
 
 ################################
 #       PREPROCESSING          #
@@ -117,29 +119,11 @@ llm:
     random_seed: 1234
     seed: 1234
   gpt:
-    available_models:
-      {
-      "gpt-4o-2024-08-06",
-      "gpt-4o-mini-2024-07-18",
-      "chatgpt-4o-latest",
-      "gpt-4-turbo",
-      "gpt-4-turbo-2024-04-09",
-      "gpt-4",
-      "gpt-3.5-turbo",
-      "gpt-4o-mini",
-      "gpt-4o",
-      "gpt-3.5-turbo-instruct"
-      }
     path_api_key: .env
   ollama:
-    available_models: {
-      "mixtral:8x7b",
-      "qwen:32b",
-      "llama3.3:70b",
-      "gemma3:4b",
-      "qwen3:8b",
-      "qwen3:32b"
-    }
     host: http://kumo01.tsc.uc3m.es:11434 #http://host.docker.internal:11434
   llama_cpp:
     host: http://host.docker.internal:11435/v1/chat/completions
+  vllm:
+    host: https://rchat.nist.gov/api
+    path_api_key: # path to .env file containing VLLM_API_KEY

@@ -3,6 +3,7 @@ import json
 import logging
 import pathlib
 import random
+import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -18,7 +19,12 @@ from transformers import AutoModel, AutoTokenizer
 from tova.prompter.prompter import Prompter
 from tova.topic_models.models.llm_based.base import LLMTModel
 from tova.utils.cancel import CancellationToken, check_cancel
+from tova.utils.common import load_yaml_config_file
 from tova.utils.progress import ProgressCallback  # type: ignore
+
+
+_EMBEDDING_CACHE: Dict[str, Dict[str, object]] = {}
+_EMBEDDING_CACHE_LOCK = threading.Lock()
 
 
 class OpenTopicRAGModel(LLMTModel):
@@ -41,10 +47,11 @@ class OpenTopicRAGModel(LLMTModel):
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
-        otr_cfg = self.config.get("opentopicrag", {})
+        otr_cfg = self.config.get("opentopicrag") or self.config.get("OpenTopicRAG") or {}
         self.run_from_web = otr_cfg.get("run_from_web", True)
         self.embedding_model_name = otr_cfg.get(
             "embedding_model", "Qwen/Qwen3-Embedding-0.6B")
+        self.embedding_device = str(otr_cfg.get("embedding_device", "auto")).lower()
         self.max_feat_tfidf = otr_cfg.get("max_feat_tfidf", 1000)
         # This value should be a string of preferences provided by the web interface. If running outside the web, it should be retrieved using the get_user_preferences method.
         self.user_preferences = otr_cfg.get("user_preferences", "")
@@ -73,7 +80,10 @@ class OpenTopicRAGModel(LLMTModel):
 
         self._prompter = Prompter(
             config_path=self._config_path,
-            model_type=self.llm_model_type
+            model_type=self.llm_model_type,
+            llm_server=self.llm_server,
+            llm_provider=self.llm_provider,
+            api_key=getattr(self, 'llm_api_key', None),
         )
 
         # init embedding model
@@ -93,27 +103,121 @@ class OpenTopicRAGModel(LLMTModel):
         Loads the specified embedding model using Hugging Face transformers. If loading fails, falls back to TF-IDF vectorizer.
         """
         try:
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                self.embedding_model_name, trust_remote_code=True)
-            self._embedding_model = AutoModel.from_pretrained(
-                self.embedding_model_name,
-                trust_remote_code=True,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            tokenizer, embedding_model, device = self._get_or_load_embedding_bundle(
+                model_name=self.embedding_model_name,
+                device_preference=self.embedding_device,
+                logger=self._logger,
             )
-            # Move to GPU if available, otherwise CPU
-            self._device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu")
-            self._embedding_model = self._embedding_model.to(self._device)
-            self._embedding_model.eval()
+            self._tokenizer = tokenizer
+            self._embedding_model = embedding_model
+            self._device = device
             self._logger.info(
-                f"Embedding model {self._embedding_model} loaded successfully on {self._device}")
+                "Embedding model %s loaded successfully on %s",
+                self.embedding_model_name,
+                self._device,
+            )
         except Exception as e:
             self._logger.warning(
-                f"Error loading embedding model {self._embedding_model}: {e}")
+                f"Error loading embedding model {self.embedding_model_name}: {e}")
             self._logger.warning("Falling back to TF-IDF for embeddings")
             from sklearn.feature_extraction.text import TfidfVectorizer
             self._embedding_model = None
             self._vectorizer = TfidfVectorizer(max_features=1000)
+
+    @staticmethod
+    def _resolve_device(device_preference: str, logger: Optional[logging.Logger] = None) -> torch.device:
+        pref = (device_preference or "auto").lower()
+        cuda_available = torch.cuda.is_available()
+
+        if pref == "cpu":
+            return torch.device("cpu")
+
+        if pref in {"cuda", "gpu"}:
+            if not cuda_available and logger:
+                logger.warning(
+                    "GPU requested for OpenTopicRAG embeddings but CUDA is not available. Falling back to CPU."
+                )
+            return torch.device("cuda" if cuda_available else "cpu")
+
+        return torch.device("cuda" if cuda_available else "cpu")
+
+    @classmethod
+    def _get_or_load_embedding_bundle(
+        cls,
+        *,
+        model_name: str,
+        device_preference: str = "auto",
+        logger: Optional[logging.Logger] = None,
+    ) -> Tuple[AutoTokenizer, AutoModel, torch.device]:
+        device = cls._resolve_device(device_preference, logger)
+        cache_key = f"{model_name}::{str(device)}"
+
+        with _EMBEDDING_CACHE_LOCK:
+            cached = _EMBEDDING_CACHE.get(cache_key)
+            if cached is not None:
+                if logger:
+                    logger.info(
+                        "Reusing cached embedding model %s on %s",
+                        model_name,
+                        device,
+                    )
+                return (
+                    cached["tokenizer"],
+                    cached["model"],
+                    cached["device"],
+                )
+
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+            )
+            embedding_model = AutoModel.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+                torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+            )
+            embedding_model = embedding_model.to(device)
+            embedding_model.eval()
+
+            _EMBEDDING_CACHE[cache_key] = {
+                "tokenizer": tokenizer,
+                "model": embedding_model,
+                "device": device,
+            }
+
+            if logger:
+                logger.info(
+                    "Loaded and cached embedding model %s on %s",
+                    model_name,
+                    device,
+                )
+
+            return tokenizer, embedding_model, device
+
+    @classmethod
+    def preload_embedding_from_config(
+        cls,
+        config_path: pathlib.Path = pathlib.Path("./static/config/config.yaml"),
+        logger: Optional[logging.Logger] = None,
+    ) -> bool:
+        """Preload OpenTopicRAG embeddings once at process startup if enabled in config."""
+        cfg = load_yaml_config_file(config_path, "topic_modeling", logger)
+        otr_cfg = cfg.get("opentopicrag") or cfg.get("OpenTopicRAG") or {}
+
+        should_preload = bool(otr_cfg.get("preload_embedding_on_startup", False))
+        if not should_preload:
+            if logger:
+                logger.info("OpenTopicRAG embedding preload disabled in config")
+            return False
+
+        model_name = otr_cfg.get("embedding_model", "Qwen/Qwen3-Embedding-0.6B")
+        device_preference = str(otr_cfg.get("embedding_device", "auto")).lower()
+        cls._get_or_load_embedding_bundle(
+            model_name=model_name,
+            device_preference=device_preference,
+            logger=logger,
+        )
+        return True
 
     def _create_embeddings(self, texts: List[str]) -> np.ndarray:
         """

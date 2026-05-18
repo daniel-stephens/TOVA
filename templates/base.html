@@ -956,6 +956,37 @@
             </div>
           </div>
 
+          <!-- vLLM Settings -->
+          <div id="llm-settings-vllm" class="llm-provider-settings d-none">
+            <div class="card border-warning mb-3">
+              <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="bi bi-lightning me-2"></i>vLLM Configuration</h6>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label for="llm-settings-vllm-host" class="form-label">Server Base URL</label>
+                  <input type="url" class="form-control" id="llm-settings-vllm-host"
+                         name="vllm_host" placeholder="https://rchat.nist.gov/api">
+                  <div class="form-text">Base URL of the vLLM service (OpenAI-compatible endpoint)</div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-settings-vllm-model" class="form-label">Model</label>
+                  <input type="text" class="form-control" id="llm-settings-vllm-model"
+                         name="vllm_model" placeholder="Enter model name"
+                         list="llm-settings-vllm-model-options">
+                  <datalist id="llm-settings-vllm-model-options"></datalist>
+                  <div class="form-text">Model name; suggestions are loaded from your vLLM server</div>
+                </div>
+                <div class="mb-3">
+                  <label for="llm-settings-vllm-api-key" class="form-label">API Key (Optional)</label>
+                  <input type="password" class="form-control" id="llm-settings-vllm-api-key"
+                         name="vllm_api_key" placeholder="EMPTY or your token">
+                  <div class="form-text">Leave blank if the server requires no authentication</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- RChat Settings -->
           <div id="llm-settings-rchat" class="llm-provider-settings d-none">
             <div class="card border-info mb-3">
@@ -1026,6 +1057,9 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-secondary" id="llm-settings-test-btn">
+          <i class="bi bi-plug me-2"></i>Test Connection
+        </button>
         <button type="button" class="btn btn-primary" id="llm-settings-save-btn">
           <i class="bi bi-save me-2"></i>Save Settings
         </button>
@@ -1034,6 +1068,9 @@
   </div>
 </div>
 {% endif %}
+
+  <!-- Global toast container for push notifications -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="globalToastContainer" style="z-index: 9999;" aria-live="polite" aria-atomic="true"></div>
 
   {% if user.is_authenticated or not request.resolver_match or request.resolver_match.url_name != 'home' %}
   <footer class="bg-dark text-white text-center py-2">
@@ -1451,17 +1488,47 @@
             llmProviderSelect.appendChild(option);
           });
         }
+        // Model suggestions are now loaded dynamically from the server via fetchAndPopulateModels
+      };
 
-        // Populate Ollama suggestions for the datalist attached to text input
-        const ollamaModelOptions = document.getElementById('llm-settings-ollama-model-options');
-        if (ollamaModelOptions && llmUiConfig.ollama && Array.isArray(llmUiConfig.ollama.models)) {
-          ollamaModelOptions.innerHTML = '';
-          llmUiConfig.ollama.models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            ollamaModelOptions.appendChild(option);
+      // Fetch available models from the backend and populate a datalist
+      const fetchAndPopulateModels = async (backend, host, apiKey, datalistId) => {
+        if (!host) return;
+        try {
+          const params = new URLSearchParams({ backend });
+          params.set('host', host);
+          if (apiKey) params.set('api_key', apiKey);
+          const resp = await fetch(`/llm/models?${params}`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+          const dl = document.getElementById(datalistId);
+          if (!dl || !Array.isArray(data.models)) return;
+          dl.innerHTML = '';
+          data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            dl.appendChild(opt);
           });
-        }
+        } catch (_) { /* silent — datalist just won't populate */ }
+      };
+
+      // Show a dismissable Bootstrap toast (accessible globally as window.showGlobalToast)
+      window.showGlobalToast = (message, variant = 'danger', duration = 8000) => {
+        const container = document.getElementById('globalToastContainer');
+        if (!container) return;
+        const id = 'toast-' + Date.now();
+        const safeMsg = String(message).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        container.insertAdjacentHTML('beforeend', `
+          <div id="${id}" class="toast align-items-center text-bg-${variant} border-0" role="alert" aria-atomic="true">
+            <div class="d-flex">
+              <div class="toast-body">${safeMsg}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>`);
+        const el = document.getElementById(id);
+        const toast = new bootstrap.Toast(el, { delay: duration });
+        toast.show();
+        el.addEventListener('hidden.bs.toast', () => el.remove());
       };
 
       // Load saved LLM config
@@ -1494,6 +1561,20 @@
                   const llamaCppHost = document.getElementById('llm-settings-llama-cpp-host');
                   if (llamaCppHost) llamaCppHost.value = config.host;
                 }
+              } else if (config.provider === 'vllm') {
+                if (config.host) {
+                  const vllmHost = document.getElementById('llm-settings-vllm-host');
+                  if (vllmHost) vllmHost.value = config.host;
+                }
+                if (config.model) {
+                  const vllmModel = document.getElementById('llm-settings-vllm-model');
+                  if (vllmModel) vllmModel.value = config.model;
+                }
+                // Fetch available models from the server so the datalist is populated
+                fetchAndPopulateModels('vllm', config.host, null, 'llm-settings-vllm-model-options');
+              } else if (config.provider === 'ollama') {
+                // Also populate Ollama model suggestions dynamically
+                fetchAndPopulateModels('ollama', config.host, null, 'llm-settings-ollama-model-options');
               } else if (config.provider === 'rchat') {
                 if (config.host) {
                   const rchatHost = document.getElementById('llm-settings-rchat-host');
@@ -1534,6 +1615,8 @@
           document.getElementById('llm-settings-ollama')?.classList.remove('d-none');
         } else if (provider === 'llama_cpp') {
           document.getElementById('llm-settings-llama-cpp')?.classList.remove('d-none');
+        } else if (provider === 'vllm') {
+          document.getElementById('llm-settings-vllm')?.classList.remove('d-none');
         } else if (provider === 'rchat') {
           document.getElementById('llm-settings-rchat')?.classList.remove('d-none');
         } else if (provider === 'custom') {
@@ -1544,6 +1627,15 @@
       // Provider selection change handler
       llmProviderSelect?.addEventListener('change', (e) => {
         showProviderSettings(e.target.value);
+      });
+
+      // Fetch model suggestions when the host URL loses focus
+      document.getElementById('llm-settings-ollama-host')?.addEventListener('blur', (e) => {
+        fetchAndPopulateModels('ollama', e.target.value.trim(), null, 'llm-settings-ollama-model-options');
+      });
+      document.getElementById('llm-settings-vllm-host')?.addEventListener('blur', (e) => {
+        const apiKey = document.getElementById('llm-settings-vllm-api-key')?.value.trim() || null;
+        fetchAndPopulateModels('vllm', e.target.value.trim(), apiKey, 'llm-settings-vllm-model-options');
       });
 
       // Save LLM settings
@@ -1571,6 +1663,13 @@
         } else if (provider === 'llama_cpp') {
           const host = document.getElementById('llm-settings-llama-cpp-host')?.value;
           if (host) payload.host = host;
+        } else if (provider === 'vllm') {
+          const host = document.getElementById('llm-settings-vllm-host')?.value;
+          const model = document.getElementById('llm-settings-vllm-model')?.value;
+          const apiKey = document.getElementById('llm-settings-vllm-api-key')?.value;
+          if (host) payload.host = host;
+          if (model) payload.model = model;
+          if (apiKey) payload.api_key = apiKey;
         } else if (provider === 'rchat') {
           const host = document.getElementById('llm-settings-rchat-host')?.value;
           const model = document.getElementById('llm-settings-rchat-model')?.value;
@@ -1626,6 +1725,47 @@
           llmSettingsFeedback.classList.add('d-none');
         }, 5000);
       };
+
+      // Test Connection
+      document.getElementById('llm-settings-test-btn')?.addEventListener('click', async () => {
+        const provider = llmProviderSelect.value;
+        if (!provider) { showLlmFeedback('Select a provider first', 'warning'); return; }
+
+        const hostMap = {
+          ollama: document.getElementById('llm-settings-ollama-host')?.value.trim(),
+          vllm: document.getElementById('llm-settings-vllm-host')?.value.trim(),
+          llama_cpp: document.getElementById('llm-settings-llama-cpp-host')?.value.trim(),
+          rchat: document.getElementById('llm-settings-rchat-host')?.value.trim(),
+          custom: document.getElementById('llm-settings-custom-host')?.value.trim(),
+        };
+        const apiKeyMap = {
+          openai: document.getElementById('llm-settings-openai-api-key')?.value.trim(),
+          vllm: document.getElementById('llm-settings-vllm-api-key')?.value.trim(),
+        };
+
+        const testBtn = document.getElementById('llm-settings-test-btn');
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing…';
+        try {
+          const params = new URLSearchParams({ backend: provider });
+          const host = hostMap[provider];
+          const apiKey = apiKeyMap[provider];
+          if (host) params.set('host', host);
+          if (apiKey) params.set('api_key', apiKey);
+          const resp = await fetch(`/llm/models?${params}`, { credentials: 'same-origin' });
+          const data = await resp.json();
+          if (resp.ok && Array.isArray(data.models)) {
+            showLlmFeedback(`Connected! ${data.models.length} model(s) available.`, 'success');
+          } else {
+            showLlmFeedback(`Connection failed: ${data.detail || data.error || resp.statusText}`, 'danger');
+          }
+        } catch (err) {
+          showLlmFeedback(`Connection error: ${err.message}`, 'danger');
+        } finally {
+          testBtn.disabled = false;
+          testBtn.innerHTML = '<i class="bi bi-plug me-2"></i>Test Connection';
+        }
+      });
 
       // Initialize when modal is shown: load UI config (and populate options) first,
       // then apply the user's latest saved LLM settings so provider/model/host preload correctly.

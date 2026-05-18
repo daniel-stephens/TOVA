@@ -85,16 +85,24 @@ class BaseTMModel(ABC):
         #self.not_include = self.config.get(
         #    "general", {}).get("not_include", [])
 
-        # llm params
+        # llm params (config defaults; subclass kwargs applied via setattr override below)
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
-        self.llm_model_type = self.config.get(
-            "general", {}).get("llm_model_type")
+        self.llm_model_type = self.config.get("general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
-        
-        # print information about the llm configuration
-        self._logger.info(f"LLM Provider: {self.llm_provider}")
-        self._logger.info(f"LLM Model Type: {self.llm_model_type}")
-        self._logger.info(f"LLM Server: {self.llm_server}")
+
+    def __setattr__(self, name: str, value) -> None:
+        # When llm_provider is overridden to a different value than the config default,
+        # and llm_server still holds the config's default value (i.e. was never explicitly
+        # set for the new provider), clear it to avoid passing a stale server URL.
+        if (
+            name == "llm_provider"
+            and value != getattr(self, "llm_provider", None)
+            and hasattr(self, "config")
+        ):
+            config_server = self.config.get("general", {}).get("llm_server")
+            if config_server and getattr(self, "llm_server", None) == config_server:
+                object.__setattr__(self, "llm_server", None)
+        object.__setattr__(self, name, value)
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -171,6 +179,7 @@ class BaseTMModel(ABC):
             llm_model_type=self.llm_model_type,
             llm_server=self.llm_server,
             llm_provider=self.llm_provider,
+            llm_api_key=getattr(self, 'llm_api_key', None),
             labeller_prompt=self.labeller_prompt,
             summarizer_prompt=self.summarizer_prompt,
         )

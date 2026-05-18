@@ -103,14 +103,11 @@ class TopicGPTTMmodel(LLMTModel):
         Prepare data files for TopicGPT scripts: full.jsonl (all docs)  and
         sample_*.jsonl (sampled docs). Returns paths to (sampled, full).
         """
-
         df_full = self._df.copy()
         path_full = model_files / "full.jsonl"
         df_full.to_json(path_full, lines=True, orient="records")
 
         df_sample = self._df.copy()
-        # gpt expects 'text' field
-        df_sample = df_sample.copy()
         if self.sample:
             if isinstance(self.sample, float):
                 df_sample = df_sample.sample(frac=self.sample)

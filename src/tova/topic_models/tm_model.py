@@ -79,6 +79,7 @@ class TMmodel(object):
         llm_model_type: str = "qwen:32b",
         llm_server: Optional[str] = None,
         llm_provider: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
         labeller_prompt: str = "src/prompter/prompts/labelling_dft.txt",
         summarizer_prompt: str = "src/prompter/prompts/summarization_dft.txt",
         logger: logging.Logger = None,
@@ -124,6 +125,7 @@ class TMmodel(object):
         self.llm_model_type = llm_model_type
         self.llm_server = llm_server
         self.llm_provider = llm_provider
+        self.llm_api_key = llm_api_key
         self._labeller_prompt = labeller_prompt
         self._summarizer_prompt = summarizer_prompt
         self._training_warnings: List[str] = []
@@ -970,11 +972,16 @@ class TMmodel(object):
         with open(prompt_path, "r") as file:
             template_str = file.read()
 
+        self._logger.info(
+            f"Effective LLM provider used: {self.llm_provider}, "
+            f"model: {self.llm_model_type}, server: {self.llm_server}"
+        )
         prompter = Prompter(
             config_path=self._config_path,
             model_type=self.llm_model_type,
             llm_server=self.llm_server,
             llm_provider=self.llm_provider,
+            api_key=self.llm_api_key,
             max_tokens=max_tokens
         )
 

@@ -10,6 +10,10 @@ RED    := \033[0;31m
 CYAN   := \033[0;36m
 RESET  := \033[0m
 
+# GPU detection: automatically include the GPU override when an NVIDIA device is present
+NVIDIA_SMI := $(shell nvidia-smi -L 2>/dev/null | head -1)
+COMPOSE_GPU := $(if $(NVIDIA_SMI),-f docker-compose.gpu.yml,)
+
 # base / artifact images (not in compose)
 build-builder:
 	@printf "$(CYAN)$(BOLD)» Building base builder image...$(RESET)\n"
@@ -94,17 +98,17 @@ build: build-builder build-assets build-api build-web
 
 rebuild-all: check-dirs check-ports rebuild-builder rebuild-assets rebuild-api rebuild-web # rebuild-solr-api
 	@printf "$(CYAN)$(BOLD)» Starting services...$(RESET)\n"
-	docker compose up -d api web postgres # solr-api solr zoo solr_config
+	docker compose $(COMPOSE_GPU) up -d --wait api web postgres # solr-api solr zoo solr_config
 	@printf "$(GREEN)$(BOLD)✔ Stack is up — web: http://$(HOST):$(WEB_PORT)  api: http://$(HOST):$(API_PORT)$(RESET)\n"
 
 rebuild-run: check-dirs check-ports rebuild-api rebuild-web # rebuild-solr-api
 	@printf "$(CYAN)$(BOLD)» Starting services...$(RESET)\n"
-	docker compose up -d api web postgres # solr-api
+	docker compose $(COMPOSE_GPU) up -d --wait api web postgres # solr-api
 	@printf "$(GREEN)$(BOLD)✔ Stack is up — web: http://$(HOST):$(WEB_PORT)  api: http://$(HOST):$(API_PORT)$(RESET)\n"
 
 up: check-dirs check-ports build
 	@printf "$(CYAN)$(BOLD)» Starting services...$(RESET)\n"
-	docker compose up -d api web postgres # solr-api solr zoo solr_config
+	docker compose $(COMPOSE_GPU) up -d --wait api web postgres # solr-api solr zoo solr_config
 	@printf "$(GREEN)$(BOLD)✔ Stack is up — web: http://$(HOST):$(WEB_PORT)  api: http://$(HOST):$(API_PORT)$(RESET)\n"
 
 # Smart entry point: detects uncommitted changes in build, relevant paths and

@@ -11,6 +11,7 @@ from tova.api.jobs.store import job_store
 from tova.api.jobs.tokens import cancellation_tokens
 from tova.api.models.job_schemas import JobDTO
 from tova.api.routers import active_learning, inference, queries, training, validating, data_handling
+from tova.topic_models.models.llm_based.topicrag.open_topic_rag_model import OpenTopicRAGModel
 from tova.utils.common import init_logger
 
 # Centralized logger initialization
@@ -46,6 +47,32 @@ app = FastAPI(
     version="1.0.0",
     swagger_ui_parameters={"syntaxHighlight": {"theme": "obsidian"}, "deepLink": True},
 )
+
+_app_ready: bool = False
+
+
+async def _background_preload() -> None:
+    global _app_ready
+    loop = asyncio.get_event_loop()
+    try:
+        did_preload = await loop.run_in_executor(
+            None,
+            lambda: OpenTopicRAGModel.preload_embedding_from_config(
+                config_path="static/config/config.yaml",
+                logger=logger,
+            ),
+        )
+        if did_preload:
+            logger.info("OpenTopicRAG embedding model preloaded at startup")
+    except Exception:
+        logger.exception("Failed to preload OpenTopicRAG embedding model at startup")
+    finally:
+        _app_ready = True
+
+
+@app.on_event("startup")
+async def preload_models() -> None:
+    asyncio.create_task(_background_preload())
 
 ################################################################################
 #                               STATUS ENDPOINTS                               #
@@ -104,9 +131,27 @@ async def cancel_job(job_id: str):
 ################################################################################
 @app.get("/health")
 async def health_check():
-    """Check the health of the API.
-    """
+    if not _app_ready:
+        raise HTTPException(status_code=503, detail="initializing")
     return {"status": "healthy"}
+
+
+################################################################################
+#                              LLM ENDPOINTS                                   #
+################################################################################
+@app.get("/llm/models")
+async def llm_models(backend: str, host: str = None, api_key: str = None):
+    from tova.prompter.prompter import Prompter
+    try:
+        models = Prompter.fetch_available_models(
+            backend=backend,
+            base_url=host,
+            api_key=api_key,
+            ollama_host=host if backend == "ollama" else None,
+        )
+        return {"models": models}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 ################################################################################

@@ -642,6 +642,28 @@ def llm_ui_config(request):
 
 
 @login_required
+def llm_models(request):
+    backend = request.GET.get("backend", "").strip()
+    if not backend:
+        return JsonResponse({"error": "backend is required"}, status=400)
+
+    params = {"backend": backend}
+    host = request.GET.get("host", "").strip()
+    api_key = request.GET.get("api_key", "").strip()
+    if host:
+        params["host"] = host
+    if api_key:
+        params["api_key"] = api_key
+
+    try:
+        r = requests.get(f"{R.API}/llm/models", params=params, timeout=15)
+        return JsonResponse(r.json(), status=r.status_code)
+    except Exception as e:
+        logger.warning("llm_models proxy failed: %s", e)
+        return JsonResponse({"error": str(e)}, status=502)
+
+
+@login_required
 def get_llm_config(request):
     user_id = _request_user_id(request)
     if not user_id:
@@ -1297,7 +1319,10 @@ def training_start(request):
         if llm_model and "llm_model_type" not in final_training_params:
             final_training_params["llm_model_type"] = llm_model
         if host and "llm_server" not in final_training_params:
-            final_training_params["llm_server"] = host
+            _src = (llm_config.get("provider") or "").lower()
+            _dst = (final_training_params.get("llm_provider") or "").lower()
+            if not _dst or _src == _dst:
+                final_training_params["llm_server"] = host
         if api_key and "llm_api_key" not in final_training_params:
             final_training_params["llm_api_key"] = api_key
 
@@ -1314,7 +1339,10 @@ def training_start(request):
             if "llm_model_type" not in final_training_params and tm_general.get("llm_model_type"):
                 final_training_params["llm_model_type"] = tm_general["llm_model_type"]
             if "llm_server" not in final_training_params and tm_general.get("llm_server"):
-                final_training_params["llm_server"] = tm_general["llm_server"]
+                _src = (tm_general.get("llm_provider") or "").lower()
+                _dst = (final_training_params.get("llm_provider") or "").lower()
+                if not _dst or _src == _dst:
+                    final_training_params["llm_server"] = tm_general["llm_server"]
 
     # When user chose Ollama but host missing, default from saved config or config file
     if (final_training_params.get("llm_provider") or "").lower() == "ollama":

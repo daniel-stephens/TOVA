@@ -18,10 +18,10 @@ services:
       - "${API_PORT:-11000}:11000"
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:11000/health', timeout=2).getcode()==200 else 1)"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 15s
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     environment:
       - PYTHONUNBUFFERED=1
       - API_SOLR_URL=http://solr-api:8001
@@ -35,6 +35,10 @@ services:
       - ./static/config:/app/static/config
     networks:
       - tova-net
+    deploy:
+      resources:
+        limits:
+          memory: 100GB
 
   web:
     build:
