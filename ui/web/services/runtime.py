@@ -191,6 +191,7 @@ def build_llm_ui_config(config: dict | None = None):
             models = []
         ui["gpt"] = {
             "label": "OpenAI (GPT)",
+            "form_value": "openai",
             "models": models,
             "show_api_key": True,
             "show_host": False,
@@ -211,6 +212,7 @@ def build_llm_ui_config(config: dict | None = None):
             models = []
         ui["ollama"] = {
             "label": "Ollama",
+            "form_value": "ollama",
             "models": models,
             "show_api_key": False,
             "show_host": True,
@@ -222,6 +224,7 @@ def build_llm_ui_config(config: dict | None = None):
     if llama_cfg:
         ui["llama_cpp"] = {
             "label": "llama.cpp",
+            "form_value": "llama_cpp",
             "models": [],
             "show_api_key": False,
             "show_host": True,

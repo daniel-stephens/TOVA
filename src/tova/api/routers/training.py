@@ -57,7 +57,7 @@ async def _run_training_job(
                 logger.error(f"Failed to update job progress: {e}")
                 pass
 
-        duration = await loop.run_in_executor(
+        duration, train_warnings = await loop.run_in_executor(
             None,
             lambda: train_model_dispatch(
                 model=model,
@@ -74,12 +74,16 @@ async def _run_training_job(
             ),
         )
 
+        result: dict = {"duration": duration}
+        if train_warnings:
+            result["warnings"] = train_warnings
+
         await job_store.update(
             job_id,
             status=JobStatus.succeeded,
             progress=1.0,
             message="Topic modeling training completed",
-            result={"duration": duration},
+            result=result,
         )
     except CancelledError as ce:
         await job_store.update(job_id, status=JobStatus.cancelled, message=str(ce))

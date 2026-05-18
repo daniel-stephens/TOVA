@@ -181,7 +181,7 @@
               </div>
             </div>
 
-            <div class="col-12">
+            <div class="col-12" id="preprocessTextWrapper">
               <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="preprocessText" checked>
                 <label class="form-check-label small text-muted" for="preprocessText">
@@ -839,6 +839,18 @@ const renderBasicGroupParams = (modelName) => {
     const groupKey =
       kind === "traditional" || kind === "llm_based" ? kind : null;
 
+    // Disable preprocessing for LLM-based models (they work with raw text)
+    if (dom.preprocessCheckbox) {
+      const isLlmBased = kind === "llm_based";
+      dom.preprocessCheckbox.disabled = isLlmBased;
+      if (isLlmBased) dom.preprocessCheckbox.checked = false;
+      const wrapper = document.getElementById("preprocessTextWrapper");
+      if (wrapper) {
+        wrapper.style.opacity = isLlmBased ? "0.45" : "";
+        wrapper.title = isLlmBased ? "Preprocessing is not applicable to LLM-based models" : "";
+      }
+    }
+
     const general = tm.general || {};
     const groupCfg = groupKey ? tm[groupKey] || {} : {};
     const specific = findModelConfigBlock(tm, modelName);
@@ -1392,11 +1404,13 @@ const renderBasicGroupParams = (modelName) => {
     // Apply LLM settings from session/user config
     await applyLlmSelection(allCollectedParams, model);
     
-    // Add preprocess_text if it's checked (only if different from default)
-    const preprocessChecked = !!dom.preprocessCheckbox?.checked;
-    const defaultPreprocess = defaultParams.preprocess_text !== undefined ? defaultParams.preprocess_text : false;
-    if (preprocessChecked !== defaultPreprocess) {
-      allCollectedParams.preprocess_text = preprocessChecked;
+    // Add preprocess_text only for traditional models (disabled for LLM-based)
+    if (!dom.preprocessCheckbox?.disabled) {
+      const preprocessChecked = !!dom.preprocessCheckbox?.checked;
+      const defaultPreprocess = defaultParams.preprocess_text !== undefined ? defaultParams.preprocess_text : false;
+      if (preprocessChecked !== defaultPreprocess) {
+        allCollectedParams.preprocess_text = preprocessChecked;
+      }
     }
 
     // Filter out parameters that match defaults - only keep changed values

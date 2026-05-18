@@ -885,11 +885,6 @@
             </label>
             <select class="form-select" id="llm-settings-provider" name="provider" required>
               <option value="">-- Select a provider --</option>
-              <option value="openai">OpenAI (GPT)</option>
-              <option value="ollama">Ollama</option>
-              <option value="llama_cpp">llama.cpp</option>
-              <option value="rchat">RChat</option>
-              <option value="custom">Custom</option>
             </select>
             <div class="form-text">Choose the LLM provider for topic modeling operations</div>
           </div>
@@ -1446,7 +1441,17 @@
       };
 
       const populateModelOptions = () => {
-        // OpenAI models are now text input, no need to populate dropdown
+        // Populate providers dropdown from config (only show providers defined in config.yaml)
+        if (llmProviderSelect && llmUiConfig && Object.keys(llmUiConfig).length > 0) {
+          llmProviderSelect.innerHTML = '<option value="">-- Select a provider --</option>';
+          Object.values(llmUiConfig).forEach(cfg => {
+            const option = document.createElement('option');
+            option.value = cfg.form_value || cfg.label;
+            option.textContent = cfg.label;
+            llmProviderSelect.appendChild(option);
+          });
+        }
+
         // Populate Ollama suggestions for the datalist attached to text input
         const ollamaModelOptions = document.getElementById('llm-settings-ollama-model-options');
         if (ollamaModelOptions && llmUiConfig.ollama && Array.isArray(llmUiConfig.ollama.models)) {

@@ -112,7 +112,8 @@ class LLMTModel(BaseTMModel, ABC):
         self.save_model()
         prs.report(1.0, "Topic model saved")
 
-        return time.time() - t_start
+        warnings = getattr(self.tm_model, "_training_warnings", [])
+        return time.time() - t_start, warnings
 
     def infer(
         self,

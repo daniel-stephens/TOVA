@@ -126,6 +126,7 @@ class TMmodel(object):
         self.llm_provider = llm_provider
         self._labeller_prompt = labeller_prompt
         self._summarizer_prompt = summarizer_prompt
+        self._training_warnings: List[str] = []
 
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
@@ -282,6 +283,13 @@ class TMmodel(object):
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             import pyLDAvis  # type: ignore
 
+        # pyLDAvis requires at least 2 topics and a valid term matrix
+        if self._ntopics < 2:
+            msg = f"The model has only {self._ntopics} topic(s); pyLDAvis visualization could not be generated."
+            self._logger.warning(msg)
+            self._training_warnings.append(msg)
+            return
+
         # We will compute the visualization using ndocs random documents
         # In case the model has gone through topic deletion, we may have rows
         # in the thetas matrix that sum up to zero (active topics have been
@@ -320,7 +328,9 @@ class TMmodel(object):
                 for item in self._coords:
                     fout.write(str(item) + "\n")
         except Exception as e:
-            print(f"Error in pyLDAvis: {e}")
+            msg = f"pyLDAvis visualization could not be generated: {e}"
+            self._logger.warning(msg)
+            self._training_warnings.append(msg)
         return
 
     def _save_cohr(self):
@@ -607,8 +617,13 @@ class TMmodel(object):
                 
     def _load_topic_coherence(self):
         if self._topic_coherence is None:
-            self._topic_coherence = np.load(
-                self._TMfolder.joinpath('topic_coherence.npy'))
+            coherence_path = self._TMfolder.joinpath('topic_coherence.npy')
+            if not coherence_path.is_file():
+                self._logger.warning("topic_coherence.npy not found; coherence will be zeros.")
+                n = self._ntopics if self._ntopics else 0
+                self._topic_coherence = np.zeros(n)
+                return
+            self._topic_coherence = np.load(coherence_path)
 
     def _largest_indices(self, ary, n):
         """Returns the n largest indices from a numpy array."""
@@ -996,7 +1011,17 @@ class TMmodel(object):
                 
     def load_tpc_coords(self):
         if self._coords is None:
-            with self._TMfolder.joinpath('tpc_coords.txt').open('r', encoding='utf8') as fin:
+            coords_path = self._TMfolder.joinpath('tpc_coords.txt')
+            if not coords_path.is_file():
+                self._logger.warning("tpc_coords.txt not found; using placeholder coordinates (pyLDAvis may have failed during training).")
+                n = self._ntopics if self._ntopics else 0
+                if n <= 1:
+                    self._coords = [(0.0, 0.0)] * n
+                else:
+                    rng = np.random.default_rng(seed=42)
+                    self._coords = [tuple(xy) for xy in rng.uniform(-1.0, 1.0, size=(n, 2))]
+                return
+            with coords_path.open('r', encoding='utf8') as fin:
                 # read the data from the file and convert it back to a list of tuples
                 self._coords = \
                     [tuple(map(float, line.strip()[1:-1].split(', ')))

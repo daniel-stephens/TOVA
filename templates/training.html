@@ -611,10 +611,11 @@
         </div>
         <div class="modal-body text-center py-4">
           <p class="fs-6 mb-3">
-            Your model has finished training successfully!  
+            Your model has finished training successfully!
             Click <b>"Open Dashboard"</b> to go directly to this model's dashboard.
           </p>
           <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+          <div id="trainingCompleteWarnings" hidden></div>
         </div>
         <div class="modal-footer justify-content-center border-0">
           <button type="button" class="btn btn-outline-secondary"
@@ -1162,7 +1163,7 @@
         stopPolling();
         if (isSuccess && !COMPLETION_SHOWN) {
           COMPLETION_SHOWN = true;
-          handleTrainingCompletion();
+          handleTrainingCompletion(data);
         } else if (terminalFailed.has(st) || error) {
           updateTrainingUI({
             ...data,
@@ -1709,11 +1710,12 @@
     renderFilteredTable(filtered);
   }
 
-  function handleTrainingCompletion() {
+  function handleTrainingCompletion(data) {
     activeTrainingJobId = null;
     syncTrainingHeroPreviewControls();
     expandTrainingLayout();
-    showTrainingCompleteModal();
+    const warnings = data?.result?.warnings;
+    showTrainingCompleteModal(Array.isArray(warnings) && warnings.length ? warnings : null);
 
     (async () => {
       try {
@@ -1771,7 +1773,7 @@
     })();
   }
 
-  function showTrainingCompleteModal() {
+  function showTrainingCompleteModal(warnings) {
     const modalEl = document.getElementById("trainingCompleteModal");
     if (!modalEl) return;
 
@@ -1785,6 +1787,23 @@
         }
         window.location.href = getCurrentModelDashboardUrl();
       };
+    }
+
+    // Render warnings section if any
+    const warningsContainer = document.getElementById("trainingCompleteWarnings");
+    if (warningsContainer) {
+      if (warnings && warnings.length) {
+        warningsContainer.innerHTML =
+          `<div class="alert alert-warning text-start mt-3 mb-0 py-2 px-3" role="alert">
+            <strong>Notices:</strong>
+            <ul class="mb-0 mt-1 ps-3">
+              ${warnings.map(w => `<li>${w}</li>`).join("")}
+            </ul>
+          </div>`;
+        warningsContainer.hidden = false;
+      } else {
+        warningsContainer.hidden = true;
+      }
     }
 
     const show = () => {
