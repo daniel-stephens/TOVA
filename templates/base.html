@@ -925,10 +925,14 @@
               <div class="card-body">
                 <div class="mb-3">
                   <label for="llm-settings-ollama-model" class="form-label">Model</label>
-                  <select class="form-select" id="llm-settings-ollama-model" name="ollama_model">
-                    <option value="">-- Select a model --</option>
-                  </select>
-                  <div class="form-text">Available models are loaded from your configuration</div>
+                  <input type="text"
+                         class="form-control"
+                         id="llm-settings-ollama-model"
+                         name="ollama_model"
+                         list="llm-settings-ollama-model-options"
+                         placeholder="Enter model name (e.g., qwen:32b)">
+                  <datalist id="llm-settings-ollama-model-options"></datalist>
+                  <div class="form-text">Type any model name; suggestions are loaded from your configuration</div>
                 </div>
                 <div class="mb-3">
                   <label for="llm-settings-ollama-host" class="form-label">Server Host</label>
@@ -1443,15 +1447,14 @@
 
       const populateModelOptions = () => {
         // OpenAI models are now text input, no need to populate dropdown
-        // Populate Ollama models
-        const ollamaSelect = document.getElementById('llm-settings-ollama-model');
-        if (ollamaSelect && llmUiConfig.ollama) {
-          ollamaSelect.innerHTML = '<option value="">-- Select a model --</option>';
+        // Populate Ollama suggestions for the datalist attached to text input
+        const ollamaModelOptions = document.getElementById('llm-settings-ollama-model-options');
+        if (ollamaModelOptions && llmUiConfig.ollama && Array.isArray(llmUiConfig.ollama.models)) {
+          ollamaModelOptions.innerHTML = '';
           llmUiConfig.ollama.models.forEach(model => {
             const option = document.createElement('option');
             option.value = model;
-            option.textContent = model;
-            ollamaSelect.appendChild(option);
+            ollamaModelOptions.appendChild(option);
           });
         }
       };

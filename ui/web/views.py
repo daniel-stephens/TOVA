@@ -2018,6 +2018,482 @@ def delete_model(request):
 # Dashboard-related routes
 # ------------------------------------------------------------------------------
 @login_required
+def active_learning_two(request):
+    model_id = (request.GET.get("model_id") or "").strip()
+    return render(request, "active_learning_two.html", {"model_id": model_id})
+
+
+@login_required
+def active_learning_two_recommend(request):
+    model_id = (request.GET.get("model_id") or "").strip()
+    user_id = _request_user_id(request)
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+    try:
+        up = requests.get(
+            f"{R.API}/active-learning/{model_id}/recommend",
+            timeout=(3.05, 30),
+        )
+        return HttpResponse(
+            up.content,
+            status=up.status_code,
+            content_type=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return JsonResponse({"error": "Upstream timeout"}, status=504)
+    except requests.RequestException as e:
+        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+
+
+@login_required
+def active_learning_two_status(request):
+    model_id = (request.GET.get("model_id") or "").strip()
+    user_id = _request_user_id(request)
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+    try:
+        up = requests.get(
+            f"{R.API}/active-learning/{model_id}/status",
+            timeout=(3.05, 20),
+        )
+        return HttpResponse(
+            up.content,
+            status=up.status_code,
+            content_type=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return JsonResponse({"error": "Upstream timeout"}, status=504)
+    except requests.RequestException as e:
+        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+
+
+@login_required
+def active_learning_two_label(request):
+    payload = _get_json(request) or {}
+    model_id = str(payload.get("model_id") or "").strip()
+    doc_id = str(payload.get("doc_id") or "").strip()
+    label = str(payload.get("label") or "").strip()
+    user_id = _request_user_id(request)
+
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not doc_id:
+        return JsonResponse({"error": "doc_id is required"}, status=400)
+    if not label:
+        return JsonResponse({"error": "label is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+
+    try:
+        up = requests.post(
+            f"{R.API}/active-learning/{model_id}/label",
+            json={"doc_id": doc_id, "label": label},
+            timeout=(3.05, 30),
+        )
+        return HttpResponse(
+            up.content,
+            status=up.status_code,
+            content_type=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return JsonResponse({"error": "Upstream timeout"}, status=504)
+    except requests.RequestException as e:
+        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+
+
+def _al2_dominant_topic_label(theta_dist: dict, topics_info: dict) -> str:
+    """Topic-model label for one document from theta distribution and Topics Info."""
+    if not theta_dist:
+        return "—"
+    try:
+        top_tid, _ = max(theta_dist.items(), key=lambda kv: float(kv[1] or 0))
+    except (TypeError, ValueError):
+        return "—"
+    tid_str = str(top_tid)
+    meta = topics_info.get(tid_str)
+    if meta is None:
+        for k, v in topics_info.items():
+            if str(k) == tid_str and isinstance(v, dict):
+                meta = v
+                break
+    if isinstance(meta, dict):
+        lab = meta.get("Label")
+        if lab is not None and str(lab).strip():
+            return str(lab).strip()
+    return f"Topic {tid_str}"
+
+
+def _al2_fetch_model_metadata(model_id: str):
+    """Load model metadata from API or drafts (same strategy as get-dashboard)."""
+    model_metadata = None
+    try:
+        up0 = time()
+        up = requests.get(
+            f"{R.API}/data/models/{model_id}",
+            timeout=(3.05, 60),
+        )
+        up.raise_for_status()
+        model_metadata = up.json()
+        logger.info(
+            "al2-bootstrap model meta ok status=%s dt=%.3fs",
+            up.status_code,
+            time() - up0,
+        )
+    except requests.HTTPError as e:
+        if e.response and e.response.status_code == 404:
+            logger.warning(
+                "Model not found via R.API, trying direct draft access for %s", model_id
+            )
+            try:
+                model_draft = drafts.get_draft(model_id, DraftType.model)
+                if model_draft:
+                    model = drafts.draft_to_model(model_draft)
+                    if model:
+                        model_path = R.DRAFTS_SAVE.resolve() / model_id
+                        metadata_path = model_path / "metadata.json"
+                        metadata_dict = {}
+                        if metadata_path.exists():
+                            try:
+                                with open(metadata_path, "r") as f:
+                                    metadata_dict = json.load(f)
+                            except Exception as ex:
+                                logger.warning(
+                                    "Failed to read metadata.json for %s: %s", model_id, ex
+                                )
+                                metadata_dict = (
+                                    pydantic_to_dict(model.metadata) if model.metadata else {}
+                                )
+                        else:
+                            metadata_dict = (
+                                pydantic_to_dict(model.metadata) if model.metadata else {}
+                            )
+                        model_metadata = {
+                            "id": model.id,
+                            "name": model.name
+                            or metadata_dict.get("tr_params", {}).get("model_name")
+                            or model_id,
+                            "owner_id": model.owner_id,
+                            "corpus_id": model.corpus_id or metadata_dict.get("corpus_id"),
+                            "created_at": model.created_at or metadata_dict.get("created_at"),
+                            "location": model.location.value
+                            if hasattr(model.location, "value")
+                            else str(model.location),
+                            "metadata": metadata_dict,
+                        }
+                        logger.info("Successfully loaded model %s from drafts directly", model_id)
+                    else:
+                        raise ValueError("Failed to convert draft to model")
+                else:
+                    logger.error("Model draft %s not found in drafts system", model_id)
+                    raise ValueError("Model not found in drafts")
+            except Exception:
+                logger.exception("Failed to load model from drafts")
+                try:
+                    error_detail = e.response.json() if e.response else {}
+                    return None, JsonResponse(
+                        {
+                            "error": error_detail.get("detail")
+                            or error_detail.get("error")
+                            or f"Model not found (HTTP {e.response.status_code})",
+                        },
+                        status=e.response.status_code if e.response else 502,
+                    )
+                except Exception:
+                    return None, JsonResponse(
+                        {
+                            "error": f"Failed to fetch model: HTTP {e.response.status_code if e.response else 'unknown'}"
+                        },
+                        status=502,
+                    )
+        else:
+            logger.exception("al2-bootstrap HTTP error fetching model: %s", e)
+            try:
+                error_detail = e.response.json() if e.response else {}
+                return None, JsonResponse(
+                    {
+                        "error": error_detail.get("detail")
+                        or error_detail.get("error")
+                        or f"Model not found (HTTP {e.response.status_code})",
+                    },
+                    status=e.response.status_code if e.response else 502,
+                )
+            except Exception:
+                return None, JsonResponse(
+                    {
+                        "error": f"Failed to fetch model: HTTP {e.response.status_code if e.response else 'unknown'}"
+                    },
+                    status=502,
+                )
+    except requests.Timeout:
+        logger.exception("al2-bootstrap timeout fetching model")
+        return None, JsonResponse(
+            {"error": "Timeout: The model service took too long to respond. Please try again."},
+            status=504,
+        )
+    except requests.RequestException as e:
+        logger.exception("al2-bootstrap error fetching model: %s", e)
+        return None, JsonResponse(
+            {"error": f"Connection error: Unable to reach the model service. {str(e)}"},
+            status=502,
+        )
+    if not model_metadata:
+        return None, JsonResponse({"error": "Failed to load model metadata"}, status=500)
+    return model_metadata, None
+
+
+@login_required
+def active_learning_two_labels(request):
+    model_id = (request.GET.get("model_id") or "").strip()
+    user_id = _request_user_id(request)
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+    try:
+        up = requests.get(
+            f"{R.API}/active-learning/{model_id}/labels",
+            timeout=(3.05, 20),
+        )
+        return HttpResponse(
+            up.content,
+            status=up.status_code,
+            content_type=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return JsonResponse({"error": "Upstream timeout"}, status=504)
+    except requests.RequestException as e:
+        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+
+
+@login_required
+def active_learning_two_bootstrap(request):
+    """Full corpus documents, dominant topic label per doc, and AL human labels."""
+    t0 = time()
+    payload = _get_json(request) or {}
+    model_id = str(payload.get("model_id") or "").strip()
+    user_id = _request_user_id(request)
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+
+    q_payload = {
+        "model_id": model_id,
+        "config": get_effective_user_config(request, user_id),
+    }
+    q_payload.pop("config_path", None)
+
+    model_metadata, err = _al2_fetch_model_metadata(model_id)
+    if err is not None:
+        return err
+
+    corpus_id = (
+        model_metadata.get("corpus_id")
+        or model_metadata.get("metadata", {}).get("corpus_id")
+        or model_metadata.get("metadata", {}).get("tr_params", {}).get("corpus_id")
+        or ""
+    )
+    if not corpus_id:
+        return JsonResponse(
+            {
+                "error": "Model missing corpus_id. Please ensure the model was trained with a valid corpus."
+            },
+            status=400,
+        )
+
+    try:
+        up0 = time()
+        up = requests.get(
+            f"{R.API}/data/corpora/{corpus_id}",
+            timeout=(3.05, 60),
+        )
+        up.raise_for_status()
+        corpus_training_data = up.json()
+        logger.info(
+            "al2-bootstrap corpus ok status=%s dt=%.3fs docs=%s",
+            up.status_code,
+            time() - up0,
+            len(corpus_training_data.get("documents", []) or []),
+        )
+    except requests.Timeout:
+        return JsonResponse(
+            {"error": "Timeout: The corpus service took too long to respond. Please try again."},
+            status=504,
+        )
+    except requests.HTTPError as e:
+        try:
+            error_detail = e.response.json() if e.response else {}
+            return JsonResponse(
+                {
+                    "error": error_detail.get("detail")
+                    or error_detail.get("error")
+                    or f"Corpus not found (HTTP {e.response.status_code})",
+                },
+                status=e.response.status_code if e.response else 502,
+            )
+        except Exception:
+            return JsonResponse(
+                {
+                    "error": f"Failed to fetch corpus: HTTP {e.response.status_code if e.response else 'unknown'}"
+                },
+                status=502,
+            )
+    except requests.RequestException as e:
+        return JsonResponse(
+            {"error": f"Connection error: Unable to reach the corpus service. {str(e)}"},
+            status=502,
+        )
+
+    model_info_key = model_id
+    cached_info, info_state = R._cache_get(R._CACHE_MODEL_INFO, model_info_key)
+    if cached_info:
+        raw_model_info = cached_info
+        logger.debug("al2-bootstrap model-info cache %s", info_state)
+    else:
+        try:
+            up0 = time()
+            r = requests.post(
+                f"{R.API}/queries/model-info", json=q_payload, timeout=60
+            )
+            r.raise_for_status()
+            raw_model_info = r.json()
+            R._cache_set(R._CACHE_MODEL_INFO, model_info_key, raw_model_info)
+            logger.info(
+                "al2-bootstrap model-info fetched status=%s dt=%.3fs (cached)",
+                r.status_code,
+                time() - up0,
+            )
+        except requests.HTTPError:
+            try:
+                error_data = r.json() if r else {}
+                return JsonResponse(
+                    {
+                        "error": error_data.get("detail")
+                        or error_data.get("error")
+                        or f"Failed to fetch model info (HTTP {r.status_code})",
+                    },
+                    status=r.status_code,
+                )
+            except Exception:
+                return JsonResponse(
+                    {
+                        "error": f"Failed to fetch model info: {r.text if r else 'Unknown error'}",
+                    },
+                    status=r.status_code if r else 502,
+                )
+        except Exception as e:
+            logger.exception("al2-bootstrap model-info proxy error: %s", e)
+            return JsonResponse({"error": f"Error fetching model info: {str(e)}"}, status=502)
+
+    topics_info = raw_model_info.get("Topics Info", {}) or {}
+
+    docs_list_raw = corpus_training_data.get("documents", []) or []
+    docs_list = [
+        d if isinstance(d, dict) else pydantic_to_dict(d) for d in docs_list_raw
+    ]
+    doc_ids = [str(d.get("id")) for d in docs_list if d.get("id") is not None]
+
+    sorted_key = tuple(sorted(doc_ids))
+    bulk_key = (model_id, sorted_key)
+    cached_bulk, bulk_state = R._cache_get(R._CACHE_THETAS_BULK, bulk_key)
+    if cached_bulk:
+        doc_thetas = cached_bulk
+        logger.debug("al2-bootstrap thetas bulk cache %s | docs=%d", bulk_state, len(doc_ids))
+    else:
+        payload_thetas = {"docs_ids": ",".join(doc_ids), "model_id": model_id}
+        try:
+            up0 = time()
+            r = requests.post(
+                f"{R.API}/queries/thetas-by-docs-ids",
+                json=payload_thetas,
+                timeout=60,
+            )
+            r.raise_for_status()
+            doc_thetas = r.json()
+            R._cache_set(R._CACHE_THETAS_BULK, bulk_key, doc_thetas)
+            logger.info(
+                "al2-bootstrap thetas fetched status=%s dt=%.3fs docs=%d",
+                r.status_code,
+                time() - up0,
+                len(doc_ids),
+            )
+        except requests.HTTPError:
+            try:
+                error_data = r.json() if r else {}
+                return JsonResponse(
+                    {
+                        "error": error_data.get("detail")
+                        or error_data.get("error")
+                        or f"Failed to fetch document-topic probabilities (HTTP {r.status_code})",
+                    },
+                    status=r.status_code,
+                )
+            except Exception:
+                return JsonResponse(
+                    {
+                        "error": f"Failed to fetch document-topic probabilities: {r.text if r else 'Unknown error'}",
+                    },
+                    status=r.status_code if r else 502,
+                )
+        except Exception as e:
+            logger.exception("al2-bootstrap thetas proxy error: %s", e)
+            return JsonResponse(
+                {"error": f"Error fetching document-topic probabilities: {str(e)}"},
+                status=502,
+            )
+
+    documents = []
+    model_label_by_id = {}
+    for d in docs_list:
+        did = str(d.get("id", ""))
+        if not did:
+            continue
+        text = d.get("text", d.get("raw_text", ""))
+        documents.append({"id": did, "text": str(text) if text is not None else ""})
+        theta_row = doc_thetas.get(did)
+        if theta_row is None:
+            theta_row = doc_thetas.get(str(did)) or {}
+        model_label_by_id[did] = _al2_dominant_topic_label(theta_row, topics_info)
+
+    human_labels = {}
+    try:
+        lr = requests.get(
+            f"{R.API}/active-learning/{model_id}/labels",
+            timeout=(3.05, 20),
+        )
+        lr.raise_for_status()
+        body = lr.json() if lr.content else {}
+        if isinstance(body, dict):
+            human_labels = body.get("labels") or {}
+    except requests.RequestException as e:
+        logger.warning("al2-bootstrap could not fetch human labels: %s", e)
+
+    logger.info("al2-bootstrap done dt=%.3fs docs=%d", time() - t0, len(documents))
+    return JsonResponse(
+        {
+            "documents": documents,
+            "model_label_by_id": model_label_by_id,
+            "human_labels": human_labels,
+        },
+        status=200,
+    )
+
+
+@login_required
 def dashboard(request):
     model_id = request.POST.get("model_id") or request.GET.get("model_id", "")
     model_name = ""

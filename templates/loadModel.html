@@ -1398,7 +1398,7 @@ const renderBasicGroupParams = (modelName) => {
     if (preprocessChecked !== defaultPreprocess) {
       allCollectedParams.preprocess_text = preprocessChecked;
     }
-    
+
     // Filter out parameters that match defaults - only keep changed values
     const filterChangedParams = (params, defaults) => {
       const changed = {};
