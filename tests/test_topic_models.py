@@ -31,10 +31,10 @@ class TestTopicModels(unittest.TestCase):
         cls.model_registry = {
             key: path for key, path in flattened_model_classes.items() if isinstance(path, str)
         }
-        cls.sample_file = "data_test/bills_sample_100.csv"
+        cls.sample_file = "data/bills_sample_1000.csv"
         cls.sample_data = pd.read_csv(cls.sample_file)#.sample(10, random_state=42)
-        cls._train_data = cls.sample_data.rename(columns={"summary": "raw_text"})
-        cls._train_data = cls._train_data[["id", "raw_text"]].to_dict(orient="records")
+        cls._train_data = cls.sample_data.rename(columns={"summary": "text"})
+        cls._train_data = cls._train_data[["id", "text"]].to_dict(orient="records")
 
     @staticmethod
     def load_class_from_path(class_path: str):
@@ -69,8 +69,8 @@ class TestTopicModels(unittest.TestCase):
                 self.model_path = model_path
 
                 # inference
-                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "raw_text"})
-                infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
+                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "text"})
+                infer_data = infer_data[["id", "text"]].to_dict(orient="records")
                 thetas, time_taken = model.infer(infer_data)
 
                 self.assertIsInstance(thetas, np.ndarray)
@@ -84,8 +84,8 @@ class TestTopicModels(unittest.TestCase):
                 tm_model = model_cls.from_saved_model(os.path.abspath(f"test_{model_name}"))
             
                 # inference
-                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "raw_text"})
-                infer_data = infer_data[["id", "raw_text"]].to_dict(orient="records")
+                infer_data = self.sample_data.sample(10, random_state=42).rename(columns={"summary": "text"})
+                infer_data = infer_data[["id", "text"]].to_dict(orient="records")
                 thetas, duration = tm_model.infer(infer_data)
 
                 self.assertIsNotNone(thetas, "Thetas should not be None")

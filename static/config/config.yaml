@@ -20,7 +20,7 @@ topic_modeling:
     n_top_docs_per_topic: 20
     llm_provider: "ollama"
     llm_model_type: "gemma3:4b"
-    llm_server: "http://host.docker.internal:11434"
+    llm_server: http://kumo01.tsc.uc3m.es:11434 #"http://host.docker.internal:11434"
   traditional:
     num_topics: 15
     thetas_thr: 3e-3
@@ -136,8 +136,10 @@ llm:
       "mixtral:8x7b",
       "qwen:32b",
       "llama3.3:70b",
-      "gemma3:4b"
+      "gemma3:4b",
+      "qwen3:8b",
+      "qwen3:32b"
     }
-    host: http://host.docker.internal:11434
+    host: http://kumo01.tsc.uc3m.es:11434 #http://host.docker.internal:11434
   llama_cpp:
     host: http://host.docker.internal:11435/v1/chat/completions

@@ -155,12 +155,12 @@ def prepare_training_data(
             df["id"] = range(1, len(df) + 1)
 
     if text_col in df.columns:
-        df.rename(columns={text_col: "raw_text"}, inplace=True)
+        df.rename(columns={text_col: "text"}, inplace=True)
     else:
         logger.warning(f"Text column '{text_col}' not found in DataFrame.")
         raise ValueError(f"Text column '{text_col}' not found in DataFrame.")
 
-    allowed_columns = ["id", "raw_text", "embeddings"]
+    allowed_columns = ["id", "text", "embeddings"]
     df = df[[col for col in df.columns if col in allowed_columns]]
 
     return df.to_dict(orient="records")
@@ -173,27 +173,33 @@ def normalize_json_data(
 ) -> list[dict]:
     """
     Normalize raw JSON input to match prepare_training_data() output.
-    Ensures 'id' and 'raw_text' fields are set.
+    Ensures 'id' and 'text' fields are set.
     """
     data = json.loads(raw_data)
 
     logger.info(f"Normalizing JSON data: {len(data)} records found.")
-    logger.info(f"Converting {id_col} to 'id' and {text_col} to 'raw_text'.")
-    
+    logger.info(f"Converting {id_col} to 'id' and {text_col} to 'text'.")
+
     if not isinstance(data, list):
         raise ValueError("Expected a JSON list of records.")
 
+    normalized = []
     for i, row in enumerate(data):
         if id_col and id_col in row:
-            row["id"] = row[id_col]
-        elif "id" not in row:
-            row["id"] = i + 1
+            doc_id = row[id_col]
+        elif "id" in row:
+            doc_id = row["id"]
+        else:
+            doc_id = i + 1
 
         if text_col not in row:
             raise ValueError(f"Missing expected text column '{text_col}' in row {i}")
 
-        row["raw_text"] = row[text_col]
-    
-    logger.info(f"Normalization complete: {len(data)} records processed.")
+        norm = {"id": doc_id, "text": row[text_col]}
+        if row.get("embeddings") is not None:
+            norm["embeddings"] = row["embeddings"]
+        normalized.append(norm)
 
-    return data
+    logger.info(f"Normalization complete: {len(normalized)} records processed.")
+
+    return normalized

@@ -41,9 +41,9 @@ class LLMTModel(BaseTMModel, ABC):
     def set_training_data(self, data):
         """
         Set training data from a normalized list of dicts.
-         Each dict must contain at least 'id' and 'raw_text' keys.
+         Each dict must contain at least 'id' and 'text' keys.
          """
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -54,9 +54,9 @@ class LLMTModel(BaseTMModel, ABC):
     def prepare_infer_data(self, data):
         """
         Prepare inference data from a normalized list of dicts.
-         Each dict must contain at least 'id' and 'raw_text' keys.
+         Each dict must contain at least 'id' and 'text' keys.
          """
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")

@@ -85,7 +85,7 @@ class ActiveLearningSession:
         items = raw if isinstance(raw, list) else raw.get("documents", raw)
         for d in items:
             doc_id = str(d.get("id", ""))
-            text = d.get("text", d.get("raw_text", ""))
+            text = d.get("text", "")
             if doc_id and text:
                 docs.append({"id": doc_id, "text": str(text)})
         return docs

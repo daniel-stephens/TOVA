@@ -202,7 +202,7 @@ class OpenTopicRAGModel(LLMTModel):
         # Initialize documents topics tracker
         self.documents = [
             {'text': text, 'id': i, 'orig_id': orig_id, 'discovered_topic': None}
-            for i, (text, orig_id) in enumerate(zip(df_sample["raw_text"], df_sample["id"]))
+            for i, (text, orig_id) in enumerate(zip(df_sample["text"], df_sample["id"]))
         ]
 
         # Create embeddings for all documents
@@ -897,7 +897,7 @@ class OpenTopicRAGModel(LLMTModel):
         Parameters
         ----------
         df_infer : pd.DataFrame
-            DataFrame containing documents to infer topics for. Must have a 'raw_text' column.
+            DataFrame containing documents to infer topics for. Must have a 'text' column.
 
         Returns
         -------
@@ -934,8 +934,7 @@ class OpenTopicRAGModel(LLMTModel):
         formatted_topics = "\n".join(
             [f"- {t}" for t in sorted(real_topics_list)])
 
-        doc_texts = df_infer['text'].tolist(
-        ) if 'text' in df_infer else df_infer['raw_text'].tolist()
+        doc_texts = df_infer['text'].tolist()
 
         for idx, text in tqdm(enumerate(doc_texts), total=D, desc="Inferring Topics"):
             snippet = text[:1500]

@@ -27,7 +27,7 @@ class TestTMPreprocessor(unittest.TestCase):
         result = self.preprocessor.fit_transform(
             self.sample_data, text_col="text", id_col="id")
         self.assertIn("id", result.columns)
-        self.assertIn("raw_text", result.columns)
+        self.assertIn("text", result.columns)
         self.assertIn("lemmas", result.columns)
         self.assertIn("bow", result.columns)
         self.assertIn("tfidf", result.columns)
@@ -65,7 +65,7 @@ class TestTMPreprocessor(unittest.TestCase):
             df, text_col="summary", id_col="id")
 
         self.assertIn("id", result.columns)
-        self.assertIn("raw_text", result.columns)
+        self.assertIn("text", result.columns)
         self.assertIn("lemmas", result.columns)
         self.assertIn("bow", result.columns)
         self.assertIn("tfidf", result.columns)

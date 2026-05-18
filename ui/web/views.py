@@ -1145,7 +1145,7 @@ def train_tfidf_corpus(request, corpus_id):
         return JsonResponse({"error": f"Upstream error fetching corpus: {e}"}, status=502)
 
     documents = [
-        {"id": str(d.get("id")), "raw_text": str(d.get("text", ""))}
+        {"id": str(d.get("id")), "text": str(d.get("text", ""))}
         for d in (corpus.get("documents") or [])
     ]
     if not documents:
@@ -2462,7 +2462,7 @@ def active_learning_two_bootstrap(request):
         did = str(d.get("id", ""))
         if not did:
             continue
-        text = d.get("text", d.get("raw_text", ""))
+        text = d.get("text", "")
         documents.append({"id": did, "text": str(text) if text is not None else ""})
         theta_row = doc_thetas.get(did)
         if theta_row is None:

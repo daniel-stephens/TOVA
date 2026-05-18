@@ -98,11 +98,11 @@ class CTMTMmodel(TradTMmodel):
         prss and prss.report(0.0, "Creating TopicModelDataPreparation and fitting dataset")
         self.qt = TopicModelDataPreparation(self.sbert_model)
 
-        raw_texts = self._df["raw_text"].tolist()
+        texts = self._df["text"].tolist()
         bow_texts = [" ".join(lemmas) for lemmas in self._train_data]
 
         tr_ds = self.qt.fit(
-            text_for_contextual=raw_texts,
+            text_for_contextual=texts,
             text_for_bow=bow_texts,
             custom_embeddings=self._embeddings
         )
@@ -200,11 +200,11 @@ class CTMTMmodel(TradTMmodel):
             raise RuntimeError("TopicModelDataPreparation not initialized. Train or load a model first.")
 
         self._logger.info("Preparing holdout dataset...")
-        raw_texts = df_infer["raw_text"].tolist()
+        texts = df_infer["text"].tolist()
         bow_texts = [" ".join(lemmas) for lemmas in infer_data]
 
         ho_ds = self.qt.transform(
-            text_for_contextual=raw_texts,
+            text_for_contextual=texts,
             text_for_bow=bow_texts,
             custom_embeddings=embeddings_infer
         )

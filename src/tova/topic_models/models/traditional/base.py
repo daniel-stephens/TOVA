@@ -69,10 +69,10 @@ class TradTMmodel(BaseTMModel, ABC):
     def set_training_data(self, data: List[Dict]):
         """
         Set training data from a normalized list of dicts.
-        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        Assumes each dict has: 'id', 'text', and optionally 'embeddings'.
         """
 
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -81,7 +81,7 @@ class TradTMmodel(BaseTMModel, ABC):
         if self._preprocessor:
             self._logger.info("Preprocessing training data.")
             df_processed = self._preprocessor.fit_transform(
-                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings)
+                df, text_col="text", id_col="id", compute_embeddings=self.do_embeddings)
             self._df = df_processed
             self._logger.info("Training data preprocessing completed.")
         else:
@@ -102,10 +102,10 @@ class TradTMmodel(BaseTMModel, ABC):
     def prepare_infer_data(self, data: List[Dict]):
         """
         Prepare inference data from a normalized list of dicts.
-        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        Assumes each dict has: 'id', 'text', and optionally 'embeddings'.
         """
 
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -114,13 +114,13 @@ class TradTMmodel(BaseTMModel, ABC):
         if self._preprocessor:
             self._logger.info("Preprocessing inference data.")
             df_processed = self._preprocessor.fit_transform(
-                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings
+                df, text_col="text", id_col="id", compute_embeddings=self.do_embeddings
             )
             infer_data = [row["lemmas"] for _, row in df_processed.iterrows()]
             df_infer = df_processed
             self._logger.info("Inference data preprocessing completed.")
         else:
-            infer_data = [row["raw_text"].split() for row in data]
+            infer_data = [row["text"].split() for row in data]
             df_infer = df
         embeddings_infer = None
         if "embeddings" in df_infer.columns:

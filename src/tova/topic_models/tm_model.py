@@ -546,7 +546,7 @@ class TMmodel(object):
             [tpc.split(', ') for tpc in self._tpc_descriptions]
 
         if reference_text is None:
-            corpus = [el.split() for el in self._df_corpus_train["raw_text"].values.tolist()]
+            corpus = [el.split() for el in self._df_corpus_train["text"].values.tolist()]
         else:
             # Texts should be given as a list of lists of strings
             corpus = reference_text
@@ -745,7 +745,7 @@ class TMmodel(object):
         if get_text:
             for topic_id, topic_docs in enumerate(top_docs_per_topic):
                 reps = [
-                    (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].raw_text, aux[doc, topic_id])
+                    (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].text, aux[doc, topic_id])
                     for doc in topic_docs
                 ]
                 most_representative_docs.append(reps)
@@ -778,7 +778,7 @@ class TMmodel(object):
         -------
         clusters : List[List[Tuple[str, str, float]]]
             A list with one sublist per topic. Each sublist contains tuples of:
-            (doc_id, raw_text (optional), topic_probability)
+            (doc_id, text (optional), topic_probability)
         """
         if self._thetas is None:
             self._logger.warning("Thetas not loaded. Run `_load_thetas()` first.")
@@ -801,10 +801,10 @@ class TMmodel(object):
         for doc_idx, topic_probs in enumerate(thetas):
             top_topic = topic_probs.argmax()
             doc_id = df_corpus.iloc[doc_idx].id
-            raw_text = df_corpus.iloc[doc_idx].raw_text if get_text else ""
+            text = df_corpus.iloc[doc_idx].text if get_text else ""
             prob = topic_probs[top_topic]
 
-            clusters[top_topic].append((doc_id, raw_text, prob))
+            clusters[top_topic].append((doc_id, text, prob))
 
         #self._logger.info("Documents assigned to topic clusters based on max probability:")
         #for i, topic_docs in enumerate(clusters):

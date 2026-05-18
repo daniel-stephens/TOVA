@@ -104,13 +104,13 @@ class TopicGPTTMmodel(LLMTModel):
         sample_*.jsonl (sampled docs). Returns paths to (sampled, full).
         """
 
-        df_full = self._df.copy().rename(columns={"raw_text": "text"})
+        df_full = self._df.copy()
         path_full = model_files / "full.jsonl"
         df_full.to_json(path_full, lines=True, orient="records")
 
         df_sample = self._df.copy()
         # gpt expects 'text' field
-        df_sample = df_sample.rename(columns={"raw_text": "text"})
+        df_sample = df_sample.copy()
         if self.sample:
             if isinstance(self.sample, float):
                 df_sample = df_sample.sample(frac=self.sample)
@@ -257,7 +257,7 @@ class TopicGPTTMmodel(LLMTModel):
         """
 
         K = thetas.shape[1]
-        doc_texts = df.raw_text.values.tolist()
+        doc_texts = df.text.values.tolist()
 
         # pseudo-betas via TF-IDF on topic documents
         topic_docs = defaultdict(list)
@@ -309,7 +309,7 @@ class TopicGPTTMmodel(LLMTModel):
         assign_path : Path
             Path to assignment_corrected.jsonl file.
         df : pd.DataFrame
-            The training dataframe with 'raw_text' and 'id' columns.
+            The training dataframe with 'text' and 'id' columns.
         
         Returns
         -------
@@ -520,8 +520,7 @@ class TopicGPTTMmodel(LLMTModel):
 
         # save infer data to temp file
         infer_path = pathlib.Path("topicgpt_infer_data.jsonl")
-        df_infer_renamed = df_infer.rename(columns={"raw_text": "text"})
-        df_infer_renamed.to_json(infer_path, lines=True, orient="records")
+        df_infer.to_json(infer_path, lines=True, orient="records")
 
         # new topics should be saved in a different file
         assign_out_path = pathlib.Path("infer_assignment.jsonl")
