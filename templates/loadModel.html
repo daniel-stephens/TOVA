@@ -245,6 +245,25 @@
     </div>
   </div>
 </template>
+<!-- LLM unavailable confirmation modal -->
+<div class="modal fade" id="llmUnavailableModal" tabindex="-1" aria-labelledby="llmUnavailableModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold text-warning" id="llmUnavailableModalLabel">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>LLM Model Not Available
+        </h5>
+      </div>
+      <div class="modal-body">
+        <p id="llmUnavailableMsg" class="mb-0"></p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" id="llmUnavailableCancelBtn">Cancel training</button>
+        <button type="button" class="btn btn-warning" id="llmUnavailableContinueBtn">Continue without labels/summaries</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1466,6 +1485,17 @@ const renderBasicGroupParams = (modelName) => {
     };
     console.log("Training payload:", payload);
 
+    // Pre-flight LLM check for traditional models with labelling/summarization enabled
+    if (kind === "traditional" && (training_params.do_labeller || training_params.do_summarizer) && training_params.llm_model_type) {
+      const llmOk = await checkLlmModelAvailable(
+        training_params.llm_provider || "openai",
+        training_params.llm_model_type,
+        training_params.llm_server || null,
+      );
+      if (llmOk === false) return; // user cancelled
+      // llmOk === null means check could not run (backend unreachable) — proceed
+    }
+
     try {
       if (dom.modal) dom.modal.hide();
       else if (dom.modalEl) {
@@ -1520,6 +1550,8 @@ const renderBasicGroupParams = (modelName) => {
           const key = "tova_training_jobs";
           const saved = JSON.parse(localStorage.getItem(key) || "[]");
           const jobs = Array.isArray(saved) ? saved : [];
+          // Strip sensitive/LLM-specific params so retrain picks up the current saved LLM config
+          const { llm_api_key: _k, llm_model_type: _m, llm_provider: _p, llm_server: _s, ...retrainParams } = payload.training_params || {};
           jobs.unshift({
             job_id: data.job_id,
             corpus_id: data.corpus_id || corpusId,
@@ -1528,6 +1560,7 @@ const renderBasicGroupParams = (modelName) => {
             model_name: modelName,
             created_at: new Date().toISOString(),
             status: "starting",
+            retrain_payload: { ...payload, training_params: retrainParams },
           });
           localStorage.setItem(key, JSON.stringify(jobs.slice(0, 25)));
         }
@@ -1546,6 +1579,55 @@ const renderBasicGroupParams = (modelName) => {
       showToast(err.message || "An error occurred starting training.", "danger");
     }
   };
+
+  /**
+   * Check if llmModel is available for the given provider/host.
+   * Returns:
+   *   true  – model is available, proceed with training
+   *   false – model not available and user chose to cancel
+   *   null  – could not reach backend (skip check, proceed)
+   */
+  async function checkLlmModelAvailable(provider, llmModel, host) {
+    try {
+      const params = new URLSearchParams({ backend: provider });
+      if (host) params.set("host", host);
+      const resp = await fetch(`/llm/models?${params}`, { credentials: "same-origin" });
+      if (!resp.ok) return null; // backend unreachable, skip check
+      const data = await resp.json();
+      const models = Array.isArray(data.models) ? data.models : [];
+      if (models.includes(llmModel)) return true; // model available
+
+      // Model not available — show confirmation modal
+      return new Promise((resolve) => {
+        const msgEl = document.getElementById("llmUnavailableMsg");
+        if (msgEl) {
+          msgEl.textContent =
+            `The model "${llmModel}" is not available for provider "${provider}".` +
+            (models.length
+              ? ` Available models: ${models.join(", ")}.`
+              : " No models were found.") +
+            " If you continue, labelling and summarization will be skipped.";
+        }
+        const modalEl = document.getElementById("llmUnavailableModal");
+        const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const cancelBtn = document.getElementById("llmUnavailableCancelBtn");
+        const continueBtn = document.getElementById("llmUnavailableContinueBtn");
+        const cleanup = (result) => {
+          modal?.hide();
+          cancelBtn?.removeEventListener("click", onCancel);
+          continueBtn?.removeEventListener("click", onContinue);
+          resolve(result);
+        };
+        const onCancel = () => cleanup(false);
+        const onContinue = () => cleanup(true);
+        cancelBtn?.addEventListener("click", onCancel);
+        continueBtn?.addEventListener("click", onContinue);
+        modal?.show();
+      });
+    } catch {
+      return null; // network error, skip check
+    }
+  }
 
   // Start the application
   init();

@@ -684,7 +684,7 @@ def save_llm_config(request):
     user_id = _request_user_id(request)
     if not user_id:
         return JsonResponse({"success": False, "message": "User not authenticated."}, status=401)
-    
+
     data = _get_json(request) or {}
 
     provider = data.get("provider")
@@ -695,26 +695,48 @@ def save_llm_config(request):
     if not provider:
         return JsonResponse({"success": False, "message": "Provider is required."}, status=400)
 
+    # Validate model against available models for the provider
+    if model:
+        try:
+            from tova.prompter.prompter import Prompter
+            _provider_norm = provider.strip().lower()
+            if _provider_norm in ("openai", "gpt"):
+                _key = api_key or _get_openai_key_from_env() or os.environ.get("OPENAI_API_KEY", "")
+                available = Prompter.fetch_available_models(backend="openai", api_key=_key or None)
+            elif _provider_norm == "ollama":
+                available = Prompter.fetch_available_models(backend="ollama", ollama_host=host or None)
+            elif _provider_norm in ("vllm", "llama_cpp"):
+                available = Prompter.fetch_available_models(backend=_provider_norm, base_url=host or None)
+            else:
+                available = None
+            if available is not None and model not in available:
+                return JsonResponse(
+                    {"success": False, "message": f"Model '{model}' is not available for provider '{provider}'. Available models: {available}"},
+                    status=400,
+                )
+        except Exception as e:
+            logger.warning("Could not validate model '%s' for provider '%s': %s", model, provider, e)
+
     # Build LLM config object
     llm_cfg = {
         "provider": provider,
         "model": model,
         "host": host,
     }
-    
+
     # Store API key if provided (for secure server-side use)
     if api_key:
         llm_cfg["api_key"] = api_key
 
     # Load existing user config
     existing_config = _load_user_config(user_id) or {}
-    
+
     # Update LLM config in user config
     existing_config["llm_config"] = llm_cfg
-    
+
     # Save to database
     _save_user_config_overrides(user_id, existing_config)
-    
+
     logger.debug("Saved LLM config to database for user: %s", user_id)
 
     return JsonResponse({"success": True})

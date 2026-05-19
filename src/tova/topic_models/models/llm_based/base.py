@@ -76,6 +76,18 @@ class LLMTModel(BaseTMModel, ABC):
         pr = ProgressReporter(callback=progress_callback, logger=self._logger)
         pr.report(0, "Starting training")
 
+        # Pre-training LLM validation (required since the whole model depends on the LLM)
+        from tova.topic_models.models.base_model import validate_llm_config
+        ok, msg = validate_llm_config(
+            llm_model_type=getattr(self, "llm_model_type", None),
+            llm_provider=getattr(self, "llm_provider", None),
+            llm_server=getattr(self, "llm_server", None),
+            llm_api_key=getattr(self, "llm_api_key", None),
+            logger=self._logger,
+        )
+        if not ok:
+            raise ValueError(msg)
+
         # 1. PREPROCESSING (0-20%)
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.0, 0.2)

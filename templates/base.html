@@ -1526,7 +1526,8 @@
             </div>
           </div>`);
         const el = document.getElementById(id);
-        const toast = new bootstrap.Toast(el, { delay: duration });
+        const toastOpts = duration ? { delay: duration } : { autohide: false };
+        const toast = new bootstrap.Toast(el, toastOpts);
         toast.show();
         el.addEventListener('hidden.bs.toast', () => el.remove());
       };
@@ -1755,7 +1756,10 @@
           const resp = await fetch(`/llm/models?${params}`, { credentials: 'same-origin' });
           const data = await resp.json();
           if (resp.ok && Array.isArray(data.models)) {
-            showLlmFeedback(`Connected! ${data.models.length} model(s) available.`, 'success');
+            const modelList = data.models.length
+              ? data.models.join(', ')
+              : '(none)';
+            showLlmFeedback(`Connected! ${data.models.length} model(s) available: ${modelList}`, 'success');
           } else {
             showLlmFeedback(`Connection failed: ${data.detail || data.error || resp.statusText}`, 'danger');
           }

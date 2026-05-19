@@ -17,6 +17,50 @@ from tova.topic_models.tm_model import TMmodel
 from tova.utils.common import init_logger, load_yaml_config_file
 
 
+# @TODO: make this generic (right now depends onf fixed providers)
+def validate_llm_config(
+    llm_model_type: str | None,
+    llm_provider: str | None,
+    llm_server: str | None,
+    llm_api_key: str | None,
+    logger: logging.Logger,
+) -> tuple[bool, str]:
+    """Check that llm_model_type is available on the configured provider.
+
+    Returns (True, "") when valid or when validation cannot be performed
+    (no model specified, provider unknown, or backend unreachable).
+    Returns (False, <message>) when the model is explicitly not found.
+    """
+    if not llm_model_type:
+        return True, ""
+
+    try:
+        from tova.prompter.prompter import Prompter
+
+        provider_norm = (llm_provider or "openai").strip().lower()
+        if provider_norm in ("openai", "gpt"):
+            import os
+            key = llm_api_key or os.environ.get("OPENAI_API_KEY") or None
+            available = Prompter.fetch_available_models(backend="openai", api_key=key)
+        elif provider_norm == "ollama":
+            available = Prompter.fetch_available_models(backend="ollama", ollama_host=llm_server or None)
+        elif provider_norm in ("vllm", "llama_cpp"):
+            available = Prompter.fetch_available_models(backend=provider_norm, base_url=llm_server or None)
+        else:
+            return True, ""
+
+        if llm_model_type not in available:
+            msg = (
+                f"LLM model '{llm_model_type}' is not available for provider "
+                f"'{llm_provider or 'openai'}'. Available models: {available}."
+            )
+            return False, msg
+    except Exception as exc:
+        logger.warning("Could not validate LLM model '%s': %s", llm_model_type, exc)
+
+    return True, ""
+
+
 class BaseTMModel(ABC):
     """
     Abstract base class for topic models.

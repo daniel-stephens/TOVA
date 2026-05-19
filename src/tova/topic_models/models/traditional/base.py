@@ -167,6 +167,23 @@ class TradTMmodel(BaseTMModel, ABC):
         pr = ProgressReporter(callback=progress_callback, logger=self._logger)
         pr.report(0, "Starting training")
 
+        # Pre-training LLM validation (only when labelling or summarization is requested)
+        from tova.topic_models.models.base_model import validate_llm_config
+        _pre_warnings: List[str] = []
+        if self.do_labeller or self.do_summarizer:
+            ok, msg = validate_llm_config(
+                llm_model_type=getattr(self, "llm_model_type", None),
+                llm_provider=getattr(self, "llm_provider", None),
+                llm_server=getattr(self, "llm_server", None),
+                llm_api_key=getattr(self, "llm_api_key", None),
+                logger=self._logger,
+            )
+            if not ok:
+                self._logger.warning(msg)
+                _pre_warnings.append(msg)
+                self.do_labeller = False
+                self.do_summarizer = False
+
         # 1. PREPROCESSING (0-20%)
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.0, 0.2)
@@ -203,7 +220,7 @@ class TradTMmodel(BaseTMModel, ABC):
         self.save_model()
         prs.report(1.0, "Topic model saved")
 
-        warnings = getattr(self.tm_model, "_training_warnings", [])
+        warnings = _pre_warnings + getattr(self.tm_model, "_training_warnings", [])
         return time.time() - t_start, warnings
 
     def infer(
