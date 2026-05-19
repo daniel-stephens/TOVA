@@ -121,7 +121,7 @@ llm:
   gpt:
     path_api_key: .env
   ollama:
-    host: http://kumo01.tsc.uc3m.es:11434 #http://host.docker.internal:11434
+    host: http://host.docker.internal:11434
   llama_cpp:
     host: http://host.docker.internal:11435/v1/chat/completions
   vllm:
