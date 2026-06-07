@@ -869,7 +869,7 @@ class TMmodel(object):
                     
                     enriched_docs = []
                     for doc_id, _, prob in docs:
-                        # 1. Base del documento
+                        doc_id = doc_id.item() if hasattr(doc_id, "item") else doc_id
                         doc_obj = {
                             "doc_id": doc_id,
                             "prob": float(prob)
@@ -879,10 +879,10 @@ class TMmodel(object):
                         if self._tpc_add_info:
 
                             meta_data = doc_meta_map.get(doc_id, {})
-                            
+
                             for key in sorted_extra_keys:
                                 val = meta_data.get(key, "")
-                                doc_obj[key] = val
+                                doc_obj[key] = val.item() if hasattr(val, "item") else val
 
                         enriched_docs.append(doc_obj)
 
