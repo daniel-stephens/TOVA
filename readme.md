@@ -26,57 +26,9 @@ TOVA is a topic modeling platform with a plug-in architecture, supporting traini
     - [Port already in use](#port-already-in-use)
     - [Postgres authentication error after changing credentials](#postgres-authentication-error-after-changing-credentials)
     - [500 Internal Server Error after rebuild](#500-internal-server-error-after-rebuild)
-
-## Repository Structure
-
-The TOVA repository is organized as follows:
-
-```
-tova/
-├── .gitignore
-├── LICENSE.md
-├── Makefile
-├── docker-compose.yaml
-├── pyproject.toml
-├── README.md
-├── sample.env             # Template for environment variables
-├── data/                 # Shared data directory
-├── db/                   # Database files
-├── docker/               # Docker configuration and Dockerfiles
-│   ├── Dockerfile.api
-│   ├── Dockerfile.ui
-│   ├── Dockerfile.solr_api
-│   ├── Dockerfile.solr_db
-│   ├── Dockerfile.postgres_db
-│   ├── Dockerfile.base
-│   ├── entrypoint_api.sh
-│   └── check.md
-├── solr/                 # Apache Solr search engine configuration
-├── src/                  # Source code (Python package)
-│   └── tova/             # Main package
-│       ├── api/          # FastAPI backend service
-│       ├── cli/          # Command-line interface (Typer-based)
-│       ├── core/         # Core functionality (data handling, task dispatching)
-│       ├── preprocessing/# Text preprocessing utilities
-│       ├── prompter/     # LLM interaction layer
-│       ├── topic_models/ # Topic model implementations
-│       │   ├── traditional/  # TF-IDF, LSI models
-│       │   └── llm_based/    # LLM-powered models (OpenTopicRAG, etc.)
-│       └── utils/        # Cross-cutting utilities (logging, progress, etc.)
-├── static/               # Static assets
-│   ├── config/           # Configuration files (config.yaml)
-│   ├── examples/         # Example data and configurations
-│   ├── js/               # JavaScript files
-│   │   ├── columns.js
-│   │   ├── upload.js
-│   │   └── file-validation.js
-│   └── img/              # Images
-├── templates/            # HTML templates
-├── ui/                   # Django web application
-│   ├── tova_site/        # Django project settings
-│   └── web/              # Main Django app (models, views, etc.)
-└── tests/                # Test files
-```
+  - [Repository Structure](#repository-structure)
+  - [License](#license)
+  - [Disclaimer](#disclaimer)
 
 ## Key capabilities
 
@@ -313,3 +265,66 @@ make up         # reinitialises the database with the new credentials
 
 Usually caused by a stale Postgres volume whose schema or credentials no longer
 match the running app. Run `make reset-db` then `make up`.
+
+## Repository Structure
+
+The TOVA repository is organized as follows:
+
+```
+tova/
+├── .gitignore
+├── LICENSE.md
+├── Makefile
+├── docker-compose.yaml
+├── pyproject.toml
+├── README.md
+├── sample.env             # Template for environment variables
+├── data/                 # Shared data directory
+├── db/                   # Database files
+├── docker/               # Docker configuration and Dockerfiles
+│   ├── Dockerfile.api
+│   ├── Dockerfile.ui
+│   ├── Dockerfile.solr_api
+│   ├── Dockerfile.solr_db
+│   ├── Dockerfile.postgres_db
+│   ├── Dockerfile.base
+│   ├── entrypoint_api.sh
+│   └── check.md
+├── solr/                 # Apache Solr search engine configuration
+├── src/                  # Source code (Python package)
+│   └── tova/             # Main package
+│       ├── api/          # FastAPI backend service
+│       ├── cli/          # Command-line interface (Typer-based)
+│       ├── core/         # Core functionality (data handling, task dispatching)
+│       ├── preprocessing/# Text preprocessing utilities
+│       ├── prompter/     # LLM interaction layer
+│       ├── topic_models/ # Topic model implementations
+│       │   ├── traditional/  # TF-IDF, LSI models
+│       │   └── llm_based/    # LLM-powered models (OpenTopicRAG, etc.)
+│       └── utils/        # Cross-cutting utilities (logging, progress, etc.)
+├── static/               # Static assets
+│   ├── config/           # Configuration files (config.yaml)
+│   ├── examples/         # Example data and configurations
+│   ├── js/               # JavaScript files
+│   │   ├── columns.js
+│   │   ├── upload.js
+│   │   └── file-validation.js
+│   └── img/              # Images
+├── templates/            # HTML templates
+├── ui/                   # Django web application
+│   ├── tova_site/        # Django project settings
+│   └── web/              # Main Django app (models, views, etc.)
+└── tests/                # Test files
+```
+
+## License
+
+NIST-developed software is provided by NIST as a public service. You may use, copy, and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify, and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
+
+NIST-developed software is expressly provided "AS IS." NIST MAKES NO WARRANTY OF ANY KIND, EXPRESS, IMPLIED, IN FACT, OR ARISING BY OPERATION OF LAW, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND DATA ACCURACY. NIST NEITHER REPRESENTS NOR WARRANTS THAT THE OPERATION OF THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. NIST DOES NOT WARRANT OR MAKE ANY REPRESENTATIONS REGARDING THE USE OF THE SOFTWARE OR THE RESULTS THEREOF, INCLUDING BUT NOT LIMITED TO THE CORRECTNESS, ACCURACY, RELIABILITY, OR USEFULNESS OF THE SOFTWARE.
+
+You are solely responsible for determining the appropriateness of using and distributing the software and you assume all risks associated with its use, including but not limited to the risks and costs of program errors, compliance with applicable laws, damage to or loss of data, programs or equipment, and the unavailability or interruption of operation. This software is not intended to be used in any situation where a failure could cause risk of injury or damage to property. The software developed by NIST employees is not subject to copyright protection within the United States.
+
+## Disclaimer
+
+Certain equipment, instruments, software, or materials are identified in this paper in order to specify the experimental procedure adequately. Such identification is not intended to imply recommendation or endorsement of any product or service by NIST, nor is it intended to imply that the materials or equipment identified are necessarily the best available for the purpose.
