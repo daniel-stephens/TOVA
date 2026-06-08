@@ -986,14 +986,14 @@ footer {
         </ul>
 
         <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
-          <!-- <div class="dashboard-actions d-flex flex-wrap align-items-center gap-2 order-1 order-sm-0">
+          <div class="dashboard-actions d-flex flex-wrap align-items-center gap-2 order-1 order-sm-0">
             <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#inferenceModal">
               Run inference
             </button>
             <a class="btn btn-outline-secondary btn-sm text-nowrap" href="{% url_for 'active_learning_two' %}{% if model_id %}?model_id={{ model_id|urlencode }}{% endif %}">
               Active Learning
             </a>
-          </div> -->
+          </div>
 
           {% if user.is_authenticated and model_id and corpus_id %}
           <a class="btn btn-outline-primary btn-sm order-1 order-sm-0 text-nowrap"
@@ -1490,8 +1490,9 @@ footer {
             </div>
           </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <div class="modal-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <a class="btn btn-primary btn-sm d-none" id="al2LabelInAlLink" href="#">Label in Active Learning</a>
+          <button class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Close</button>
         </div>
       </div>
     </div>
@@ -2815,6 +2816,18 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (!grid.children.length) {
         grid.innerHTML = `<div class="col-12"><div class="border rounded p-2 bg-light-subtle small">No diagnostics for this document.</div></div>`;
+      }
+    }
+
+    const alLink = document.getElementById("al2LabelInAlLink");
+    if (alLink) {
+      if (modelId && docId) {
+        const q = new URLSearchParams({ model_id: modelId, doc_id: String(docId) });
+        alLink.href = `/active-learning-2?${q.toString()}`;
+        alLink.classList.remove("d-none");
+      } else {
+        alLink.classList.add("d-none");
+        alLink.href = "#";
       }
     }
 

@@ -18,10 +18,6 @@
     --al2-success-soft: #d1fae5;
     --al2-warning-soft: #fef3c7;
     --al2-warning-text: #92400e;
-    /* Space reserved from viewport for the queue table pane (chrome above it) */
-    --al2-queue-table-offset: 21rem;
-    /* Larger = shorter document pane — room for model strip, suggested labels, and card footer */
-    --al2-content-area-offset: 31.25rem;
   }
 
   .al2-page {
@@ -37,69 +33,117 @@
   .al2-main-row > [class*="col-"] {
     display: flex;
     flex-direction: column;
+    min-width: 0;
   }
 
   @media (min-width: 992px) {
+    /* Fill space between navbar and site footer (no fixed vh guess) */
+    main.flex-grow-1:has(.al2-page) {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .al2-page {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .al2-page > .container-fluid {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .al2-page-wrap {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .al2-page-header {
+      flex-shrink: 0;
+    }
+
     .al2-main-row {
+      flex: 1 1 0;
+      min-height: 0;
       align-items: stretch;
     }
 
     .al2-main-row > [class*="col-"] {
-      min-width: 0;
+      min-height: 0;
     }
 
-    /* Cards fill the shorter column so left/right outer heights match */
     .al2-main-row > [class*="col-"] > .card.al2-card {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       min-height: 0;
-    }
-
-    .al2-review-card > .card-body {
-      flex: 1 1 auto;
-      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
     }
 
+    .al2-review-card > .card-header,
+    .al2-queue-card > .card-header,
+    .al2-review-card > .card-footer {
+      flex-shrink: 0;
+    }
+
+    .al2-review-card > .card-body {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
     .al2-review-card .al2-content-toolbar,
-    .al2-review-card .al2-model-label-strip,
+    .al2-review-card .al2-model-label-strip {
+      flex-shrink: 0;
+    }
+
     .al2-review-card .al2-labels-section {
       flex-shrink: 0;
     }
 
     .al2-review-card .al2-content-area {
-      flex: 0 0 auto;
-      height: calc(100vh - var(--al2-content-area-offset));
-      max-height: calc(100vh - var(--al2-content-area-offset));
-      height: calc(100dvh - var(--al2-content-area-offset));
-      max-height: calc(100dvh - var(--al2-content-area-offset));
-      min-height: 9rem;
+      flex: 1 1 0;
+      min-height: 5rem;
       overflow-y: auto;
     }
 
-    .al2-queue-card > .card-body.p-0 {
-      flex: 1 1 auto;
+    .al2-queue-card > .card-body {
+      flex: 1 1 0;
       min-height: 0;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
-    .al2-queue-card > .card-body.p-0 > div:first-child {
+    .al2-queue-card .al2-context-toolbar {
       flex-shrink: 0;
     }
 
-    /* Fixed viewport height: scroll inside the table area only */
-    .al2-table-wrap {
-      flex: 0 0 auto;
-      height: calc(100vh - var(--al2-queue-table-offset));
-      max-height: calc(100vh - var(--al2-queue-table-offset));
-      height: calc(100dvh - var(--al2-queue-table-offset));
-      max-height: calc(100dvh - var(--al2-queue-table-offset));
-      min-height: 11rem;
+    .al2-queue-card .al2-context-bulk {
+      flex-shrink: 0;
+    }
+
+    .al2-queue-card .al2-context-scroll {
+      flex: 1 1 0;
+      min-height: 0;
       overflow-y: auto;
     }
   }
 
   /* ---------- Page header ---------- */
   .al2-page-header {
+    position: relative;
+    z-index: 5;
     background: #ffffff;
     border: 1px solid var(--al2-border);
     border-radius: 0.85rem;
@@ -216,15 +260,24 @@
   }
 
   .al2-review-card #al2LabelSuggestions {
-    flex-wrap: wrap;
-    gap: 0.35rem !important;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.35rem;
+    width: 100%;
   }
 
   .al2-review-card .al2-label-chip {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
     padding: 0.28rem 0.55rem;
     font-size: 0.78rem;
     border-width: 1px;
     border-radius: 0.45rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .al2-review-card .al2-custom-label-wrap {
@@ -411,51 +464,49 @@
     color: var(--al2-success);
   }
 
-  /* ---------- Labels section (under content) ---------- */
+  /* ---------- Model label (above document content) ---------- */
   .al2-model-label-strip {
     display: flex;
+    flex-direction: row;
     align-items: baseline;
-    gap: 0.45rem;
-    margin-top: 0.35rem;
-    padding: 0.32rem 0.55rem;
-    background: var(--al2-surface-alt);
-    border: 1px solid var(--al2-border-soft);
-    border-radius: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+    padding: 0;
     flex-shrink: 0;
     min-width: 0;
   }
 
   .al2-model-label-strip__k {
-    font-size: 0.65rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: var(--al2-text-muted);
     flex-shrink: 0;
   }
 
+  .al2-model-label-strip__k::after {
+    content: ":";
+  }
+
   .al2-model-label-strip__v {
-    font-size: 0.82rem;
+    font-size: 0.95rem;
     font-weight: 600;
+    line-height: 1.35;
     color: var(--al2-text);
     min-width: 0;
     flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .al2-review-card .al2-model-label-strip {
-    margin-top: 0.3rem;
-    padding: 0.28rem 0.45rem;
-  }
-
-  .al2-review-card .al2-model-label-strip__k {
-    font-size: 0.62rem;
+    margin-bottom: 0.55rem;
   }
 
   .al2-review-card .al2-model-label-strip__v {
-    font-size: 0.78rem;
+    font-size: 0.98rem;
   }
 
   .al2-labels-section {
@@ -582,7 +633,7 @@
   .al2-table-wrap thead th {
     font-size: 0.75rem;
     border-bottom: 1px solid var(--al2-border);
-    padding: 0.42rem 0.45rem;
+    padding: 0.35rem 0.2rem;
     white-space: nowrap;
     position: sticky;
     top: 0;
@@ -609,7 +660,7 @@
   }
 
   .al2-table-wrap tbody td {
-    padding: 0.38rem 0.45rem;
+    padding: 0.32rem 0.2rem;
     font-size: 0.81rem;
     border-color: var(--al2-border-soft);
     vertical-align: middle;
@@ -647,24 +698,56 @@
     word-break: break-all;
   }
 
-  .al2-table-wrap th:nth-child(1),
-  .al2-table-wrap td:nth-child(1) {
-    width: 13%;
+  .al2-col-select {
+    width: 2rem;
+    max-width: 2rem;
+    text-align: center;
+    padding-left: 0.15rem !important;
+    padding-right: 0.15rem !important;
   }
 
-  .al2-table-wrap th:nth-child(2),
-  .al2-table-wrap td:nth-child(2) {
-    width: 42%;
+  .al2-col-select .form-check-input {
+    margin: 0;
+    cursor: pointer;
   }
 
-  .al2-table-wrap th:nth-child(3),
-  .al2-table-wrap td:nth-child(3) {
-    width: 22%;
+  .al2-col-doc {
+    width: 5rem;
+    max-width: 5rem;
+    padding-left: 0.25rem;
+    padding-right: 0.15rem;
   }
 
-  .al2-table-wrap th:nth-child(4),
-  .al2-table-wrap td:nth-child(4) {
-    width: 23%;
+  .al2-doc-id-cell {
+    cursor: help;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .al2-col-preview {
+    width: 38%;
+  }
+
+  .al2-table-wrap.has-similarity-col .al2-col-preview {
+    width: 30%;
+  }
+
+  .al2-col-model {
+    width: 18%;
+  }
+
+  .al2-col-human {
+    width: 18%;
+  }
+
+  .al2-col-similarity {
+    width: 4.5rem;
+    max-width: 4.5rem;
+    text-align: right;
+    font-size: 0.72rem;
+    color: var(--al2-text-muted);
+    white-space: nowrap;
   }
 
   .al2-empty-state {
@@ -685,20 +768,155 @@
       max-width: 100%;
     }
 
-    /* Stacked layout: shorter document pane so model strip + labels + footer stay reachable */
-    .al2-content-area {
-      flex: 0 0 auto;
-      height: min(14rem, 30dvh);
-      max-height: min(14rem, 30dvh);
-      min-height: 6.5rem;
+    .al2-review-card .al2-content-area {
+      min-height: 10rem;
+      max-height: min(16rem, 34dvh);
     }
 
-    .al2-table-wrap {
-      flex: 0 0 auto;
-      height: min(26rem, 52dvh);
-      max-height: min(26rem, 52dvh);
-      min-height: 10rem;
+    .al2-queue-card .al2-context-scroll {
+      min-height: 12rem;
+      max-height: min(22rem, 42dvh);
     }
+  }
+
+  /* ---------- Context panel ---------- */
+  .al2-context-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem 0.5rem;
+    border-bottom: 1px solid var(--al2-border-soft);
+  }
+
+  .al2-context-view-toggle .btn {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    border-color: var(--al2-border);
+    color: #475569;
+  }
+
+  .al2-context-view-toggle .btn.is-active {
+    background: var(--al2-primary);
+    border-color: var(--al2-primary);
+    color: #fff;
+  }
+
+  .al2-context-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.35rem 0.5rem 0.65rem;
+  }
+
+  .al2-context-group {
+    margin-bottom: 0.5rem;
+  }
+
+  .al2-context-group__title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--al2-text-muted);
+    padding: 0.35rem 0.4rem 0.25rem;
+  }
+
+  .al2-table-wrap tbody tr.is-recommended {
+    background: var(--al2-primary-soft);
+  }
+
+  .al2-table-wrap tbody tr.is-recommended.is-active {
+    background: #eef2ff;
+    box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.12);
+  }
+
+  .al2-context-badge.is-next {
+    display: inline-block;
+    margin-top: 0.15rem;
+    font-size: 0.58rem;
+    font-weight: 600;
+    padding: 0.08rem 0.3rem;
+    border-radius: 0.25rem;
+    background: var(--al2-primary);
+    color: #fff;
+    white-space: nowrap;
+  }
+
+  .al2-label-tag.is-unlabeled {
+    color: #64748b;
+    font-style: italic;
+  }
+
+  .al2-context-completed summary {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--al2-text-muted);
+    cursor: pointer;
+    padding: 0.35rem 0.4rem;
+  }
+
+  .al2-context-anchor-note {
+    font-size: 0.72rem;
+    color: var(--al2-text-muted);
+    padding: 0.35rem 0.45rem 0.25rem;
+    border-bottom: 1px solid var(--al2-border-soft);
+    background: var(--al2-surface-soft);
+  }
+
+  .al2-context-bulk {
+    flex-shrink: 0;
+    padding: 0.5rem 0.85rem;
+    border-bottom: 1px solid var(--al2-border-soft);
+    background: var(--al2-surface-soft);
+  }
+
+  .al2-context-bulk.is-hidden {
+    display: none;
+  }
+
+  .al2-context-bulk .form-label {
+    font-size: 0.72rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .al2-chip-loading {
+    flex: 1 1 100%;
+    font-size: 0.75rem;
+    color: var(--al2-text-muted);
+    font-style: italic;
+  }
+
+  .al2-review-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 8rem;
+    color: var(--al2-text-muted);
+    font-size: 0.85rem;
+  }
+
+  .al2-review-loading.is-hidden {
+    display: none;
+  }
+
+  .al2-review-card.is-loading .al2-content-toolbar,
+  .al2-review-card.is-loading .al2-content-area,
+  .al2-review-card.is-loading .al2-model-label-strip,
+  .al2-review-card.is-loading .al2-labels-section,
+  .al2-review-card.is-loading .card-footer {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .al2-context-cap-note {
+    font-size: 0.68rem;
+    color: var(--al2-text-muted);
+    padding: 0.35rem 0.45rem 0.25rem;
+    border-bottom: 1px solid var(--al2-border-soft);
+    background: var(--al2-surface-soft);
   }
 
 </style>
@@ -721,7 +939,7 @@
             <h4 class="mb-0 fw-bold al2-page-title">Document Review</h4>
           </div>
           <div class="d-flex align-items-center gap-3">
-            <a href="{% url_for 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+            <a id="al2DashboardLink" href="/dashboard" class="btn btn-outline-secondary btn-sm">
               Dashboard
             </a>
           </div>
@@ -757,6 +975,10 @@
             </div>
 
             <div class="card-body">
+              <div id="al2ReviewLoading" class="al2-review-loading" aria-live="polite">
+                <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+                <span>Loading documents…</span>
+              </div>
               <!-- Toolbar: meta info + view toggle -->
               <div class="al2-content-toolbar">
                 <div class="al2-meta-pills" id="al2MetaPills"></div>
@@ -770,14 +992,14 @@
                 </div>
               </div>
 
-              <!-- Content area: text or summary -->
-              <div class="al2-content-area" id="al2ContentArea">
-                <p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;"></p>
-              </div>
-
               <div class="al2-model-label-strip" id="al2ModelLabelStrip" aria-live="polite">
                 <span class="al2-model-label-strip__k">Model label</span>
                 <span class="al2-model-label-strip__v" id="al2ModelLabelText">—</span>
+              </div>
+
+              <!-- Content area: text or summary -->
+              <div class="al2-content-area" id="al2ContentArea">
+                <p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;"></p>
               </div>
 
               <!-- Suggested labels -->
@@ -785,18 +1007,19 @@
                 <div class="al2-section-label">
                   Suggested labels
                 </div>
-                <div id="al2LabelSuggestions" class="d-flex flex-wrap gap-2"></div>
+                <div id="al2LabelSuggestions"></div>
                 <div class="al2-custom-label-wrap">
                   <label for="al2CustomLabelInput" class="form-label fw-semibold mb-1">Label</label>
                   <div class="al2-custom-label-row">
                     <input type="text" class="form-control form-control-sm" id="al2CustomLabelInput"
-                      placeholder="Type a label" maxlength="120" autocomplete="off">
+                      list="al2HumanLabelList" placeholder="Type or select a label" maxlength="120" autocomplete="off">
                     <button type="button" class="btn btn-success" id="al2ApplyBtn" disabled>
                       Save Label &amp; Continue
                     </button>
                   </div>
                   <div id="al2SaveFeedback" class="al2-save-feedback" aria-live="polite"></div>
                 </div>
+                <datalist id="al2HumanLabelList"></datalist>
               </div>
             </div>
 
@@ -816,42 +1039,39 @@
           </div>
         </div>
 
-        <!-- RIGHT: Queue table -->
+        <!-- RIGHT: Context panel -->
         <div class="col-xl-5 col-lg-6">
           <div class="card al2-card al2-queue-card">
-            <div class="card-header">
-              <div class="d-flex align-items-center justify-content-between gap-2">
-                <div class="d-flex align-items-center gap-2">
-                  <div>
-                    <div class="al2-header-title">Document Queue</div>
-                    <div class="al2-header-subtitle">
-                      <span id="al2QueueCount">0</span> documents
-                    </div>
-                  </div>
-                </div>
+            <div class="card-header py-2">
+              <div class="al2-header-title">Context</div>
+              <div class="al2-header-subtitle">
+                <span id="al2QueueCount">0</span> documents ·
+                <span id="al2UnlabeledCount">0</span> unlabeled
               </div>
             </div>
-
-            <div class="card-body p-0">
-              <div class="px-3 pt-3 pb-2">
-                <div class="al2-search">
+            <div class="card-body p-0 d-flex flex-column">
+              <div class="al2-context-toolbar">
+                <div class="btn-group btn-group-sm al2-context-view-toggle" role="group" id="al2ContextViewToggle">
+                  <button type="button" class="btn is-active" data-context-view="recommended">Recommended</button>
+                  <button type="button" class="btn" data-context-view="by_model_label">By model label</button>
+                  <button type="button" class="btn" data-context-view="similar">Similar</button>
+                </div>
+                <div class="al2-search flex-grow-1" style="min-width: 8rem;">
                   <input type="search" class="form-control form-control-sm" id="al2SearchInput"
-                    placeholder="Search ID, text, model label, or human label" autocomplete="off">
+                    placeholder="Search documents" autocomplete="off">
                 </div>
               </div>
-              <div class="al2-table-wrap">
-                <table class="table table-sm table-hover align-middle mb-0">
-                  <thead class="bg-white">
-                    <tr>
-                      <th>ID</th>
-                      <th>Preview</th>
-                      <th>Model Label</th>
-                      <th>Human Label</th>
-                    </tr>
-                  </thead>
-                  <tbody id="al2DocTableBody"></tbody>
-                </table>
+              <div class="al2-context-bulk" id="al2ContextBulkBar">
+                <label for="al2ContextBulkLabelInput" class="form-label fw-semibold mb-1">Label selected documents</label>
+                <div class="d-flex flex-wrap gap-2 align-items-stretch">
+                  <input type="text" class="form-control form-control-sm flex-grow-1" id="al2ContextBulkLabelInput"
+                    list="al2HumanLabelList" maxlength="120" placeholder="Type or select a label" autocomplete="off">
+                  <button type="button" class="btn btn-success btn-sm text-nowrap" id="al2ContextBulkApplyBtn" disabled>
+                    Label selected (0)
+                  </button>
+                </div>
               </div>
+              <div class="al2-context-scroll" id="al2ContextPanel"></div>
             </div>
           </div>
         </div>
@@ -859,6 +1079,8 @@
       </div>
     </div>
   </div>
+
+
 </div>
 {% endblock %}
 
@@ -867,24 +1089,50 @@
 (() => {
   const pageRoot = document.querySelector(".al2-page");
   const modelId = (pageRoot?.dataset.modelId || "").trim();
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialDocId = (urlParams.get("doc_id") || "").trim();
+
   const emptySummary = "No summary available.";
   const defaultSuggestions = ["Security Incident", "Program Management", "Policy Update"];
 
+  const AL2_RANKINGS_URL = "/api/active-learning-2/rankings";
+  const AL2_RELATED_URL = "/api/active-learning-2/related";
+  const AL2_BULK_URL = "/api/active-learning-2/labels/bulk";
+
   const escapeHtml = (str) =>
     String(str ?? "").replace(/[&<>"']/g, (m) => (
-      {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]
     ));
 
   const docsById = new Map();
   const docOrder = [];
-  /** Doc ids to return to after Apply (stack); Previous consumes. */
   const navHistory = [];
   let activeLearningIndex = 0;
   let selectedSuggestion = null;
   let searchTerm = "";
-  let statusState = { num_total: 0, num_labeled: 0 };
+  let statusState = { num_total: 0, num_labeled: 0, class_distribution: {} };
   let saveFeedbackTimeout = null;
+  let recommendedDocId = null;
+  let rankingsByDocId = new Map();
+  let contextView = "recommended";
+  let lastUsedLabel = "";
+  let suggestionsAbort = null;
+  let contextSimilarClusters = [];
+  let contextSimilarAnchorId = null;
+  let contextSimilarLoading = false;
+  const selectedDocIds = new Set();
+  let pageReady = false;
+  let lastRecommendation = null;
+  let contextPanelTimer = null;
+  let suggestionsDeferTimer = null;
+
+  const CONTEXT_PANEL_CAP = 200;
+  const CONTEXT_LABELED_CAP = 80;
+  const RECOMMEND_URL = `{% url_for 'active_learning_two_recommend' %}?model_id=${encodeURIComponent(modelId)}`;
+
   const displayId = (id) => String(id || "").slice(0, Math.max(0, String(id || "").length - 4));
+  const TABLE_ID_PREVIEW_LEN = 7;
+  const shortTableId = (id) => String(id || "").slice(0, TABLE_ID_PREVIEW_LEN);
   const truncate = (str, maxLen) => {
     const s = String(str ?? "");
     if (s.length <= maxLen) return s;
@@ -894,13 +1142,99 @@
     const firstSentence = String(text || "").split(/(?<=[.?!])\s+/)[0] || "";
     return firstSentence.trim() || emptySummary;
   };
+  const ensureDocSummary = (doc) => {
+    if (!doc) return emptySummary;
+    if (!doc.summary) doc.summary = buildSummary(doc.text);
+    return doc.summary;
+  };
+  const setReviewLoading = (loading) => {
+    const card = document.querySelector(".al2-review-card");
+    const el = document.getElementById("al2ReviewLoading");
+    if (card) card.classList.toggle("is-loading", Boolean(loading));
+    if (el) el.classList.toggle("is-hidden", !loading);
+  };
   const getDocs = () => docOrder.map((id) => docsById.get(id)).filter(Boolean);
   const getCurrentDoc = () => getDocs()[activeLearningIndex] || null;
 
+  const jsonFetch = async (url, options = {}) => {
+    const resp = await fetch(url, options);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(data?.detail || data?.error || `Request failed (${resp.status})`);
+    }
+    return data;
+  };
+
+  const tryJsonFetch = async (url, options = {}) => {
+    try {
+      return await jsonFetch(url, options);
+    } catch {
+      return null;
+    }
+  };
+
   const getSuggestionSet = (doc) => {
-    const fromStatus = Object.keys(statusState.class_distribution || {});
-    const merged = [...(doc?.suggestions || []), ...fromStatus, ...defaultSuggestions];
-    return [...new Set(merged.filter(Boolean))].slice(0, 8);
+    const stored = (doc?.suggestions || []).filter(Boolean);
+    if (stored.length) return stored.slice(0, 3);
+    return defaultSuggestions.slice(0, 3);
+  };
+
+  const getLabelDatalistOptions = () => {
+    const labels = new Set();
+    Object.keys(statusState.class_distribution || {}).forEach((label) => {
+      const trimmed = String(label || "").trim();
+      if (trimmed) labels.add(trimmed);
+    });
+    getDocs().forEach((doc) => {
+      const human = String(doc.appliedLabel || "").trim();
+      if (human) labels.add(human);
+      const model = String(doc.label || "").trim();
+      if (model && model !== "—") labels.add(model);
+    });
+    if (lastUsedLabel) labels.add(lastUsedLabel);
+    return [...labels].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  };
+
+  const refreshHumanLabelDatalist = () => {
+    const list = document.getElementById("al2HumanLabelList");
+    if (!list) return;
+    list.innerHTML = "";
+    getLabelDatalistOptions().forEach((label) => {
+      const opt = document.createElement("option");
+      opt.value = label;
+      list.appendChild(opt);
+    });
+  };
+
+  const setLabelInputValue = (value, { force = false } = {}) => {
+    const input = document.getElementById("al2CustomLabelInput");
+    if (!input) return;
+    if (force || document.activeElement !== input) {
+      input.value = value || "";
+    }
+  };
+
+  const updateApplyButton = () => {
+    const applyBtn = document.getElementById("al2ApplyBtn");
+    const input = document.getElementById("al2CustomLabelInput");
+    if (!applyBtn) return;
+    const labelInputVal = (input?.value || "").trim();
+    applyBtn.disabled = !(labelInputVal || selectedSuggestion);
+  };
+
+  const syncLabelControlsForDoc = (doc) => {
+    if (!doc) {
+      selectedSuggestion = null;
+      setLabelInputValue("", { force: true });
+      renderLabelChips(null);
+      updateApplyButton();
+      return;
+    }
+    const applied = String(doc.appliedLabel || "").trim();
+    selectedSuggestion = applied || null;
+    setLabelInputValue(selectedSuggestion || "", { force: true });
+    renderLabelChips(doc);
+    updateApplyButton();
   };
 
   const upsertDoc = (doc) => {
@@ -914,73 +1248,8 @@
     docOrder.length = 0;
     navHistory.length = 0;
     activeLearningIndex = 0;
-  };
-
-  const loadBootstrap = async () => {
-    const data = await jsonFetch(`{% url_for 'active_learning_two_bootstrap' %}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId }),
-    });
-    resetDocStore();
-    const ml = data.model_label_by_id || {};
-    const hl = data.human_labels || {};
-    for (const row of data.documents || []) {
-      const id = row.id;
-      if (!id) continue;
-      docOrder.push(id);
-      const text = row.text || "";
-      docsById.set(id, {
-        id,
-        text,
-        summary: buildSummary(text),
-        label: ml[id] || "—",
-        suggestions: defaultSuggestions,
-        appliedLabel: hl[id] ?? null,
-        reviewed: Boolean(hl[id]),
-        viewPreference: "text",
-      });
-    }
-    syncLabels(hl);
-  };
-
-  const loadHumanLabels = async () => {
-    const d = await jsonFetch(
-      `{% url_for 'active_learning_two_labels' %}?model_id=${encodeURIComponent(modelId)}`
-    );
-    syncLabels(d.labels || {});
-  };
-
-  const ensureCurrentInRange = () => {
-    const docs = getDocs();
-    if (docs.length === 0) {
-      activeLearningIndex = 0;
-      return;
-    }
-    if (activeLearningIndex > docs.length - 1) {
-      activeLearningIndex = docs.length - 1;
-    }
-  };
-
-  const jsonFetch = async (url, options = {}) => {
-    const resp = await fetch(url, options);
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      throw new Error(data?.detail || data?.error || `Request failed (${resp.status})`);
-    }
-    return data;
-  };
-
-  const showSaveFeedback = (message) => {
-    const feedback = document.getElementById("al2SaveFeedback");
-    if (!feedback) return;
-    feedback.textContent = message;
-    feedback.classList.add("is-visible");
-    if (saveFeedbackTimeout) clearTimeout(saveFeedbackTimeout);
-    saveFeedbackTimeout = setTimeout(() => {
-      feedback.classList.remove("is-visible");
-      feedback.textContent = "";
-    }, 1800);
+    rankingsByDocId = new Map();
+    recommendedDocId = null;
   };
 
   const syncLabels = (labelMap) => {
@@ -1001,38 +1270,603 @@
         });
       }
     });
+    refreshHumanLabelDatalist();
+  };
+
+  const buildRankingsFallback = (recId) => {
+    const unlabeled = getDocs().filter((d) => !d.reviewed);
+    const items = unlabeled.map((d, i) => ({
+      doc_id: d.id,
+      score: d.id === recId ? 1 : Math.max(0.01, 0.9 - i * 0.01),
+      rank: i + 1,
+    }));
+    items.sort((a, b) => {
+      if (a.doc_id === recId) return -1;
+      if (b.doc_id === recId) return 1;
+      return b.score - a.score;
+    });
+    items.forEach((it, i) => { it.rank = i + 1; });
+    return {
+      recommended_doc_id: recId || (items[0]?.doc_id ?? null),
+      classifier_trained: Boolean(statusState.classifier_trained),
+      items,
+    };
+  };
+
+  const applyRankings = (data) => {
+    rankingsByDocId = new Map();
+    (data?.items || []).forEach((it) => {
+      if (it?.doc_id) rankingsByDocId.set(it.doc_id, it);
+    });
+    if (data?.recommended_doc_id) recommendedDocId = data.recommended_doc_id;
+  };
+
+  const fetchRankings = async ({ skipRecommend = false } = {}) => {
+    const live = await tryJsonFetch(
+      `${AL2_RANKINGS_URL}?model_id=${encodeURIComponent(modelId)}`
+    );
+    if (live?.items) {
+      applyRankings(live);
+      return live;
+    }
+    let recId = recommendedDocId;
+    if (!skipRecommend && !recId) {
+      const rec = await tryJsonFetch(RECOMMEND_URL);
+      if (rec?.doc_id) recId = rec.doc_id;
+    }
+    const fallback = buildRankingsFallback(recId);
+    applyRankings(fallback);
+    return fallback;
+  };
+
+  const buildRelatedFallback = (anchorDocId) => {
+    const anchor = docsById.get(anchorDocId);
+    if (!anchor) return { anchor_doc_id: anchorDocId, applied_label: "", clusters: [] };
+    const unlabeled = getDocs().filter((d) => !d.reviewed && d.id !== anchorDocId);
+    const sameLabel = unlabeled
+      .filter((d) => anchor.label && anchor.label !== "—" && d.label === anchor.label)
+      .slice(0, 10);
+    const sameIds = new Set(sameLabel.map((d) => d.id));
+    const similar = unlabeled.filter((d) => !sameIds.has(d.id)).slice(0, 18);
+    const clusters = [];
+    if (similar.length) {
+      clusters.push({
+        id: "similar",
+        title: "Similar to this document",
+        documents: similar.map((d, i) => ({
+          doc_id: d.id,
+          text: d.text,
+          model_label: d.label,
+          similarity: Math.max(0.35, 0.92 - i * 0.03),
+        })),
+      });
+    }
+    if (sameLabel.length) {
+      clusters.push({
+        id: "same_model_label",
+        title: "Same model label",
+        documents: sameLabel.map((d, i) => ({
+          doc_id: d.id,
+          text: d.text,
+          model_label: d.label,
+          similarity: Math.max(0.2, 0.55 - i * 0.02),
+        })),
+      });
+    }
+    return {
+      anchor_doc_id: anchorDocId,
+      applied_label: anchor.appliedLabel || lastUsedLabel || "",
+      clusters,
+    };
+  };
+
+  const fetchRelated = async (anchorDocId) => {
+    const live = await tryJsonFetch(
+      `${AL2_RELATED_URL}?model_id=${encodeURIComponent(modelId)}&doc_id=${encodeURIComponent(anchorDocId)}`
+    );
+    if (live?.clusters) return live;
+    return buildRelatedFallback(anchorDocId);
+  };
+
+  const postBulkLabels = async (label, docIds) => {
+    const body = { model_id: modelId, label, doc_ids: docIds };
+    const live = await tryJsonFetch(AL2_BULK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (live) return live;
+    let lastRec = null;
+    for (const docId of docIds) {
+      lastRec = await jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: modelId, doc_id: docId, label }),
+      });
+    }
+    return lastRec;
+  };
+
+  const loadBootstrap = async () => {
+    const data = await jsonFetch(`{% url_for 'active_learning_two_bootstrap' %}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    resetDocStore();
+    const ml = data.model_label_by_id || {};
+    const hl = data.human_labels || {};
+    for (const row of data.documents || []) {
+      const id = row.id;
+      if (!id) continue;
+      docOrder.push(id);
+      const text = row.text || "";
+      docsById.set(id, {
+        id,
+        text,
+        summary: "",
+        label: ml[id] || "—",
+        suggestions: [...defaultSuggestions],
+        appliedLabel: hl[id] ?? null,
+        reviewed: Boolean(hl[id]),
+        viewPreference: "text",
+      });
+    }
+    syncLabels(hl);
   };
 
   const loadStatus = async () => {
     statusState = await jsonFetch(
       `{% url_for 'active_learning_two_status' %}?model_id=${encodeURIComponent(modelId)}`
     );
+    refreshHumanLabelDatalist();
+  };
+
+  const applyRecommendation = (rec) => {
+    if (!rec) return;
+    lastRecommendation = rec;
+    syncLabels(rec.current_labels || {});
+    if (!rec.doc_id) return;
+    recommendedDocId = rec.doc_id;
+    const prev = docsById.get(rec.doc_id);
+    const text = rec.text || prev?.text || "";
+    const existing = prev || {};
+    docsById.set(rec.doc_id, {
+      ...existing,
+      id: rec.doc_id,
+      text: text || existing.text || "",
+      summary: existing.summary || "",
+      label: existing.label ?? "—",
+      suggestions: existing.suggestions || [...defaultSuggestions],
+      appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? existing.appliedLabel ?? null,
+      reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
+      viewPreference: existing.viewPreference || "text",
+    });
+    if (!docOrder.includes(rec.doc_id)) docOrder.push(rec.doc_id);
   };
 
   const loadRecommendation = async () => {
-    const rec = await jsonFetch(
-      `{% url_for 'active_learning_two_recommend' %}?model_id=${encodeURIComponent(modelId)}`
-    );
-    syncLabels(rec.current_labels || {});
-    if (rec.doc_id) {
-      const prev = docsById.get(rec.doc_id);
-      const text = rec.text || prev?.text || "";
-      upsertDoc({
-        id: rec.doc_id,
-        text,
-        summary: buildSummary(text),
-        label: prev?.label ?? "—",
-        suggestions: getSuggestionSet(prev || {}),
-        appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? prev?.appliedLabel ?? null,
-        reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
-        viewPreference: prev?.viewPreference || "text",
+    const rec = await jsonFetch(RECOMMEND_URL);
+    applyRecommendation(rec);
+    return rec;
+  };
+
+  const fetchRecommendation = () => tryJsonFetch(RECOMMEND_URL);
+
+  const refreshStatusAndRankings = async () => {
+    await Promise.all([loadStatus(), fetchRankings({ skipRecommend: true })]);
+  };
+
+  const scheduleDocSuggestions = (doc) => {
+    if (!doc) return;
+    if (suggestionsDeferTimer) clearTimeout(suggestionsDeferTimer);
+    renderLabelChips(doc);
+    if (!doc.text?.trim()) return;
+    suggestionsDeferTimer = setTimeout(() => fetchDocSuggestions(doc), 80);
+  };
+
+  const fetchDocSuggestions = async (doc) => {
+    if (!doc?.text?.trim()) return;
+    if (suggestionsAbort) suggestionsAbort.abort();
+    suggestionsAbort = new AbortController();
+    const docId = doc.id;
+    if (getCurrentDoc()?.id === docId) renderLabelChips(doc, { loading: true });
+    try {
+      const data = await jsonFetch(`{% url_for 'suggest_doc_topics' %}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: doc.text.slice(0, 4000) }),
+        signal: suggestionsAbort.signal,
       });
-      activeLearningIndex = Math.max(0, docOrder.indexOf(rec.doc_id));
-    } else if (docOrder.length) {
-      activeLearningIndex = 0;
+      if (getCurrentDoc()?.id !== docId) return;
+      const llm = (data.suggestions || [])
+        .map((s) => (typeof s === "string" ? s : s?.label))
+        .map((label) => String(label || "").trim())
+        .filter(Boolean);
+      doc.suggestions = llm.length ? llm.slice(0, 3) : [...defaultSuggestions];
+      renderLabelChips(doc);
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      renderLabelChips(doc);
     }
   };
 
+  const goToDocId = (docId, { pushHistory = false } = {}) => {
+    const ix = docOrder.indexOf(docId);
+    if (ix < 0) return;
+    if (pushHistory) {
+      const cur = getCurrentDoc();
+      if (cur?.id) navHistory.push(cur.id);
+    }
+    activeLearningIndex = ix;
+    renderActiveLearningTwo({ refreshContext: false });
+    onDocFocusChange();
+  };
+
+  const goToRecommended = (docId) => {
+    const target = docId || recommendedDocId;
+    if (!target) return;
+    recommendedDocId = target;
+    goToDocId(target);
+  };
+
+  const goTo = (newIndex) => {
+    if (newIndex < 0 || newIndex >= getDocs().length) return;
+    activeLearningIndex = newIndex;
+    renderActiveLearningTwo({ refreshContext: false });
+    onDocFocusChange();
+  };
+
+  const goBack = () => {
+    if (navHistory.length > 0) {
+      const target = navHistory.pop();
+      const ix = docOrder.indexOf(target);
+      if (ix >= 0) {
+        activeLearningIndex = ix;
+        renderActiveLearningTwo({ refreshContext: false });
+        onDocFocusChange();
+        return;
+      }
+    }
+    goTo(activeLearningIndex - 1);
+  };
+
+  const onDocFocusChange = () => {
+    const doc = getCurrentDoc();
+    if (doc) scheduleDocSuggestions(doc);
+    if (contextView === "similar") {
+      contextSimilarAnchorId = null;
+      loadContextSimilar({ force: true }).then(() => scheduleContextPanelRender());
+    }
+  };
+
+  const docMatchesSearch = (doc) => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      doc.id.toLowerCase().includes(term) ||
+      doc.text.toLowerCase().includes(term) ||
+      String(doc.label || "").toLowerCase().includes(term) ||
+      (doc.appliedLabel || "").toLowerCase().includes(term)
+    );
+  };
+
+  const getRankScore = (docId) => rankingsByDocId.get(docId)?.score ?? 0;
+
+  const sortDocsForContext = (docs) => {
+    return [...docs].sort((a, b) => {
+      const sa = getRankScore(a.id);
+      const sb = getRankScore(b.id);
+      if (sb !== sa) return sb - sa;
+      return docOrder.indexOf(a.id) - docOrder.indexOf(b.id);
+    });
+  };
+
+  const scheduleContextPanelRender = () => {
+    if (contextPanelTimer) clearTimeout(contextPanelTimer);
+    contextPanelTimer = setTimeout(() => {
+      contextPanelTimer = null;
+      renderContextPanel();
+    }, 50);
+  };
+
+  const capDocList = (docs, cap) => {
+    if (docs.length <= cap) return { shown: docs, truncated: false, total: docs.length };
+    return { shown: docs.slice(0, cap), truncated: true, total: docs.length };
+  };
+
+  const getContextTableOpts = () => ({
+    showSimilarity: contextView === "similar",
+  });
+
+  const upsertRelatedDoc = (row) => {
+    if (!row?.doc_id) return null;
+    const existing = docsById.get(row.doc_id);
+    const textVal = row.text || existing?.text || "";
+    const modelLabel = row.model_label || existing?.label || "—";
+    if (!existing) {
+      upsertDoc({
+        id: row.doc_id,
+        text: textVal,
+        summary: textVal ? buildSummary(textVal) : emptySummary,
+        label: modelLabel,
+        suggestions: [...defaultSuggestions],
+        appliedLabel: null,
+        reviewed: false,
+        viewPreference: "text",
+      });
+    } else {
+      if (textVal && !existing.text) existing.text = textVal;
+      if (modelLabel && modelLabel !== "—" && (!existing.label || existing.label === "—")) {
+        existing.label = modelLabel;
+      }
+    }
+    return docsById.get(row.doc_id);
+  };
+
+  const syncContextBulkBar = () => {
+    const bulkBtn = document.getElementById("al2ContextBulkApplyBtn");
+    const bulkInput = document.getElementById("al2ContextBulkLabelInput");
+    const count = selectedDocIds.size;
+    if (bulkBtn) {
+      bulkBtn.disabled = count === 0 || !(bulkInput?.value || "").trim();
+      bulkBtn.textContent = count
+        ? `Label selected (${count})`
+        : "Label selected (0)";
+    }
+  };
+
+  const setDocSelected = (docId, selected) => {
+    if (!docId) return;
+    const doc = docsById.get(docId);
+    if (!doc || doc.reviewed) return;
+    if (selected) selectedDocIds.add(docId);
+    else selectedDocIds.delete(docId);
+    syncContextBulkBar();
+  };
+
+  const pruneSelectedDocIds = () => {
+    for (const id of [...selectedDocIds]) {
+      const doc = docsById.get(id);
+      if (!doc || doc.reviewed) selectedDocIds.delete(id);
+    }
+    syncContextBulkBar();
+  };
+
+  const loadContextSimilar = async ({ force = false } = {}) => {
+    const anchor = getCurrentDoc();
+    if (!anchor?.id) {
+      contextSimilarClusters = [];
+      contextSimilarAnchorId = null;
+      return;
+    }
+    if (!force && contextSimilarAnchorId === anchor.id && contextSimilarClusters.length) return;
+    contextSimilarAnchorId = anchor.id;
+    contextSimilarLoading = true;
+    if (contextView === "similar") scheduleContextPanelRender();
+    try {
+      const related = await fetchRelated(anchor.id);
+      contextSimilarClusters = related.clusters || [];
+      for (const cluster of contextSimilarClusters) {
+        for (const row of cluster.documents || []) upsertRelatedDoc(row);
+      }
+      const bulkInput = document.getElementById("al2ContextBulkLabelInput");
+      if (bulkInput && !bulkInput.value.trim()) {
+        bulkInput.value = anchor.appliedLabel || lastUsedLabel || selectedSuggestion || "";
+      }
+    } finally {
+      contextSimilarLoading = false;
+    }
+  };
+
+  const renderContextTableHead = ({ showSimilarity = false } = {}) => `
+    <thead>
+      <tr>
+        <th scope="col" class="al2-col-select">
+          <input type="checkbox" class="form-check-input al2-select-all" title="Select all unlabeled" aria-label="Select all">
+        </th>
+        <th scope="col" class="al2-col-doc">Doc</th>
+        <th scope="col" class="al2-col-preview">Preview</th>
+        <th scope="col" class="al2-col-model">Model label</th>
+        <th scope="col" class="al2-col-human">Human label</th>
+        ${showSimilarity ? '<th scope="col" class="al2-col-similarity">Match</th>' : ""}
+      </tr>
+    </thead>`;
+
+  const renderContextTableRow = (doc, { similarity = null } = {}) => {
+    const isCurrent = getCurrentDoc()?.id === doc.id;
+    const isRec = recommendedDocId && doc.id === recommendedDocId;
+    const trClass = [
+      isCurrent ? "is-active" : "",
+      isRec ? "is-recommended" : "",
+    ].filter(Boolean).join(" ");
+    const modelLabel = doc.label || "—";
+    const humanLabel = doc.appliedLabel || "Unlabeled";
+    const humanTagClass = doc.appliedLabel ? "al2-label-tag is-applied" : "al2-label-tag is-unlabeled";
+    const canSelect = !doc.reviewed;
+    const checked = selectedDocIds.has(doc.id);
+    const simCell = similarity != null
+      ? `<td class="al2-col-similarity">${Math.round(similarity * 100)}%</td>`
+      : "";
+    return `
+      <tr class="${trClass}" data-doc-id="${escapeHtml(doc.id)}" role="button" tabindex="0">
+        <td class="al2-col-select">
+          <input type="checkbox" class="form-check-input al2-row-select" data-doc-id="${escapeHtml(doc.id)}"
+            ${canSelect ? "" : "disabled"} ${checked ? "checked" : ""}
+            aria-label="Select ${escapeHtml(displayId(doc.id))}">
+        </td>
+        <td class="font-monospace small text-muted al2-doc-id-cell al2-col-doc" title="${escapeHtml(doc.id)}">
+          ${escapeHtml(shortTableId(doc.id))}
+          ${isRec ? '<span class="al2-context-badge is-next">Next</span>' : ""}
+        </td>
+        <td class="al2-text-cell al2-col-preview" title="${escapeHtml(doc.text)}">${escapeHtml(truncate(doc.text, 72))}</td>
+        <td class="al2-truncate-cell al2-col-model"><span class="al2-label-tag" title="${escapeHtml(modelLabel)}">${escapeHtml(modelLabel)}</span></td>
+        <td class="al2-truncate-cell al2-col-human"><span class="${humanTagClass}" title="${escapeHtml(humanLabel)}">${escapeHtml(humanLabel)}</span></td>
+        ${simCell}
+      </tr>`;
+  };
+
+  const wrapContextTable = (rowsHtml, { showSimilarity = false } = {}) => `
+    <div class="al2-table-wrap${showSimilarity ? " has-similarity-col" : ""}">
+      <table class="table table-sm table-hover mb-0">
+        ${renderContextTableHead({ showSimilarity })}
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+
+  const syncSelectAllCheckbox = (panel) => {
+    if (!panel) return;
+    const rowChecks = [...panel.querySelectorAll(".al2-row-select:not(:disabled)")];
+    const checkedCount = rowChecks.filter((cb) => cb.checked).length;
+    const allChecked = rowChecks.length > 0 && checkedCount === rowChecks.length;
+    const indeterminate = checkedCount > 0 && checkedCount < rowChecks.length;
+    panel.querySelectorAll(".al2-select-all").forEach((selectAll) => {
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = indeterminate;
+    });
+  };
+
+  const renderContextPanel = () => {
+    const panel = document.getElementById("al2ContextPanel");
+    const countEl = document.getElementById("al2QueueCount");
+    const unlabeledEl = document.getElementById("al2UnlabeledCount");
+    if (!panel) return;
+
+    pruneSelectedDocIds();
+    const all = getDocs();
+    const unlabeled = sortDocsForContext(all.filter((d) => !d.reviewed && docMatchesSearch(d)));
+    const labeled = all.filter((d) => d.reviewed && docMatchesSearch(d));
+    const tableOpts = getContextTableOpts();
+
+    if (countEl) countEl.textContent = String(statusState.num_total || all.length);
+    if (unlabeledEl) unlabeledEl.textContent = String(unlabeled.length);
+
+    if (contextView === "similar") {
+      const anchor = getCurrentDoc();
+      if (!anchor) {
+        panel.innerHTML = `<div class="al2-empty-state">Open a document to see similar items.</div>`;
+        syncSelectAllCheckbox(panel);
+        syncContextBulkBar();
+        return;
+      }
+      if (contextSimilarLoading) {
+        panel.innerHTML = `<div class="al2-empty-state">Loading similar documents…</div>`;
+        syncContextBulkBar();
+        return;
+      }
+      let html = `<div class="al2-context-anchor-note">Similar to <span class="font-monospace">${escapeHtml(displayId(anchor.id))}</span> · model label: ${escapeHtml(anchor.label || "—")}</div>`;
+      let hasRows = false;
+      for (const cluster of contextSimilarClusters) {
+        const rows = [];
+        for (const row of cluster.documents || []) {
+          const doc = upsertRelatedDoc(row);
+          if (!doc || doc.reviewed || !docMatchesSearch(doc)) continue;
+          rows.push(renderContextTableRow(doc, { similarity: row.similarity }));
+        }
+        if (!rows.length) continue;
+        hasRows = true;
+        html += `
+          <div class="al2-context-group">
+            <div class="al2-context-group__title">${escapeHtml(cluster.title)} (${rows.length})</div>
+            ${wrapContextTable(rows.join(""), tableOpts)}
+          </div>`;
+      }
+      panel.innerHTML = hasRows
+        ? html
+        : `${html}<div class="al2-empty-state">No similar unlabeled documents match.</div>`;
+    } else if (contextView === "by_model_label") {
+      const groups = new Map();
+      unlabeled.forEach((d) => {
+        const key = d.label || "—";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(d);
+      });
+      const keys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+      panel.innerHTML = keys.length
+        ? keys.map((k) => `
+            <div class="al2-context-group">
+              <div class="al2-context-group__title">${escapeHtml(k)} (${groups.get(k).length})</div>
+              ${wrapContextTable(groups.get(k).map((d) => renderContextTableRow(d)).join(""), tableOpts)}
+            </div>`).join("")
+        : `<div class="al2-empty-state">No unlabeled documents match.</div>`;
+    } else {
+      const unlabeledCap = capDocList(unlabeled, CONTEXT_PANEL_CAP);
+      const labeledCap = capDocList(labeled, CONTEXT_LABELED_CAP);
+      let html = "";
+      if (unlabeledCap.shown.length) {
+        html = wrapContextTable(unlabeledCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts);
+        if (unlabeledCap.truncated) {
+          html = `<div class="al2-context-cap-note">Showing top ${CONTEXT_PANEL_CAP} of ${unlabeledCap.total} unlabeled — use search to narrow.</div>${html}`;
+        }
+      } else {
+        html = `<div class="al2-empty-state">No unlabeled documents match.</div>`;
+      }
+      panel.innerHTML = html;
+      if (labeledCap.shown.length) {
+        const labeledNote = labeledCap.truncated
+          ? ` <span class="text-muted fw-normal">(first ${CONTEXT_LABELED_CAP} of ${labeledCap.total})</span>`
+          : "";
+        panel.innerHTML += `
+          <details class="al2-context-completed mt-2">
+            <summary>Completed (${labeled.length})${labeledNote}</summary>
+            ${wrapContextTable(labeledCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts)}
+          </details>`;
+      }
+    }
+
+    syncSelectAllCheckbox(panel);
+    syncContextBulkBar();
+    const active = panel.querySelector("tr.is-active[data-doc-id]");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  };
+
+  const applyContextBulkLabels = async () => {
+    const bulkInput = document.getElementById("al2ContextBulkLabelInput");
+    const label = (bulkInput?.value || "").trim();
+    const docIds = [...selectedDocIds];
+    if (!label || !docIds.length) return;
+    lastUsedLabel = label;
+    try {
+      const rec = await postBulkLabels(label, docIds);
+      syncLabels(rec?.current_labels || {});
+      docIds.forEach((id) => selectedDocIds.delete(id));
+      await refreshStatusAndRankings();
+      if (contextView === "similar") {
+        contextSimilarAnchorId = null;
+        await loadContextSimilar({ force: true });
+      }
+      if (rec?.doc_id) {
+        goToRecommended(rec.doc_id);
+      } else {
+        renderActiveLearningTwo();
+      }
+      scheduleContextPanelRender();
+      showSaveFeedback(`Labeled ${docIds.length} document(s).`);
+    } catch (err) {
+      alert(err.message || "Bulk label failed.");
+    }
+  };
+
+  const showSaveFeedback = (message) => {
+    const feedback = document.getElementById("al2SaveFeedback");
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.classList.add("is-visible");
+    if (saveFeedbackTimeout) clearTimeout(saveFeedbackTimeout);
+    saveFeedbackTimeout = setTimeout(() => {
+      feedback.classList.remove("is-visible");
+      feedback.textContent = "";
+    }, 1800);
+  };
+
+  const ensureCurrentInRange = () => {
+    const docs = getDocs();
+    if (!docs.length) {
+      activeLearningIndex = 0;
+      return;
+    }
+    if (activeLearningIndex > docs.length - 1) activeLearningIndex = docs.length - 1;
+  };
 
   const wordCount = (text) => text.trim().split(/\s+/).filter(Boolean).length;
   const readingTime = (text) => Math.max(1, Math.round(wordCount(text) / 220));
@@ -1043,16 +1877,12 @@
     if (!bar) return;
     const wc = wordCount(doc.text);
     const rt = readingTime(doc.text);
+    const isRec = recommendedDocId && doc.id === recommendedDocId;
     bar.innerHTML = `
-      <span class="al2-meta-pill is-primary">
-        ${escapeHtml(displayId(doc.id))}
-      </span>
-      <span class="al2-meta-pill">
-        ${wc.toLocaleString()} words
-      </span>
-      <span class="al2-meta-pill">
-        ~${rt} min
-      </span>
+      <span class="al2-meta-pill is-primary">${escapeHtml(displayId(doc.id))}</span>
+      <span class="al2-meta-pill">${wc.toLocaleString()} words</span>
+      <span class="al2-meta-pill">~${rt} min</span>
+      ${isRec ? '<span class="al2-meta-pill is-primary">Next to review</span>' : ""}
     `;
   };
 
@@ -1097,8 +1927,7 @@
     if (!toggle) return;
     const activeView = getActiveView(doc);
     toggle.querySelectorAll(".btn").forEach((btn) => {
-      if (btn.dataset.view === activeView) btn.classList.add("is-active");
-      else btn.classList.remove("is-active");
+      btn.classList.toggle("is-active", btn.dataset.view === activeView);
     });
   };
 
@@ -1106,95 +1935,55 @@
     const area = document.getElementById("al2ContentArea");
     if (!area) return;
     const view = getActiveView(doc);
-
     if (view === "summary") {
       area.classList.add("is-summary");
       area.innerHTML = `
-        <div class="al2-content-summary-tag">
-          Summary
-        </div>
-        <p class="mb-0">${escapeHtml(doc.summary)}</p>
-      `;
+        <div class="al2-content-summary-tag">Summary</div>
+        <p class="mb-0">${escapeHtml(ensureDocSummary(doc))}</p>`;
     } else {
       area.classList.remove("is-summary");
-      area.innerHTML = `<p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;">${escapeHtml(doc.text)}</p>`;
+      area.innerHTML = `<p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(doc.text)}</p>`;
     }
     area.scrollTop = 0;
   };
 
-  const renderTable = () => {
-    const tbody = document.getElementById("al2DocTableBody");
-    const countEl = document.getElementById("al2QueueCount");
-    if (!tbody) return;
-
-    const term = searchTerm.toLowerCase().trim();
-    const filtered = getDocs()
-      .map((doc, idx) => ({ doc, idx }))
-      .filter(({ doc }) => {
-        if (!term) return true;
-        return (
-          doc.id.toLowerCase().includes(term) ||
-          doc.text.toLowerCase().includes(term) ||
-          doc.label.toLowerCase().includes(term) ||
-          (doc.appliedLabel || "").toLowerCase().includes(term)
-        );
-      });
-
-    if (countEl) countEl.textContent = String(statusState.num_total || filtered.length);
-
-    if (filtered.length === 0) {
-      tbody.innerHTML = `
-        <tr><td colspan="4" class="al2-empty-state">
-          No documents match your search.
-          <div class="al2-empty-state-note">Try a different keyword.</div>
-        </td></tr>
-      `;
-      return;
-    }
-
+  const updateContextRowHighlight = () => {
+    const panel = document.getElementById("al2ContextPanel");
     const currentId = getCurrentDoc()?.id;
-    tbody.innerHTML = filtered
-      .map(({ doc, idx }) => {
-        const humanLabel = doc.appliedLabel || "Unlabeled";
-        const humanClass = doc.appliedLabel ? "al2-label-tag is-applied" : "al2-label-tag";
-        const isActive = currentId && doc.id === currentId;
-        const idShort = truncate(displayId(doc.id), 20);
-        const preview = truncate(doc.text, 72);
-        const modelLab = truncate(doc.label, 36);
-        const humanDisp = truncate(humanLabel, 36);
-        return `
-          <tr class="${isActive ? "is-active" : ""}" data-index="${idx}">
-            <td class="font-monospace small al2-truncate-cell" title="${escapeHtml(doc.id)}">${escapeHtml(idShort)}</td>
-            <td class="al2-text-cell" title="${escapeHtml(doc.text)}">${escapeHtml(preview)}</td>
-            <td class="al2-truncate-cell" title="${escapeHtml(doc.label)}"><span class="al2-label-tag">${escapeHtml(modelLab)}</span></td>
-            <td class="al2-truncate-cell" title="${escapeHtml(humanLabel)}"><span class="${humanClass}">${escapeHtml(humanDisp)}</span></td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    // Scroll the active row into view inside the table
-    const activeRow = tbody.querySelector("tr.is-active");
-    if (activeRow) activeRow.scrollIntoView({ block: "nearest" });
+    if (!panel || !currentId) return;
+    panel.querySelectorAll("tr[data-doc-id]").forEach((row) => {
+      const isCurrent = row.dataset.docId === currentId;
+      const isRec = recommendedDocId && row.dataset.docId === recommendedDocId;
+      row.classList.toggle("is-active", isCurrent);
+      row.classList.toggle("is-recommended", isRec);
+    });
+    const active = panel.querySelector("tr.is-active[data-doc-id]");
+    if (active) active.scrollIntoView({ block: "nearest" });
   };
 
-  const renderLabelChips = (doc) => {
+  const renderLabelChips = (doc, { loading = false } = {}) => {
     const labelsEl = document.getElementById("al2LabelSuggestions");
     if (!labelsEl) return;
-    labelsEl.innerHTML = getSuggestionSet(doc)
-      .map((label) => {
-        const selected = selectedSuggestion === label;
-        return `
-          <button type="button" class="al2-label-chip ${selected ? "is-selected" : ""}"
-            data-label="${escapeHtml(label)}">
-            ${escapeHtml(label)}
-          </button>
-        `;
-      })
-      .join("");
+    labelsEl.innerHTML = "";
+    if (!doc) return;
+    if (loading) {
+      const hint = document.createElement("span");
+      hint.className = "al2-chip-loading";
+      hint.textContent = "Loading suggestions…";
+      labelsEl.appendChild(hint);
+      return;
+    }
+    getSuggestionSet(doc).forEach((label) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `al2-label-chip${selectedSuggestion === label ? " is-selected" : ""}`;
+      btn.dataset.label = label;
+      btn.textContent = label;
+      labelsEl.appendChild(btn);
+    });
   };
 
-  const renderActiveLearningTwo = () => {
+  const renderActiveLearningTwo = ({ refreshContext = true } = {}) => {
     ensureCurrentInRange();
     const docs = getDocs();
     const doc = docs[activeLearningIndex];
@@ -1204,119 +1993,125 @@
     const applyBtn = document.getElementById("al2ApplyBtn");
 
     if (!doc || !counterEl || !prevBtn || !nextBtn) {
+      syncLabelControlsForDoc(null);
       renderModelLabelStrip(null);
+      if (refreshContext) scheduleContextPanelRender();
       return;
     }
 
-    selectedSuggestion = doc.appliedLabel;
-    const customLabelInput = document.getElementById("al2CustomLabelInput");
-    if (customLabelInput) customLabelInput.value = selectedSuggestion || "";
+    syncLabelControlsForDoc(doc);
 
     counterEl.textContent =
       `Document ${activeLearningIndex + 1} of ${Math.max(docs.length, Number(statusState.num_total || 0))} · ${displayId(doc.id)}`;
     prevBtn.disabled = activeLearningIndex === 0 && navHistory.length === 0;
-    nextBtn.disabled = activeLearningIndex === docs.length - 1;
-    if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+    nextBtn.disabled = activeLearningIndex >= docs.length - 1;
 
     renderMetaPills(doc);
     renderViewToggle(doc);
     renderContent(doc);
     renderModelLabelStrip(doc);
     renderAppliedLabel(doc);
-    renderLabelChips(doc);
-    renderTable();
+    if (refreshContext) scheduleContextPanelRender();
+    else updateContextRowHighlight();
     renderProgress();
-  };
-
-  const goTo = (newIndex) => {
-    if (newIndex < 0 || newIndex >= getDocs().length) return;
-    activeLearningIndex = newIndex;
-    renderActiveLearningTwo();
-  };
-
-  const goBack = () => {
-    if (navHistory.length > 0) {
-      const target = navHistory.pop();
-      const ix = docOrder.indexOf(target);
-      if (ix >= 0) {
-        activeLearningIndex = ix;
-        renderActiveLearningTwo();
-        return;
-      }
-    }
-    goTo(activeLearningIndex - 1);
   };
 
   const applyAndContinue = async () => {
     const input = document.getElementById("al2CustomLabelInput");
-    const labelToApply = input ? input.value.trim() : "";
+    const labelToApply = (input?.value || selectedSuggestion || "").trim();
     if (!labelToApply) return;
     const doc = getCurrentDoc();
     if (!doc?.id || !modelId) return;
     const submittedDocId = doc.id;
+    lastUsedLabel = labelToApply;
+    refreshHumanLabelDatalist();
     try {
       const rec = await jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model_id: modelId,
-          doc_id: doc.id,
-          label: labelToApply,
-        }),
+        body: JSON.stringify({ model_id: modelId, doc_id: doc.id, label: labelToApply }),
       });
       syncLabels(rec.current_labels || {});
+      doc.appliedLabel = labelToApply;
+      doc.reviewed = true;
+      selectedDocIds.delete(submittedDocId);
       navHistory.push(submittedDocId);
-      await loadStatus();
-      await loadHumanLabels();
+      await refreshStatusAndRankings();
+      scheduleContextPanelRender();
       if (rec.doc_id) {
-        const existing = docsById.get(rec.doc_id);
-        if (existing) {
-          Object.assign(existing, {
-            text: rec.text || existing.text,
-            summary: buildSummary(rec.text || existing.text),
-            appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? existing.appliedLabel,
-            reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
-          });
-        } else {
-          upsertDoc({
-            id: rec.doc_id,
-            text: rec.text || "",
-            summary: buildSummary(rec.text || ""),
-            label: "—",
-            suggestions: getSuggestionSet({}),
-            appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? null,
-            reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
-            viewPreference: "text",
-          });
-        }
-        activeLearningIndex = Math.max(0, docOrder.indexOf(rec.doc_id));
-        showSaveFeedback(`Saved ${displayId(submittedDocId)}. Moved to ${displayId(rec.doc_id)}.`);
+        goToRecommended(rec.doc_id);
+        showSaveFeedback(`Saved ${displayId(submittedDocId)}. Next: ${displayId(rec.doc_id)}.`);
       } else {
-        showSaveFeedback(`Saved ${displayId(submittedDocId)}. No more documents remaining.`);
+        showSaveFeedback(`Saved ${displayId(submittedDocId)}. All documents labeled.`);
+        renderActiveLearningTwo();
+        scheduleContextPanelRender();
       }
-      renderActiveLearningTwo();
     } catch (err) {
       alert(err.message || "Failed to save label.");
     }
   };
 
+  const focusInitialDocument = () => {
+    if (initialDocId && docOrder.includes(initialDocId)) {
+      activeLearningIndex = docOrder.indexOf(initialDocId);
+    } else if (recommendedDocId && docOrder.includes(recommendedDocId)) {
+      activeLearningIndex = docOrder.indexOf(recommendedDocId);
+    } else {
+      activeLearningIndex = 0;
+    }
+    ensureCurrentInRange();
+    pageReady = true;
+    renderActiveLearningTwo();
+    onDocFocusChange();
+  };
+
+  const initPage = async () => {
+    setReviewLoading(true);
+    const content = document.getElementById("al2ContentArea");
+    if (content) {
+      content.innerHTML = "<p class=\"mb-0 text-muted\">Loading…</p>";
+    }
+    try {
+      const [, , rec] = await Promise.all([
+        loadStatus(),
+        loadBootstrap(),
+        fetchRecommendation(),
+      ]);
+      applyRecommendation(rec);
+      await fetchRankings({ skipRecommend: true });
+      focusInitialDocument();
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
   document.addEventListener("DOMContentLoaded", () => {
+    const dashLink = document.getElementById("al2DashboardLink");
+    if (dashLink) {
+      const mid = modelId || new URLSearchParams(window.location.search).get("model_id") || "";
+      dashLink.href = mid ? `/dashboard?model_id=${encodeURIComponent(mid)}` : "/dashboard";
+    }
+
     const prevBtn = document.getElementById("al2PrevBtn");
     const nextBtn = document.getElementById("al2NextBtn");
     const applyBtn = document.getElementById("al2ApplyBtn");
     const labelsEl = document.getElementById("al2LabelSuggestions");
-    const tableBody = document.getElementById("al2DocTableBody");
+    const contextPanel = document.getElementById("al2ContextPanel");
     const searchInput = document.getElementById("al2SearchInput");
     const viewToggle = document.getElementById("al2ViewToggle");
     const customLabelInput = document.getElementById("al2CustomLabelInput");
+    const contextViewToggle = document.getElementById("al2ContextViewToggle");
+    const contextBulkApplyBtn = document.getElementById("al2ContextBulkApplyBtn");
+    const contextBulkInput = document.getElementById("al2ContextBulkLabelInput");
 
-    if (prevBtn) prevBtn.addEventListener("click", () => { goBack(); });
-    if (nextBtn) nextBtn.addEventListener("click", () => { goTo(activeLearningIndex + 1); });
-    if (applyBtn) applyBtn.addEventListener("click", () => { applyAndContinue(); });
+    if (prevBtn) prevBtn.addEventListener("click", goBack);
+    if (nextBtn) nextBtn.addEventListener("click", () => goTo(activeLearningIndex + 1));
+    if (applyBtn) applyBtn.addEventListener("click", applyAndContinue);
+
     if (customLabelInput) {
       customLabelInput.addEventListener("input", (e) => {
         selectedSuggestion = e.target.value.trim() || null;
-        if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+        updateApplyButton();
         const current = getCurrentDoc();
         if (current) renderLabelChips(current);
       });
@@ -1328,7 +2123,6 @@
       });
     }
 
-    // View toggle: explicit user choice persists per doc
     if (viewToggle) {
       viewToggle.addEventListener("click", (e) => {
         const btn = e.target.closest(".btn[data-view]");
@@ -1341,40 +2135,84 @@
       });
     }
 
-    // Toggle label chip selection
     if (labelsEl) {
       labelsEl.addEventListener("click", (e) => {
         const chip = e.target.closest(".al2-label-chip");
         if (!chip) return;
-        const label = chip.dataset.label;
-        selectedSuggestion = label;
-        if (customLabelInput) customLabelInput.value = label;
+        selectedSuggestion = chip.dataset.label || "";
+        setLabelInputValue(selectedSuggestion, { force: true });
         const doc = getCurrentDoc();
-        if (!doc) return;
-        renderLabelChips(doc);
-        if (applyBtn) applyBtn.disabled = !selectedSuggestion;
+        if (doc) renderLabelChips(doc);
+        updateApplyButton();
       });
     }
 
-    // Click row to jump to that doc
-    if (tableBody) {
-      tableBody.addEventListener("click", (e) => {
-        const row = e.target.closest("tr[data-index]");
+    refreshHumanLabelDatalist();
+
+    if (contextPanel) {
+      contextPanel.addEventListener("click", (e) => {
+        if (e.target.closest(".al2-col-select")) return;
+        const row = e.target.closest("tr[data-doc-id]");
         if (!row) return;
-        const idx = Number(row.dataset.index);
-        if (Number.isFinite(idx)) goTo(idx);
+        goToDocId(row.dataset.docId, { pushHistory: true });
+      });
+      contextPanel.addEventListener("change", (e) => {
+        const selectAll = e.target.closest(".al2-select-all");
+        if (selectAll) {
+          const panel = document.getElementById("al2ContextPanel");
+          panel?.querySelectorAll(".al2-row-select:not(:disabled)").forEach((cb) => {
+            setDocSelected(cb.dataset.docId, selectAll.checked);
+            cb.checked = selectAll.checked;
+          });
+          syncSelectAllCheckbox(panel);
+          return;
+        }
+        const rowCb = e.target.closest(".al2-row-select");
+        if (!rowCb) return;
+        setDocSelected(rowCb.dataset.docId, rowCb.checked);
+        syncSelectAllCheckbox(document.getElementById("al2ContextPanel"));
       });
     }
 
-    // Search filter
+    if (contextViewToggle) {
+      contextViewToggle.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-context-view]");
+        if (!btn) return;
+        contextView = btn.dataset.contextView;
+        contextViewToggle.querySelectorAll("button").forEach((b) => {
+          b.classList.toggle("is-active", b === btn);
+        });
+        if (contextView === "similar") {
+          contextSimilarAnchorId = null;
+          await loadContextSimilar({ force: true });
+        }
+        scheduleContextPanelRender();
+      });
+    }
+
     if (searchInput) {
+      let searchDebounce = null;
       searchInput.addEventListener("input", (e) => {
         searchTerm = e.target.value;
-        renderTable();
+        if (searchDebounce) clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          scheduleContextPanelRender();
+        }, 200);
       });
     }
 
-    // Keyboard shortcuts
+
+    if (contextBulkApplyBtn) contextBulkApplyBtn.addEventListener("click", applyContextBulkLabels);
+    if (contextBulkInput) {
+      contextBulkInput.addEventListener("input", syncContextBulkBar);
+      contextBulkInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !contextBulkApplyBtn?.disabled) {
+          e.preventDefault();
+          applyContextBulkLabels();
+        }
+      });
+    }
+
     document.addEventListener("keydown", (e) => {
       const tag = e.target.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -1398,17 +2236,15 @@
       return;
     }
 
-    loadStatus()
-      .then(() => loadBootstrap())
-      .then(() => loadRecommendation())
-      .then(() => renderActiveLearningTwo())
-      .catch((err) => {
-        const content = document.getElementById("al2ContentArea");
-        if (content) {
-          content.innerHTML = `<p class="mb-0">${escapeHtml(err.message || "Failed to load active-learning data.")}</p>`;
-        }
-      });
+    initPage().catch((err) => {
+      setReviewLoading(false);
+      const content = document.getElementById("al2ContentArea");
+      if (content) {
+        content.innerHTML = `<p class="mb-0">${escapeHtml(err.message || "Failed to load active-learning data.")}</p>`;
+      }
+    });
   });
 })();
+
 </script>
 {% endblock %}
