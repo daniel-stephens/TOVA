@@ -49,6 +49,13 @@ TOVA is a topic modeling platform with a plug-in architecture, supporting traini
 - **Extensibility**
   - Plug-in architecture to add new topic model classes
 
+- **Uncertainty Quantification**
+  - Estimates topic probability (likelihood of each topic per document)
+  - Available as "Score" in the document table UI (proportion of majority topic)
+  - For traditional models (LDA, CTM): probabilities come directly from the model
+  - For LLM-based models: probabilities are approximated post-hoc
+  - Accessible in both UI and Python package
+
 ### Supported models
 
 | Model | Type | Library |
