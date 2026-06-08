@@ -33,6 +33,7 @@ services:
     volumes:
       - ./data:/data
       - ./static/config:/app/static/config
+      - hf_cache:/root/.cache/huggingface
     networks:
       - tova-net
     deploy:
@@ -169,3 +170,4 @@ services:
 volumes:
   data:
   postgres_data: # New volume for persistent Postgres data
+  hf_cache:      # Persistent HuggingFace model cache — avoids re-downloading on container rebuild
