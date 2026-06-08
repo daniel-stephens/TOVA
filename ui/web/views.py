@@ -642,6 +642,28 @@ def llm_ui_config(request):
 
 
 @login_required
+def llm_models(request):
+    backend = request.GET.get("backend", "").strip()
+    if not backend:
+        return JsonResponse({"error": "backend is required"}, status=400)
+
+    params = {"backend": backend}
+    host = request.GET.get("host", "").strip()
+    api_key = request.GET.get("api_key", "").strip()
+    if host:
+        params["host"] = host
+    if api_key:
+        params["api_key"] = api_key
+
+    try:
+        r = requests.get(f"{R.API}/llm/models", params=params, timeout=15)
+        return JsonResponse(r.json(), status=r.status_code)
+    except Exception as e:
+        logger.warning("llm_models proxy failed: %s", e)
+        return JsonResponse({"error": str(e)}, status=502)
+
+
+@login_required
 def get_llm_config(request):
     user_id = _request_user_id(request)
     if not user_id:
@@ -662,7 +684,7 @@ def save_llm_config(request):
     user_id = _request_user_id(request)
     if not user_id:
         return JsonResponse({"success": False, "message": "User not authenticated."}, status=401)
-    
+
     data = _get_json(request) or {}
 
     provider = data.get("provider")
@@ -673,26 +695,48 @@ def save_llm_config(request):
     if not provider:
         return JsonResponse({"success": False, "message": "Provider is required."}, status=400)
 
+    # Validate model against available models for the provider
+    if model:
+        try:
+            from tova.prompter.prompter import Prompter
+            _provider_norm = provider.strip().lower()
+            if _provider_norm in ("openai", "gpt"):
+                _key = api_key or _get_openai_key_from_env() or os.environ.get("OPENAI_API_KEY", "")
+                available = Prompter.fetch_available_models(backend="openai", api_key=_key or None)
+            elif _provider_norm == "ollama":
+                available = Prompter.fetch_available_models(backend="ollama", ollama_host=host or None)
+            elif _provider_norm in ("vllm", "llama_cpp"):
+                available = Prompter.fetch_available_models(backend=_provider_norm, base_url=host or None)
+            else:
+                available = None
+            if available is not None and model not in available:
+                return JsonResponse(
+                    {"success": False, "message": f"Model '{model}' is not available for provider '{provider}'. Available models: {available}"},
+                    status=400,
+                )
+        except Exception as e:
+            logger.warning("Could not validate model '%s' for provider '%s': %s", model, provider, e)
+
     # Build LLM config object
     llm_cfg = {
         "provider": provider,
         "model": model,
         "host": host,
     }
-    
+
     # Store API key if provided (for secure server-side use)
     if api_key:
         llm_cfg["api_key"] = api_key
 
     # Load existing user config
     existing_config = _load_user_config(user_id) or {}
-    
+
     # Update LLM config in user config
     existing_config["llm_config"] = llm_cfg
-    
+
     # Save to database
     _save_user_config_overrides(user_id, existing_config)
-    
+
     logger.debug("Saved LLM config to database for user: %s", user_id)
 
     return JsonResponse({"success": True})
@@ -1145,7 +1189,7 @@ def train_tfidf_corpus(request, corpus_id):
         return JsonResponse({"error": f"Upstream error fetching corpus: {e}"}, status=502)
 
     documents = [
-        {"id": str(d.get("id")), "raw_text": str(d.get("text", ""))}
+        {"id": str(d.get("id")), "text": str(d.get("text", ""))}
         for d in (corpus.get("documents") or [])
     ]
     if not documents:
@@ -1297,7 +1341,10 @@ def training_start(request):
         if llm_model and "llm_model_type" not in final_training_params:
             final_training_params["llm_model_type"] = llm_model
         if host and "llm_server" not in final_training_params:
-            final_training_params["llm_server"] = host
+            _src = (llm_config.get("provider") or "").lower()
+            _dst = (final_training_params.get("llm_provider") or "").lower()
+            if not _dst or _src == _dst:
+                final_training_params["llm_server"] = host
         if api_key and "llm_api_key" not in final_training_params:
             final_training_params["llm_api_key"] = api_key
 
@@ -1314,7 +1361,10 @@ def training_start(request):
             if "llm_model_type" not in final_training_params and tm_general.get("llm_model_type"):
                 final_training_params["llm_model_type"] = tm_general["llm_model_type"]
             if "llm_server" not in final_training_params and tm_general.get("llm_server"):
-                final_training_params["llm_server"] = tm_general["llm_server"]
+                _src = (tm_general.get("llm_provider") or "").lower()
+                _dst = (final_training_params.get("llm_provider") or "").lower()
+                if not _dst or _src == _dst:
+                    final_training_params["llm_server"] = tm_general["llm_server"]
 
     # When user chose Ollama but host missing, default from saved config or config file
     if (final_training_params.get("llm_provider") or "").lower() == "ollama":
@@ -2462,7 +2512,7 @@ def active_learning_two_bootstrap(request):
         did = str(d.get("id", ""))
         if not did:
             continue
-        text = d.get("text", d.get("raw_text", ""))
+        text = d.get("text", "")
         documents.append({"id": did, "text": str(text) if text is not None else ""})
         theta_row = doc_thetas.get(did)
         if theta_row is None:

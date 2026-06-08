@@ -1,0 +1,10 @@
+# GPU override — included automatically by the Makefile when nvidia-smi detects a device.
+# Do not use directly; run 'make up' or 'make smart-up' instead.
+services:
+  api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

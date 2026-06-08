@@ -69,10 +69,10 @@ class TradTMmodel(BaseTMModel, ABC):
     def set_training_data(self, data: List[Dict]):
         """
         Set training data from a normalized list of dicts.
-        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        Assumes each dict has: 'id', 'text', and optionally 'embeddings'.
         """
 
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -81,7 +81,7 @@ class TradTMmodel(BaseTMModel, ABC):
         if self._preprocessor:
             self._logger.info("Preprocessing training data.")
             df_processed = self._preprocessor.fit_transform(
-                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings)
+                df, text_col="text", id_col="id", compute_embeddings=self.do_embeddings)
             self._df = df_processed
             self._logger.info("Training data preprocessing completed.")
         else:
@@ -102,10 +102,10 @@ class TradTMmodel(BaseTMModel, ABC):
     def prepare_infer_data(self, data: List[Dict]):
         """
         Prepare inference data from a normalized list of dicts.
-        Assumes each dict has: 'id', 'raw_text', and optionally 'embeddings'.
+        Assumes each dict has: 'id', 'text', and optionally 'embeddings'.
         """
 
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -114,13 +114,13 @@ class TradTMmodel(BaseTMModel, ABC):
         if self._preprocessor:
             self._logger.info("Preprocessing inference data.")
             df_processed = self._preprocessor.fit_transform(
-                df, text_col="raw_text", id_col="id", compute_embeddings=self.do_embeddings
+                df, text_col="text", id_col="id", compute_embeddings=self.do_embeddings
             )
             infer_data = [row["lemmas"] for _, row in df_processed.iterrows()]
             df_infer = df_processed
             self._logger.info("Inference data preprocessing completed.")
         else:
-            infer_data = [row["raw_text"].split() for row in data]
+            infer_data = [row["text"].split() for row in data]
             df_infer = df
         embeddings_infer = None
         if "embeddings" in df_infer.columns:
@@ -167,6 +167,23 @@ class TradTMmodel(BaseTMModel, ABC):
         pr = ProgressReporter(callback=progress_callback, logger=self._logger)
         pr.report(0, "Starting training")
 
+        # Pre-training LLM validation (only when labelling or summarization is requested)
+        from tova.topic_models.models.base_model import validate_llm_config
+        _pre_warnings: List[str] = []
+        if self.do_labeller or self.do_summarizer:
+            ok, msg = validate_llm_config(
+                llm_model_type=getattr(self, "llm_model_type", None),
+                llm_provider=getattr(self, "llm_provider", None),
+                llm_server=getattr(self, "llm_server", None),
+                llm_api_key=getattr(self, "llm_api_key", None),
+                logger=self._logger,
+            )
+            if not ok:
+                self._logger.warning(msg)
+                _pre_warnings.append(msg)
+                self.do_labeller = False
+                self.do_summarizer = False
+
         # 1. PREPROCESSING (0-20%)
         check_cancel(cancel, self._logger)
         prs = pr.report_subrange(0.0, 0.2)
@@ -203,7 +220,8 @@ class TradTMmodel(BaseTMModel, ABC):
         self.save_model()
         prs.report(1.0, "Topic model saved")
 
-        return time.time() - t_start
+        warnings = _pre_warnings + getattr(self.tm_model, "_training_warnings", [])
+        return time.time() - t_start, warnings
 
     def infer(
         self,

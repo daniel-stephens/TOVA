@@ -231,7 +231,7 @@ class TMPreprocessor:
     def fit_transform(
         self,
         df: pd.DataFrame,
-        text_col: str = "raw_text",
+        text_col: str = "text",
         id_col: str = "id",
         *,
         compute_bow: bool = True,
@@ -249,9 +249,9 @@ class TMPreprocessor:
             out["id"] = df[id_col].values
         else:
             out["id"] = range(len(df))
-        out["raw_text"] = df[text_col].fillna("").astype(str)
+        out["text"] = df[text_col].fillna("").astype(str)
 
-        out["lemmas"] = [self._lemmatize(t) for t in out["raw_text"].tolist()]
+        out["lemmas"] = [self._lemmatize(t) for t in out["text"].tolist()]
 
         # BoW
         if compute_bow:
@@ -277,7 +277,7 @@ class TMPreprocessor:
         if compute_embeddings:
             if self._st is None:
                 raise RuntimeError("Embeddings model not initialized.")
-            texts = [" ".join(toks) for toks in out["raw_text"]]
+            texts = [" ".join(toks) for toks in out["text"]]
             embs = self._st.encode(
                 texts, show_progress_bar=False,
                 normalize_embeddings=True, convert_to_numpy=True

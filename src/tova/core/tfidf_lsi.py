@@ -19,7 +19,7 @@ class InvalidCorpusError(ValueError): ...
 def _load_corpus_documents(corpus_dir: Path) -> List[Dict[str, Any]]:
     """
     Reads <corpus_dir>/data.json and returns normalized documents:
-    [{ id: str, raw_text: str }, ...]
+    [{ id: str, text: str }, ...]
     """
     corpus_file = corpus_dir / "data.json"
     if not corpus_file.exists():
@@ -36,10 +36,10 @@ def _load_corpus_documents(corpus_dir: Path) -> List[Dict[str, Any]]:
 
     out: List[Dict[str, Any]] = []
     for d in docs:
-        raw = d.get("text") if d.get("text") is not None else d.get("raw_text")
+        raw = d.get("text")
         if raw is None:
             continue
-        out.append({"id": str(d.get("id")), "raw_text": str(raw)})
+        out.append({"id": str(d.get("id")), "text": str(raw)})
     if not out:
         raise InvalidCorpusError("No valid documents with text found.")
     return out
@@ -219,9 +219,9 @@ def analyze_corpus_draft_folder(
             # keep safe fallbacks
             pass
 
-    # Load documents (id, raw_text)
+    # Load documents (id, text)
     #documents = _load_corpus_documents(corpus_dir)
-    texts = [d["raw_text"] for d in documents]
+    texts = [d["text"] for d in documents]
     n_docs = len(documents)
 
     # pipeline
@@ -238,7 +238,7 @@ def analyze_corpus_draft_folder(
     doc_outputs: List[Dict[str, Any]] = []
     for i, doc in enumerate(documents):
         start_word = _start_word_for_doc(
-            doc_text=doc["raw_text"],
+            doc_text=doc["text"],
             vec=vec,
             tfidf_row=tfidf[i],           # 1 x V sparse row
             rel_threshold=0.33,           # tune to taste
@@ -247,7 +247,7 @@ def analyze_corpus_draft_folder(
 
         doc_outputs.append({
             "id": doc["id"],
-            "text": doc["raw_text"].capitalize(),
+            "text": doc["text"].capitalize(),
             "cluster": int(labels[i]),
             "score": float(scores[i]),
             "pca": [float(x) for x in coords[i]],

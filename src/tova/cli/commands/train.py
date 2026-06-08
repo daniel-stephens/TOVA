@@ -53,7 +53,7 @@ def run(
             raise typer.BadParameter(
                 f"Unable to parse --tr-params as JSON: {exc.msg}") from exc
 
-    duration = train_model_dispatch(
+    duration, warnings = train_model_dispatch(
         model=model,
         data=normalized_data,
         output=output,
@@ -62,5 +62,7 @@ def run(
         tr_params=parsed_tr_params,
         logger=logger
     )
-    
+
     typer.echo(f"Training completed in {duration:.2f} seconds")
+    for w in warnings or []:
+        typer.echo(f"Warning: {w}", err=True)

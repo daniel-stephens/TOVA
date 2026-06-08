@@ -41,9 +41,9 @@ class LLMTModel(BaseTMModel, ABC):
     def set_training_data(self, data):
         """
         Set training data from a normalized list of dicts.
-         Each dict must contain at least 'id' and 'raw_text' keys.
+         Each dict must contain at least 'id' and 'text' keys.
          """
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -54,9 +54,9 @@ class LLMTModel(BaseTMModel, ABC):
     def prepare_infer_data(self, data):
         """
         Prepare inference data from a normalized list of dicts.
-         Each dict must contain at least 'id' and 'raw_text' keys.
+         Each dict must contain at least 'id' and 'text' keys.
          """
-        required_keys = {"id", "raw_text"}
+        required_keys = {"id", "text"}
         for row in data:
             if not required_keys.issubset(row):
                 raise ValueError(f"Missing required keys in data row: {row}")
@@ -75,6 +75,18 @@ class LLMTModel(BaseTMModel, ABC):
         t_start = time.time()
         pr = ProgressReporter(callback=progress_callback, logger=self._logger)
         pr.report(0, "Starting training")
+
+        # Pre-training LLM validation (required since the whole model depends on the LLM)
+        from tova.topic_models.models.base_model import validate_llm_config
+        ok, msg = validate_llm_config(
+            llm_model_type=getattr(self, "llm_model_type", None),
+            llm_provider=getattr(self, "llm_provider", None),
+            llm_server=getattr(self, "llm_server", None),
+            llm_api_key=getattr(self, "llm_api_key", None),
+            logger=self._logger,
+        )
+        if not ok:
+            raise ValueError(msg)
 
         # 1. PREPROCESSING (0-20%)
         check_cancel(cancel, self._logger)
@@ -112,7 +124,8 @@ class LLMTModel(BaseTMModel, ABC):
         self.save_model()
         prs.report(1.0, "Topic model saved")
 
-        return time.time() - t_start
+        warnings = getattr(self.tm_model, "_training_warnings", [])
+        return time.time() - t_start, warnings
 
     def infer(
         self,

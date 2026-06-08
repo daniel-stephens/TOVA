@@ -600,8 +600,12 @@
         ? (String(j.status || "").toLowerCase().includes("fail") || String(j.status || "").toLowerCase() === "error" ? "text-bg-danger" : "text-bg-success")
         : "text-bg-primary";
       const jobLabel = j.model_name || j.model_id || j.job_id || "Training job";
+      const isFailed = String(j.status || "").toLowerCase().includes("fail") || String(j.status || "").toLowerCase() === "error";
       const progressLink = !done && j?.job_id && j?.corpus_id
         ? `<a class="training-job-item__link" href="${escapeHtml(trainingProgressUrl(j))}">View progress</a>`
+        : "";
+      const errorSnippet = isFailed && j.error
+        ? `<div class="training-job-item__error text-danger small mt-1" title="${escapeHtml(j.error)}">${escapeHtml(j.error.slice(0, 120))}${j.error.length > 120 ? "…" : ""}</div>`
         : "";
       return `
         <article class="training-job-item">
@@ -610,6 +614,7 @@
             <span class="badge ${badgeClass}">${escapeHtml(st)}</span>
             ${progressLink}
           </div>
+          ${errorSnippet}
         </article>
       `;
     }).join("");
@@ -634,6 +639,21 @@
         if (d.error) {
           next.status = "error";
           next.error = String(d.error);
+        }
+        // Notify the user when a job transitions to a terminal state
+        const wasActive = !isDoneStatus(job.status);
+        if (wasActive && isDoneStatus(next.status)) {
+          const label = job.model_name || job.model_id || "Training job";
+          if (next.status === "error" || next.status === "failed") {
+            const errMsg = next.error ? `${label} failed: ${next.error}` : `${label} failed.`;
+            if (typeof window.showGlobalToast === "function") {
+              window.showGlobalToast(errMsg, "danger", 0);
+            }
+          } else if (next.status === "completed" || next.status === "succeeded") {
+            if (typeof window.showGlobalToast === "function") {
+              window.showGlobalToast(`${label} completed successfully.`, "success", 6000);
+            }
+          }
         }
         return next;
       } catch {

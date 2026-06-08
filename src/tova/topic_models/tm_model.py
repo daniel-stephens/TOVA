@@ -79,6 +79,7 @@ class TMmodel(object):
         llm_model_type: str = "qwen:32b",
         llm_server: Optional[str] = None,
         llm_provider: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
         labeller_prompt: str = "src/prompter/prompts/labelling_dft.txt",
         summarizer_prompt: str = "src/prompter/prompts/summarization_dft.txt",
         logger: logging.Logger = None,
@@ -124,8 +125,10 @@ class TMmodel(object):
         self.llm_model_type = llm_model_type
         self.llm_server = llm_server
         self.llm_provider = llm_provider
+        self.llm_api_key = llm_api_key
         self._labeller_prompt = labeller_prompt
         self._summarizer_prompt = summarizer_prompt
+        self._training_warnings: List[str] = []
 
         self._logger.info(
             '-- -- -- Topic model object (TMmodel) successfully created')
@@ -282,6 +285,13 @@ class TMmodel(object):
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             import pyLDAvis  # type: ignore
 
+        # pyLDAvis requires at least 2 topics and a valid term matrix
+        if self._ntopics < 2:
+            msg = f"The model has only {self._ntopics} topic(s); pyLDAvis visualization could not be generated."
+            self._logger.warning(msg)
+            self._training_warnings.append(msg)
+            return
+
         # We will compute the visualization using ndocs random documents
         # In case the model has gone through topic deletion, we may have rows
         # in the thetas matrix that sum up to zero (active topics have been
@@ -320,7 +330,9 @@ class TMmodel(object):
                 for item in self._coords:
                     fout.write(str(item) + "\n")
         except Exception as e:
-            print(f"Error in pyLDAvis: {e}")
+            msg = f"pyLDAvis visualization could not be generated: {e}"
+            self._logger.warning(msg)
+            self._training_warnings.append(msg)
         return
 
     def _save_cohr(self):
@@ -546,7 +558,7 @@ class TMmodel(object):
             [tpc.split(', ') for tpc in self._tpc_descriptions]
 
         if reference_text is None:
-            corpus = [el.split() for el in self._df_corpus_train["raw_text"].values.tolist()]
+            corpus = [el.split() for el in self._df_corpus_train["text"].values.tolist()]
         else:
             # Texts should be given as a list of lists of strings
             corpus = reference_text
@@ -607,8 +619,13 @@ class TMmodel(object):
                 
     def _load_topic_coherence(self):
         if self._topic_coherence is None:
-            self._topic_coherence = np.load(
-                self._TMfolder.joinpath('topic_coherence.npy'))
+            coherence_path = self._TMfolder.joinpath('topic_coherence.npy')
+            if not coherence_path.is_file():
+                self._logger.warning("topic_coherence.npy not found; coherence will be zeros.")
+                n = self._ntopics if self._ntopics else 0
+                self._topic_coherence = np.zeros(n)
+                return
+            self._topic_coherence = np.load(coherence_path)
 
     def _largest_indices(self, ary, n):
         """Returns the n largest indices from a numpy array."""
@@ -745,7 +762,7 @@ class TMmodel(object):
         if get_text:
             for topic_id, topic_docs in enumerate(top_docs_per_topic):
                 reps = [
-                    (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].raw_text, aux[doc, topic_id])
+                    (self._df_corpus_train.iloc[doc].id, self._df_corpus_train.iloc[doc].text, aux[doc, topic_id])
                     for doc in topic_docs
                 ]
                 most_representative_docs.append(reps)
@@ -778,7 +795,7 @@ class TMmodel(object):
         -------
         clusters : List[List[Tuple[str, str, float]]]
             A list with one sublist per topic. Each sublist contains tuples of:
-            (doc_id, raw_text (optional), topic_probability)
+            (doc_id, text (optional), topic_probability)
         """
         if self._thetas is None:
             self._logger.warning("Thetas not loaded. Run `_load_thetas()` first.")
@@ -801,10 +818,10 @@ class TMmodel(object):
         for doc_idx, topic_probs in enumerate(thetas):
             top_topic = topic_probs.argmax()
             doc_id = df_corpus.iloc[doc_idx].id
-            raw_text = df_corpus.iloc[doc_idx].raw_text if get_text else ""
+            text = df_corpus.iloc[doc_idx].text if get_text else ""
             prob = topic_probs[top_topic]
 
-            clusters[top_topic].append((doc_id, raw_text, prob))
+            clusters[top_topic].append((doc_id, text, prob))
 
         #self._logger.info("Documents assigned to topic clusters based on max probability:")
         #for i, topic_docs in enumerate(clusters):
@@ -852,7 +869,7 @@ class TMmodel(object):
                     
                     enriched_docs = []
                     for doc_id, _, prob in docs:
-                        # 1. Base del documento
+                        doc_id = doc_id.item() if hasattr(doc_id, "item") else doc_id
                         doc_obj = {
                             "doc_id": doc_id,
                             "prob": float(prob)
@@ -862,10 +879,10 @@ class TMmodel(object):
                         if self._tpc_add_info:
 
                             meta_data = doc_meta_map.get(doc_id, {})
-                            
+
                             for key in sorted_extra_keys:
                                 val = meta_data.get(key, "")
-                                doc_obj[key] = val
+                                doc_obj[key] = val.item() if hasattr(val, "item") else val
 
                         enriched_docs.append(doc_obj)
 
@@ -955,11 +972,16 @@ class TMmodel(object):
         with open(prompt_path, "r") as file:
             template_str = file.read()
 
+        self._logger.info(
+            f"Effective LLM provider used: {self.llm_provider}, "
+            f"model: {self.llm_model_type}, server: {self.llm_server}"
+        )
         prompter = Prompter(
             config_path=self._config_path,
             model_type=self.llm_model_type,
             llm_server=self.llm_server,
             llm_provider=self.llm_provider,
+            api_key=self.llm_api_key,
             max_tokens=max_tokens
         )
 
@@ -996,7 +1018,17 @@ class TMmodel(object):
                 
     def load_tpc_coords(self):
         if self._coords is None:
-            with self._TMfolder.joinpath('tpc_coords.txt').open('r', encoding='utf8') as fin:
+            coords_path = self._TMfolder.joinpath('tpc_coords.txt')
+            if not coords_path.is_file():
+                self._logger.warning("tpc_coords.txt not found; using placeholder coordinates (pyLDAvis may have failed during training).")
+                n = self._ntopics if self._ntopics else 0
+                if n <= 1:
+                    self._coords = [(0.0, 0.0)] * n
+                else:
+                    rng = np.random.default_rng(seed=42)
+                    self._coords = [tuple(xy) for xy in rng.uniform(-1.0, 1.0, size=(n, 2))]
+                return
+            with coords_path.open('r', encoding='utf8') as fin:
                 # read the data from the file and convert it back to a list of tuples
                 self._coords = \
                     [tuple(map(float, line.strip()[1:-1].split(', ')))

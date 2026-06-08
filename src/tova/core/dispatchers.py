@@ -76,7 +76,8 @@ def train_model_dispatch(
         **tr_params
     )
 
-    return tm_model.train_model(data, progress_callback=progress_callback, cancel=cancel)
+    duration, warnings = tm_model.train_model(data, progress_callback=progress_callback, cancel=cancel)
+    return duration, warnings
 
 
 def infer_model_dispatch(

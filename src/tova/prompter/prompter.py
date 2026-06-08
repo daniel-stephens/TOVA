@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import pathlib
+import re
 
 from typing import List, Union
 
@@ -21,12 +22,14 @@ memory = Memory(location='cache', verbose=0)
 def hash_input(*args):
     return hashlib.md5(str(args).encode()).hexdigest()
 
+
 class Prompter:
     def __init__(
         self,
         model_type: str,
         llm_server: str = None,
         llm_provider: str = None,
+        api_key: str = None,
         logger: logging.Logger = None,
         config_path: pathlib.Path = pathlib.Path("config/config.yaml"),
         temperature: float = None,
@@ -36,29 +39,24 @@ class Prompter:
         self._logger = logger if logger else init_logger(config_path, __name__)
         self.config = load_yaml_config_file(config_path, "llm", logger)
 
-        self.GPT_MODELS = self.config.get(
-            "gpt", {}).get("available_models", {})
-        self.OLLAMA_MODELS = self.config.get(
-            "ollama", {}).get("available_models", {})
-
         self.model_type = model_type
         self.context = None
         self.params = self.config.get("parameters", {})
+        self._api_key = api_key
 
-        # Determine backend based on llm_provider
+        # Determine backend; recognize gpt-like models by default
         if llm_provider is not None:
             self.backend = llm_provider
-            self._logger.info(f"Using provider override: {llm_provider}")
-        elif model_type in self.GPT_MODELS:
+            self._logger.info(f"Using provider: {llm_provider}")
+        elif model_type.startswith(("gpt-", "o1-", "o3-", "o4-")):
             self.backend = "openai"
-        elif model_type in self.OLLAMA_MODELS:
-            self.backend = "ollama"
-        elif model_type == "llama_cpp":
-            self.backend = "llama_cpp"
         else:
-            raise ValueError("Unsupported model_type specified.")
+            raise ValueError(
+                f"Cannot determine backend for model '{model_type}'. "
+                "Set llm_provider explicitly (e.g. 'ollama', 'vllm', 'openai')."
+            )
 
-        # We can override the temperature and seed from the config file if given as arguments
+        # Override generation params when provided as arguments
         if temperature is not None:
             self.params["temperature"] = temperature
             self._logger.info(f"Setting temperature to: {temperature}")
@@ -66,14 +64,8 @@ class Prompter:
             self.params["seed"] = seed
             self._logger.info(f"Setting seed to: {seed}")
         if max_tokens is not None:
-            # set max_tokens only if provided by the user; otherwise the default values are used
-            # for gpt models, the parameter is 'max_completion_tokens'
-            if self.backend == "openai":
-                self.params["max_completion_tokens"] = max_tokens
-                self._logger.info(f"Setting max_completion_tokens to: {max_tokens}")
-            # for ollama models, the parameter is 'num_predict'
-            # https://github.com/ollama/ollama/blob/main/docs/modelfile.md
-            elif self.backend == "ollama":
+            if self.backend == "ollama":
+                # https://github.com/ollama/ollama/blob/main/docs/modelfile.md
                 self.params["num_predict"] = max_tokens
                 self._logger.info(f"Setting num_predict to: {max_tokens}")
             else:
@@ -82,12 +74,37 @@ class Prompter:
 
         if self.backend == "openai":
             load_dotenv(self.config.get("gpt", {}).get("path_api_key", ".env"))
-            # llm_server can be used as a custom base_url (e.g. for OpenAI-compatible APIs)
             self.openai_base_url = llm_server
+            # Validate only when using a custom endpoint (bare OpenAI API trusts the model name)
+            if self.openai_base_url:
+                self._validate_model(model_type, "openai", base_url=self.openai_base_url)
             self._logger.info(
                 f"Using OpenAI API with model: {model_type}"
                 + (f", base_url: {llm_server}" if llm_server else "")
             )
+
+        elif self.backend == "vllm":
+            vllm_cfg = self.config.get("vllm", {}) or {}
+            self.openai_base_url = llm_server or vllm_cfg.get("host")
+            if not self.openai_base_url:
+                raise ValueError(
+                    "llm_server (base URL) is required for the vllm backend. "
+                    "Pass it as llm_server or set vllm.host in config."
+                )
+            if self._api_key is None:
+                env_path = vllm_cfg.get("path_api_key")
+                if env_path:
+                    load_dotenv(env_path)
+                self._api_key = (
+                    os.getenv("VLLM_API_KEY")
+                    or os.getenv("OPENAI_API_KEY")
+                    or "EMPTY"
+                )
+            self._validate_model(model_type, "vllm", base_url=self.openai_base_url)
+            self._logger.info(
+                f"Using vLLM (OpenAI-compatible) at {self.openai_base_url} with model: {model_type}"
+            )
+
         elif self.backend == "ollama":
             ollama_host = llm_server or self.config.get("ollama", {}).get(
                 "host", "http://kumo01.tsc.uc3m.es:11434"
@@ -98,20 +115,67 @@ class Prompter:
                 host=ollama_host,
                 headers={'x-some-header': 'some-value'}
             )
-            available_models = [m.model for m in Prompter.ollama_client.list().models]
-            if model_type not in available_models:
-                raise ValueError(
-                    f"Model '{model_type}' is not available on the Ollama server at {ollama_host}. "
-                    f"Available models: {available_models}"
-                )
+            self._validate_model(model_type, "ollama", ollama_host=ollama_host)
             self._logger.info(f"Using OLLAMA API with host: {ollama_host}")
+
         elif self.backend == "llama_cpp":
             self.llama_cpp_host = llm_server or self.config.get("llama_cpp", {}).get(
                 "host", "http://kumo01:11435/v1/chat/completions"
             )
+            # llama.cpp loads a single model server-side; model_type is not used in the API call
             self._logger.info(f"Using llama_cpp API with host: {self.llama_cpp_host}")
+
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
+
+    def _validate_model(
+        self,
+        model_type: str,
+        backend: str,
+        base_url: str = None,
+        ollama_host: str = None,
+    ) -> None:
+        available = Prompter.fetch_available_models(
+            backend=backend,
+            base_url=base_url,
+            api_key=self._api_key,
+            ollama_host=ollama_host,
+        )
+        if model_type not in available:
+            raise ValueError(
+                f"Model '{model_type}' is not available on the {backend} backend. "
+                f"Available models: {available}"
+            )
+
+    @staticmethod
+    def fetch_available_models(
+        backend: str,
+        base_url: str = None,
+        api_key: str = None,
+        ollama_host: str = None,
+    ) -> List[str]:
+        """Query the backend server and return the list of available model IDs.
+
+        Use this to populate UI dropdowns dynamically or to validate a model
+        before starting a training job — no need to register models in config.
+        """
+        if backend in ("openai", "vllm"):
+            resolved_key = api_key or os.getenv("OPENAI_API_KEY") or "EMPTY"
+            kwargs: dict = {"api_key": resolved_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            client = OpenAI(**kwargs)
+            return [m.id for m in client.models.list().data]
+        elif backend == "ollama":
+            host = ollama_host or os.getenv("OLLAMA_HOST", "http://kumo01.tsc.uc3m.es:11434")
+            return [m.model for m in Client(host=host).list().models]
+        elif backend == "llama_cpp":
+            # Strip /chat/completions suffix to reach the /v1/models endpoint
+            base = re.sub(r'/chat/completions$', '', (base_url or "")).rstrip('/')
+            client = OpenAI(api_key="EMPTY", base_url=base)
+            return [m.id for m in client.models.list().data]
+        else:
+            raise ValueError(f"fetch_available_models not supported for backend: {backend}")
 
     @staticmethod
     @memory.cache
@@ -124,18 +188,20 @@ class Prompter:
         context=None,
         use_context: bool = False,
         openai_base_url: str = None,
+        api_key: str = None,
     ) -> dict:
         """Caching setup."""
 
         print("Cache miss: computing results...")
 
-        if backend == "openai":
+        if backend in ("openai", "vllm"):
             result, logprobs = Prompter._call_openai_api(
                 template=template,
                 question=question,
                 model_type=model_type,
                 params=dict(params),
                 base_url=openai_base_url,
+                api_key=api_key,
             )
         elif backend == "ollama":
             result, logprobs, context = Prompter._call_ollama_api(
@@ -171,8 +237,8 @@ class Prompter:
         }
 
     @staticmethod
-    def _call_openai_api(template, question, model_type, params, base_url=None):
-        """Handles the OpenAI API call."""
+    def _call_openai_api(template, question, model_type, params, base_url=None, api_key=None):
+        """Handles OpenAI and vLLM (OpenAI-compatible) API calls."""
 
         if template is not None:
             messages = [
@@ -184,7 +250,8 @@ class Prompter:
                 {"role": "user", "content": question},
             ]
 
-        client_kwargs = {"api_key": os.getenv("OPENAI_API_KEY")}
+        resolved_key = api_key or os.getenv("OPENAI_API_KEY") or "EMPTY"
+        client_kwargs: dict = {"api_key": resolved_key}
         if base_url is not None:
             client_kwargs["base_url"] = base_url
         open_ai_client = OpenAI(**client_kwargs)
@@ -264,17 +331,15 @@ class Prompter:
     ) -> Union[str, List[str]]:
         """Public method to execute a prompt given a system prompt template and a question."""
 
-        # Load the system prompt template
         system_prompt_template = None
         if system_prompt_template_path is not None:
             with open(system_prompt_template_path, "r") as file:
                 system_prompt_template = file.read()
 
-        # Ensure hashable params for caching and get cached data / execute prompt
         if temperature is not None:
             self.params["temperature"] = temperature
         params_tuple = tuple(sorted(self.params.items()))
-        
+
         print("Cache key:", hash_input(system_prompt_template, question, self.model_type, self.backend, params_tuple, self.context, use_context))
         cached_data = self._cached_prompt_impl(
             template=system_prompt_template,
@@ -285,12 +350,12 @@ class Prompter:
             context=self.context if use_context else None,
             use_context=use_context,
             openai_base_url=getattr(self, "openai_base_url", None),
+            api_key=getattr(self, "_api_key", None),
         )
 
         result = cached_data["outputs"]["result"]
         logprobs = cached_data["outputs"]["logprobs"]
 
-        # Update context if necessary
         if use_context:
             self.context = cached_data["inputs"]["context"]
 

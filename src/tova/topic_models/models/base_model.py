@@ -17,6 +17,50 @@ from tova.topic_models.tm_model import TMmodel
 from tova.utils.common import init_logger, load_yaml_config_file
 
 
+# @TODO: make this generic (right now depends onf fixed providers)
+def validate_llm_config(
+    llm_model_type: str | None,
+    llm_provider: str | None,
+    llm_server: str | None,
+    llm_api_key: str | None,
+    logger: logging.Logger,
+) -> tuple[bool, str]:
+    """Check that llm_model_type is available on the configured provider.
+
+    Returns (True, "") when valid or when validation cannot be performed
+    (no model specified, provider unknown, or backend unreachable).
+    Returns (False, <message>) when the model is explicitly not found.
+    """
+    if not llm_model_type:
+        return True, ""
+
+    try:
+        from tova.prompter.prompter import Prompter
+
+        provider_norm = (llm_provider or "openai").strip().lower()
+        if provider_norm in ("openai", "gpt"):
+            import os
+            key = llm_api_key or os.environ.get("OPENAI_API_KEY") or None
+            available = Prompter.fetch_available_models(backend="openai", api_key=key)
+        elif provider_norm == "ollama":
+            available = Prompter.fetch_available_models(backend="ollama", ollama_host=llm_server or None)
+        elif provider_norm in ("vllm", "llama_cpp"):
+            available = Prompter.fetch_available_models(backend=provider_norm, base_url=llm_server or None)
+        else:
+            return True, ""
+
+        if llm_model_type not in available:
+            msg = (
+                f"LLM model '{llm_model_type}' is not available for provider "
+                f"'{llm_provider or 'openai'}'. Available models: {available}."
+            )
+            return False, msg
+    except Exception as exc:
+        logger.warning("Could not validate LLM model '%s': %s", llm_model_type, exc)
+
+    return True, ""
+
+
 class BaseTMModel(ABC):
     """
     Abstract base class for topic models.
@@ -85,16 +129,24 @@ class BaseTMModel(ABC):
         #self.not_include = self.config.get(
         #    "general", {}).get("not_include", [])
 
-        # llm params
+        # llm params (config defaults; subclass kwargs applied via setattr override below)
         self.llm_provider = self.config.get("general", {}).get("llm_provider")
-        self.llm_model_type = self.config.get(
-            "general", {}).get("llm_model_type")
+        self.llm_model_type = self.config.get("general", {}).get("llm_model_type")
         self.llm_server = self.config.get("general", {}).get("llm_server")
-        
-        # print information about the llm configuration
-        self._logger.info(f"LLM Provider: {self.llm_provider}")
-        self._logger.info(f"LLM Model Type: {self.llm_model_type}")
-        self._logger.info(f"LLM Server: {self.llm_server}")
+
+    def __setattr__(self, name: str, value) -> None:
+        # When llm_provider is overridden to a different value than the config default,
+        # and llm_server still holds the config's default value (i.e. was never explicitly
+        # set for the new provider), clear it to avoid passing a stale server URL.
+        if (
+            name == "llm_provider"
+            and value != getattr(self, "llm_provider", None)
+            and hasattr(self, "config")
+        ):
+            config_server = self.config.get("general", {}).get("llm_server")
+            if config_server and getattr(self, "llm_server", None) == config_server:
+                object.__setattr__(self, "llm_server", None)
+        object.__setattr__(self, name, value)
 
     def to_dict(self) -> dict:
         def safe_value(val):
@@ -171,6 +223,7 @@ class BaseTMModel(ABC):
             llm_model_type=self.llm_model_type,
             llm_server=self.llm_server,
             llm_provider=self.llm_provider,
+            llm_api_key=getattr(self, 'llm_api_key', None),
             labeller_prompt=self.labeller_prompt,
             summarizer_prompt=self.summarizer_prompt,
         )

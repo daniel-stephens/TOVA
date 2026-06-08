@@ -8,7 +8,7 @@ class TrainRequest(BaseModel):
     model: str = Field(..., description="Model key to load from the registry", example="tomotopyLDA")
     data: List[DataRecord] = Field(..., description="List of input records to train the model")
     id_col: Optional[str] = Field("id", description="Name of the ID column", example="id")
-    text_col: str = Field("raw_text", description="Column containing the text", example="raw_text")
+    text_col: str = Field("text", description="Column containing the text", example="text")
     training_params: Optional[Dict[str, Any]] = Field(
         None, description="Custom model hyperparameters", example={"num_topics": 50, "alpha": 0.1}
     )

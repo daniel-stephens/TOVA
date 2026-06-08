@@ -54,6 +54,7 @@ urlpatterns = [
     path("terms", views.terms, name="terms"),
     path("privacy", views.privacy, name="privacy"),
     path("llm/ui-config", views.llm_ui_config, name="llm_ui_config"),
+    path("llm/models", views.llm_models, name="llm_models"),
     path("get-llm-config", views.get_llm_config, name="get_llm_config"),
     path("save-llm-config", _x(views.save_llm_config), name="save_llm_config"),
     path("api/user-config", _x(views.api_user_config), name="api_user_config"),

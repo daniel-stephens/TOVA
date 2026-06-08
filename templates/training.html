@@ -611,10 +611,11 @@
         </div>
         <div class="modal-body text-center py-4">
           <p class="fs-6 mb-3">
-            Your model has finished training successfully!  
+            Your model has finished training successfully!
             Click <b>"Open Dashboard"</b> to go directly to this model's dashboard.
           </p>
           <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+          <div id="trainingCompleteWarnings" hidden></div>
         </div>
         <div class="modal-footer justify-content-center border-0">
           <button type="button" class="btn btn-outline-secondary"
@@ -1005,7 +1006,7 @@
       const c = corpusLabel ? String(corpusLabel).trim() : "";
       if (c) {
         subEl.textContent = hasJob
-          ? `${c} · Training runs in the background—you can leave this page or open the preview for an early look at themes.`
+          ? `${c} · Training runs in the background: you can leave this page or open the preview for an early look at themes.`
           : `${c} · Preparing your training run…`;
       } else if (corpusId) {
         subEl.textContent = hasJob
@@ -1162,12 +1163,15 @@
         stopPolling();
         if (isSuccess && !COMPLETION_SHOWN) {
           COMPLETION_SHOWN = true;
-          handleTrainingCompletion();
+          handleTrainingCompletion(data);
         } else if (terminalFailed.has(st) || error) {
-          updateTrainingUI({
-            ...data,
-            error: error || data.message || "Training did not complete successfully.",
-          });
+          const errMsg = error || data.message || "Training did not complete successfully.";
+          updateTrainingUI({ ...data, error: errMsg });
+          // Hide action buttons — nothing to continue or preview when training has failed
+          activeTrainingJobId = null;
+          syncTrainingHeroPreviewControls();
+          document.getElementById("openPreviewBtn")?.classList.add("d-none");
+          document.getElementById("toggleTfidfPreviewBtn")?.classList.add("d-none");
         }
         return;
       }
@@ -1206,7 +1210,7 @@
     }
 
     let mainText = "Initializing training…";
-    if (error) mainText = `Error: ${String(error)}`;
+    if (error) mainText = "Training failed.";
     else if (done) mainText = "Training complete!";
     else if (status === "queued") {
       mainText = `Queued${Number.isFinite(queued_position) ? ` (position ${queued_position})` : ""}…`;
@@ -1229,7 +1233,84 @@
     }
     etaEl.textContent = etaText;
 
-    if (error)       activityEl.textContent = "An error occurred. Check logs for details.";
+    if (error) {
+      const raw = String(error);
+      const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const short = esc(raw.split(/\.\s+Available models:/i)[0].replace(/^Error:\s*/i,"").trim());
+      activityEl.className = "";
+      activityEl.innerHTML = `
+        <div class="alert alert-danger mb-0 py-2 px-3" style="font-size:0.875rem">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <span><i class="bi bi-exclamation-triangle-fill me-1"></i><strong>LLM configuration error.</strong> ${short}.</span>
+            <button type="button" class="btn-close flex-shrink-0" style="font-size:0.65em" aria-label="Dismiss"></button>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="#" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#llmSettingsModal">
+              <i class="bi bi-gear me-1"></i>Configure LLM settings
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-retrain">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Retrain
+            </button>
+          </div>
+        </div>`;
+      activityEl.querySelector(".btn-close")?.addEventListener("click", () => {
+        activityEl.classList.add("d-none");
+      });
+      activityEl.querySelector(".btn-retrain")?.addEventListener("click", async () => {
+        const btn = activityEl.querySelector(".btn-retrain");
+        const urlParams = new URLSearchParams(location.search);
+        const currentJobId = urlParams.get("job_id");
+        let payload = null;
+        try {
+          const jobs = JSON.parse(localStorage.getItem("tova_training_jobs") || "[]");
+          const entry = Array.isArray(jobs) ? jobs.find(j => j?.job_id === currentJobId) : null;
+          payload = entry?.retrain_payload || null;
+        } catch { /* ignore */ }
+        if (!payload) {
+          // Fallback: go to /model page if no saved payload
+          const corpusId = urlParams.get("corpus_id") || "";
+          window.location.href = "/model" + (corpusId ? `?corpus_id=${encodeURIComponent(corpusId)}` : "");
+          return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Starting…';
+        try {
+          const res = await fetch("/training/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
+          const data = await res.json();
+          if (data.job_id) {
+            try {
+              const saved = JSON.parse(localStorage.getItem("tova_training_jobs") || "[]");
+              const list = Array.isArray(saved) ? saved : [];
+              list.unshift({
+                job_id: data.job_id,
+                corpus_id: payload.corpus_id,
+                model_id: data.model_id || null,
+                model_name: payload.model_name,
+                created_at: new Date().toISOString(),
+                status: "starting",
+                retrain_payload: payload,
+              });
+              localStorage.setItem("tova_training_jobs", JSON.stringify(list.slice(0, 25)));
+            } catch { /* ignore */ }
+            const u = new URL("/training/", location.origin);
+            u.searchParams.set("corpus_id", payload.corpus_id);
+            if (data.model_id) u.searchParams.set("model_id", data.model_id);
+            u.searchParams.set("job_id", data.job_id);
+            window.location.href = u.toString();
+          }
+        } catch (err) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>Retrain';
+          alert(err.message || "Could not start training.");
+        }
+      });
+    }
     else if (done)   activityEl.textContent = "Finalizing artifacts…";
     else if (phase)  activityEl.textContent = `Current activity: ${phase}`;
     else if (message)activityEl.textContent = String(message);
@@ -1709,11 +1790,12 @@
     renderFilteredTable(filtered);
   }
 
-  function handleTrainingCompletion() {
+  function handleTrainingCompletion(data) {
     activeTrainingJobId = null;
     syncTrainingHeroPreviewControls();
     expandTrainingLayout();
-    showTrainingCompleteModal();
+    const warnings = data?.result?.warnings;
+    showTrainingCompleteModal(Array.isArray(warnings) && warnings.length ? warnings : null);
 
     (async () => {
       try {
@@ -1771,7 +1853,7 @@
     })();
   }
 
-  function showTrainingCompleteModal() {
+  function showTrainingCompleteModal(warnings) {
     const modalEl = document.getElementById("trainingCompleteModal");
     if (!modalEl) return;
 
@@ -1785,6 +1867,23 @@
         }
         window.location.href = getCurrentModelDashboardUrl();
       };
+    }
+
+    // Render warnings section if any
+    const warningsContainer = document.getElementById("trainingCompleteWarnings");
+    if (warningsContainer) {
+      if (warnings && warnings.length) {
+        warningsContainer.innerHTML =
+          `<div class="alert alert-warning text-start mt-3 mb-0 py-2 px-3" role="alert">
+            <strong>Notices:</strong>
+            <ul class="mb-0 mt-1 ps-3">
+              ${warnings.map(w => `<li>${w}</li>`).join("")}
+            </ul>
+          </div>`;
+        warningsContainer.hidden = false;
+      } else {
+        warningsContainer.hidden = true;
+      }
     }
 
     const show = () => {
