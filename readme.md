@@ -27,6 +27,57 @@ TOVA is a topic modeling platform with a plug-in architecture, supporting traini
     - [Postgres authentication error after changing credentials](#postgres-authentication-error-after-changing-credentials)
     - [500 Internal Server Error after rebuild](#500-internal-server-error-after-rebuild)
 
+## Repository Structure
+
+The TOVA repository is organized as follows:
+
+```
+tova/
+├── .gitignore
+├── LICENSE.md
+├── Makefile
+├── docker-compose.yaml
+├── pyproject.toml
+├── README.md
+├── sample.env             # Template for environment variables
+├── data/                 # Shared data directory
+├── db/                   # Database files
+├── docker/               # Docker configuration and Dockerfiles
+│   ├── Dockerfile.api
+│   ├── Dockerfile.ui
+│   ├── Dockerfile.solr_api
+│   ├── Dockerfile.solr_db
+│   ├── Dockerfile.postgres_db
+│   ├── Dockerfile.base
+│   ├── entrypoint_api.sh
+│   └── check.md
+├── solr/                 # Apache Solr search engine configuration
+├── src/                  # Source code (Python package)
+│   └── tova/             # Main package
+│       ├── api/          # FastAPI backend service
+│       ├── cli/          # Command-line interface (Typer-based)
+│       ├── core/         # Core functionality (data handling, task dispatching)
+│       ├── preprocessing/# Text preprocessing utilities
+│       ├── prompter/     # LLM interaction layer
+│       ├── topic_models/ # Topic model implementations
+│       │   ├── traditional/  # TF-IDF, LSI models
+│       │   └── llm_based/    # LLM-powered models (OpenTopicRAG, etc.)
+│       └── utils/        # Cross-cutting utilities (logging, progress, etc.)
+├── static/               # Static assets
+│   ├── config/           # Configuration files (config.yaml)
+│   ├── examples/         # Example data and configurations
+│   ├── js/               # JavaScript files
+│   │   ├── columns.js
+│   │   ├── upload.js
+│   │   └── file-validation.js
+│   └── img/              # Images
+├── templates/            # HTML templates
+├── ui/                   # Django web application
+│   ├── tova_site/        # Django project settings
+│   └── web/              # Main Django app (models, views, etc.)
+└── tests/                # Test files
+```
+
 ## Key capabilities
 
 - **Training**
