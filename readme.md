@@ -289,14 +289,6 @@ tova/
 ├── data/                 # Shared data directory
 ├── db/                   # Database files
 ├── docker/               # Docker configuration and Dockerfiles
-│   ├── Dockerfile.api
-│   ├── Dockerfile.ui
-│   ├── Dockerfile.solr_api
-│   ├── Dockerfile.solr_db
-│   ├── Dockerfile.postgres_db
-│   ├── Dockerfile.base
-│   ├── entrypoint_api.sh
-│   └── check.md
 ├── solr/                 # Apache Solr search engine configuration
 ├── src/                  # Source code (Python package)
 │   └── tova/             # Main package
@@ -313,9 +305,6 @@ tova/
 │   ├── config/           # Configuration files (config.yaml)
 │   ├── examples/         # Example data and configurations
 │   ├── js/               # JavaScript files
-│   │   ├── columns.js
-│   │   ├── upload.js
-│   │   └── file-validation.js
 │   └── img/              # Images
 ├── templates/            # HTML templates
 ├── ui/                   # Django web application
