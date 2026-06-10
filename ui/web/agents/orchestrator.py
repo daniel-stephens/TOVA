@@ -19,12 +19,72 @@ logger = logging.getLogger(__name__)
 
 _RAG_TIMEOUT = (5, 30)  # (connect, read) seconds
 
+_ABSTAIN_RESPONSE = (
+    "I'm sorry, but your question doesn't seem to match any of the topics "
+    "in this model. I can only answer questions related to the topics and "
+    "documents that are part of the current topic model. Could you try "
+    "rephrasing your question, or ask about one of the existing topics?"
+)
+
+# Sentinel: RAG endpoint was reachable and returned zero relevant topics
+_RAG_NO_MATCH = "__RAG_NO_MATCH__"
+
+
+def _extract_quoted_names(text: str) -> list[str]:
+    """Pull out names enclosed in double or single quotes from user text."""
+    import re
+    return re.findall(r'["\u201c\u201d]([^"\u201c\u201d]+)["\u201c\u201d]', text) + \
+           re.findall(r"['\u2018\u2019]([^'\u2018\u2019]+)['\u2018\u2019]", text)
+
+
+def _validate_topic_names(model_id: str, message: str) -> str | None:
+    """If the user mentions specific topic names in quotes, verify they exist.
+
+    Returns a user-facing message listing unrecognised names, or ``None``
+    if everything checks out (or if there are no quoted names).
+    """
+    quoted = _extract_quoted_names(message)
+    if not quoted:
+        return None
+
+    try:
+        resp = requests.get(
+            f"{R.API}/queries/topic-labels/{model_id}",
+            timeout=(3, 10),
+        )
+        if resp.status_code != 200:
+            return None
+        real_labels: list[str] = resp.json().get("labels", [])
+    except Exception:
+        return None
+
+    if not real_labels:
+        return None
+
+    real_lower = {lbl.lower() for lbl in real_labels}
+    bad = [q for q in quoted if q.lower() not in real_lower]
+    if not bad:
+        return None
+
+    bad_str = ", ".join(f'"{b}"' for b in bad)
+    available = ", ".join(f'"{lbl}"' for lbl in real_labels[:20])
+    return (
+        f"I couldn't find the following topic(s) in this model: {bad_str}.\n\n"
+        f"The available topics are: {available}"
+        f"{'...' if len(real_labels) > 20 else ''}.\n\n"
+        "Please check the topic names and try again."
+    )
+
 
 def _rag_retrieve(model_id: str, query: str, top_k: int = 3, top_n: int = 5) -> str | None:
     """Call the FastAPI RAG endpoint and format the result as a context block.
 
-    Returns a formatted string on success, or *None* on any failure (so the
-    caller can fall back to the dashboard context).
+    Returns:
+    - A formatted context string when relevant topics are found.
+    - ``_RAG_NO_MATCH`` when the endpoint succeeded but no topics were
+      above the similarity threshold (caller should abstain).
+    - ``None`` on network/server errors (caller falls back to dashboard
+      context).
     """
     try:
         resp = requests.post(
@@ -47,7 +107,7 @@ def _rag_retrieve(model_id: str, query: str, top_k: int = 3, top_n: int = 5) -> 
 
     topics: List[dict] = data.get("topics", [])
     if not topics:
-        return None
+        return _RAG_NO_MATCH
 
     lines: list[str] = ["## Retrieved Topics (most relevant to your question)\n"]
     for t in topics:
@@ -94,8 +154,29 @@ def run_chat_assistant(
     context = context or {}
     llm_settings = llm_settings or {}
 
+    # Check quoted topic names against the model's actual topic list
+    bad_names_msg = _validate_topic_names(model_id, message) if model_id else None
+    if bad_names_msg:
+        return {
+            "response_text": bad_names_msg,
+            "err": None,
+            "chat_model": "validation",
+            "provider": None,
+            "host": None,
+        }
+
     # Try query-driven RAG retrieval first; fall back to dashboard context
     rag_context_str = _rag_retrieve(model_id, message)
+
+    if rag_context_str == _RAG_NO_MATCH:
+        logger.info("RAG found no matching topics — abstaining for query: %s", message[:120])
+        return {
+            "response_text": _ABSTAIN_RESPONSE,
+            "err": None,
+            "chat_model": "abstain",
+            "provider": None,
+            "host": None,
+        }
 
     llm_context_str = dashboard_context_for_llm(
         context,
@@ -145,7 +226,11 @@ def run_chat_assistant(
             "that are most relevant to the user's question. Ground your answer in the "
             "retrieved documents — quote or cite them when possible. "
             "Do not invent facts. If the retrieved context does not contain enough "
-            "information to answer, say so clearly."
+            "information to answer, say so clearly.\n\n"
+            "IMPORTANT: If no retrieved topics are shown, or if the topics are clearly "
+            "unrelated to the user's question, you MUST say that the question does not "
+            "match any topics in the current model and you cannot answer it. "
+            "Do NOT guess or fabricate an answer."
         )
         context_block = rag_context_str
     else:
@@ -154,6 +239,9 @@ def run_chat_assistant(
             "using the retrieved context provided in the user message. Do not use external knowledge "
             "or invent themes, counts, or metrics. If the answer is not in the context, say so clearly. "
             "When you use numbers or theme names, they must come directly from the context.\n\n"
+            "IMPORTANT: If the user asks about a topic or subject that does not appear in the "
+            "provided context, you MUST clearly state that the topic model does not contain "
+            "information about that subject. Do NOT guess or fabricate an answer.\n\n"
             "For comparison questions: use the Themes section and the Theme similarities section.\n\n"
             "For analysis and insight questions (e.g. 'give me an analysis', 'key insights', 'what stands out'): "
             "synthesize from the context. Use the 'Analysis cues' section (dominant themes, highest coherence, "
@@ -225,7 +313,14 @@ def _resolve_chat_params(
     context = context or {}
     llm_settings = llm_settings or {}
 
+    bad_names_msg = _validate_topic_names(model_id, message) if model_id else None
+    if bad_names_msg:
+        return {"__abstain__": True, "__message__": bad_names_msg}
+
     rag_context_str = _rag_retrieve(model_id, message)
+
+    if rag_context_str == _RAG_NO_MATCH:
+        return {"__abstain__": True}
 
     llm_context_str = dashboard_context_for_llm(
         context, max_themes=30, max_doc_snippets=5,
@@ -259,7 +354,11 @@ def _resolve_chat_params(
             "that are most relevant to the user's question. Ground your answer in the "
             "retrieved documents — quote or cite them when possible. "
             "Do not invent facts. If the retrieved context does not contain enough "
-            "information to answer, say so clearly."
+            "information to answer, say so clearly.\n\n"
+            "IMPORTANT: If no retrieved topics are shown, or if the topics are clearly "
+            "unrelated to the user's question, you MUST say that the question does not "
+            "match any topics in the current model and you cannot answer it. "
+            "Do NOT guess or fabricate an answer."
         )
         context_block = rag_context_str
     else:
@@ -268,6 +367,9 @@ def _resolve_chat_params(
             "using the retrieved context provided in the user message. Do not use external knowledge "
             "or invent themes, counts, or metrics. If the answer is not in the context, say so clearly. "
             "When you use numbers or theme names, they must come directly from the context.\n\n"
+            "IMPORTANT: If the user asks about a topic or subject that does not appear in the "
+            "provided context, you MUST clearly state that the topic model does not contain "
+            "information about that subject. Do NOT guess or fabricate an answer.\n\n"
             "For comparison questions: use the Themes section and the Theme similarities section.\n\n"
             "For analysis and insight questions: synthesize from the context. Use the 'Analysis cues' section."
         )
@@ -322,6 +424,10 @@ def run_chat_assistant_stream(
     )
     if params is None:
         yield "[ERROR]No language model configured."
+        return
+
+    if params.get("__abstain__"):
+        yield params.get("__message__") or _ABSTAIN_RESPONSE
         return
 
     yield from chat_llm_stream(
