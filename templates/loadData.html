@@ -314,20 +314,12 @@
             </div><!-- /.load-data-scroll -->
 
             <div class="load-data-actions d-flex justify-content-end gap-2 flex-wrap">
-              <!-- JS enables/disables these + handles click -->
               <a href="{% url_for 'load_corpus_page' %}"
-                 class="btn btn-outline-secondary disabled"
+                 class="btn btn-primary disabled"
                  id="saveCorpusBtn"
                  tabindex="-1"
                  aria-disabled="true">
-                Save corpus only
-              </a>
-              <a href="{% url_for 'loadModel' %}"
-                 class="btn btn-primary disabled"
-                 id="continueBtn"
-                 tabindex="-1"
-                 aria-disabled="true">
-                Save and train
+                Save
               </a>
             </div>
 
@@ -431,7 +423,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const mappingProgress = document.getElementById('mappingProgress');
 
   const selectedTbody = document.getElementById('selected-files-body');
-  const continueBtn   = document.getElementById("continueBtn");
   const saveCorpusBtn = document.getElementById("saveCorpusBtn");
   const feedback      = document.getElementById('file-feedback');
 
@@ -461,20 +452,7 @@ document.addEventListener("DOMContentLoaded", function () {
   syncExposeWizard();
 
   // ===== Helpers =====
-  function setContinueEnabled(enabled) {
-    if (!continueBtn) return;
-    if (enabled) {
-      continueBtn.classList.remove("disabled");
-      continueBtn.removeAttribute("aria-disabled");
-      continueBtn.removeAttribute("tabindex");
-    } else {
-      continueBtn.classList.add("disabled");
-      continueBtn.setAttribute("aria-disabled", "true");
-      continueBtn.setAttribute("tabindex", "-1");
-    }
-    setSaveOnlyEnabled(enabled);
-  }
-  function setSaveOnlyEnabled(enabled) {
+  function setSaveEnabled(enabled) {
     if (!saveCorpusBtn) return;
     if (enabled) {
       saveCorpusBtn.classList.remove("disabled");
@@ -486,7 +464,7 @@ document.addEventListener("DOMContentLoaded", function () {
       saveCorpusBtn.setAttribute("tabindex", "-1");
     }
   }
-  setContinueEnabled(false);
+  setSaveEnabled(false);
 
   function getActiveFileInput() {
     return (fileRadio && fileRadio.checked) ? fileInput : folderInput;
@@ -598,7 +576,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     clearSelectedTable();
     feedback.textContent = '';
-    setContinueEnabled(false);
+    setSaveEnabled(false);
     singleFile = null; singleColumns = []; singleMapping = { id: '', text: '', label: '' };
     wizard.files = []; wizard.columns = {}; wizard.mappings = {}; wizard.index = 0; wizard.acceptableCount = 0;
     resetSingleSelects(); resetFolderSelects();
@@ -693,7 +671,7 @@ document.addEventListener("DOMContentLoaded", function () {
     resetSingleSelects();
     singleMapping = { id: '', text: '', label: '' };
     syncExposeSingle();
-    setContinueEnabled(false);
+    setSaveEnabled(false);
     if (!file || !isAllowed(file.name)) return;
 
     singleColumns = await detectColumnsForFile(file);
@@ -711,7 +689,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const row = selectedTbody.querySelector('tr[data-fname]');
     const cell = row?.querySelector('.status-cell');
     if (cell) cell.textContent = isSingleMapped() ? '✅ mapped' : '⏳ pending';
-    setContinueEnabled(isSingleMapped());
+    setSaveEnabled(isSingleMapped());
   }
 
   idSelectSingle.addEventListener('change', () => {
@@ -791,7 +769,7 @@ document.addEventListener("DOMContentLoaded", function () {
       fillSelectOptions(labelSelectFolder, []);
       mappingProgress.style.width = '0%';
       mappingProgress.textContent = '0%';
-      setContinueEnabled(false);
+      setSaveEnabled(false);
       updateSaveButton();
       syncExposeWizard();
       return;
@@ -820,7 +798,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById('prevMapBtn').style.visibility = i === 0 ? 'hidden' : 'visible';
 
     updateTableStatus();
-    setContinueEnabled(isAllMapped());
+    setSaveEnabled(isAllMapped());
     updateSaveButton();
     ensureFolderPreviewButton();
     syncExposeWizard();
@@ -877,8 +855,8 @@ document.addEventListener("DOMContentLoaded", function () {
       renderWizard();
     } else {
       renderWizard();
-      setContinueEnabled(true);
-      setTimeout(() => continueBtn?.focus(), 0);
+      setSaveEnabled(true);
+      setTimeout(() => saveCorpusBtn?.focus(), 0);
     }
   });
 
@@ -1097,9 +1075,9 @@ document.addEventListener("DOMContentLoaded", function () {
     };
   }
 
-  async function onContinueClick(e, redirectUrl = "{% url_for 'loadModel' %}") {
+  async function onSaveClick(e, redirectUrl = "{% url_for 'load_corpus_page' %}") {
     e.preventDefault();
-    if (continueBtn.classList.contains('disabled')) return;
+    if (saveCorpusBtn.classList.contains('disabled')) return;
 
     try {
       // --- validate corpus name ---
@@ -1211,7 +1189,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // ---------- Corpus name uniqueness helpers ----------
-  const CORPUS_LIST_ENDPOINT = "/getAllCorpora";
+  const CORPUS_LIST_ENDPOINT = "/getUniqueCorpusNames";
 
   async function getUniqueCorpusNames(endpoint = CORPUS_LIST_ENDPOINT) {
     const res = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
@@ -1230,10 +1208,10 @@ document.addEventListener("DOMContentLoaded", function () {
       return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
     }
 
-    // Case 2: objects with metadata.name
+    // Case 2: corpus objects (name at top level and/or in metadata)
     const byLower = new Map();
     for (const item of items || []) {
-      const raw = item?.metadata?.name;
+      const raw = item?.metadata?.name ?? item?.name;
       if (!raw) continue;
       const name = String(raw).trim();
       if (!name) continue;
@@ -1342,21 +1320,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   initCorpusNameValidator();
 
-  if (continueBtn) {
-    continueBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const ok = await validateCorpusNameOnSubmit();
-      if (!ok) return;
-      await onContinueClick(e);
-    }, { passive: false });
-  }
-
   if (saveCorpusBtn) {
     saveCorpusBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       const ok = await validateCorpusNameOnSubmit();
       if (!ok) return;
-      await onContinueClick(e, "{% url_for 'load_corpus_page' %}");
+      await onSaveClick(e);
     }, { passive: false });
   }
 }); // DOMContentLoaded

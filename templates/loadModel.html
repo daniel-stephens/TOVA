@@ -64,6 +64,15 @@
     height: 1em;
     margin-top: 0.15em;
   }
+
+  #configureLlmSection .cfg-llm-provider-panel {
+    font-size: 0.875rem;
+  }
+  #configureLlmSection .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
 </style>
 {% endblock %}
 
@@ -149,7 +158,7 @@
 </div>
 
 <div class="modal fade" id="modelNameModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
     <div class="modal-content shadow-lg border-0">
       
       <div class="modal-header border-bottom-0 pb-0">
@@ -193,6 +202,116 @@
 
           <!-- Dynamic group-level settings: traditional / llm-based -->
           <div class="row g-2 mt-3" id="basicGroupParams"></div>
+        </div>
+
+        <div id="configureLlmSection" class="p-3 mb-3 bg-white border rounded shadow-sm d-none">
+          <h6 class="fw-bold text-primary mb-2 small text-uppercase">
+            <i class="bi bi-cpu me-1"></i> LLM Settings
+          </h6>
+          <p class="small text-muted mb-3">
+            Choose the LLM provider and model used for topic labeling, summarization, or LLM-based training.
+          </p>
+
+          <div class="mb-3">
+            <label for="cfg-llm-provider" class="form-label">LLM Provider</label>
+            <select class="form-select form-select-sm" id="cfg-llm-provider">
+              <option value="">-- Select a provider --</option>
+            </select>
+          </div>
+
+          <div id="cfg-llm-openai" class="cfg-llm-provider-panel d-none mb-3">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label for="cfg-llm-openai-model" class="form-label">Model</label>
+                <input type="text" class="form-control form-control-sm" id="cfg-llm-openai-model" placeholder="gpt-4o, gpt-3.5-turbo">
+              </div>
+              <div class="col-md-6">
+                <label for="cfg-llm-openai-api-key" class="form-label">API Key (optional)</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-llm-openai-api-key" placeholder="sk-...">
+              </div>
+            </div>
+          </div>
+
+          <div id="cfg-llm-ollama" class="cfg-llm-provider-panel d-none mb-3">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label for="cfg-llm-ollama-model" class="form-label">Model</label>
+                <input type="text" class="form-control form-control-sm" id="cfg-llm-ollama-model"
+                       list="cfg-llm-ollama-model-options" placeholder="qwen:32b">
+                <datalist id="cfg-llm-ollama-model-options"></datalist>
+              </div>
+              <div class="col-md-6">
+                <label for="cfg-llm-ollama-host" class="form-label">Server Host</label>
+                <input type="url" class="form-control form-control-sm" id="cfg-llm-ollama-host" placeholder="http://localhost:11434">
+              </div>
+            </div>
+          </div>
+
+          <div id="cfg-llm-llama-cpp" class="cfg-llm-provider-panel d-none mb-3">
+            <label for="cfg-llm-llama-cpp-host" class="form-label">Server Endpoint URL</label>
+            <input type="url" class="form-control form-control-sm" id="cfg-llm-llama-cpp-host"
+                   placeholder="http://localhost:11435/v1/chat/completions">
+          </div>
+
+          <div id="cfg-llm-vllm" class="cfg-llm-provider-panel d-none mb-3">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label for="cfg-llm-vllm-host" class="form-label">Server Base URL</label>
+                <input type="url" class="form-control form-control-sm" id="cfg-llm-vllm-host" placeholder="https://example.com/api">
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-vllm-model" class="form-label">Model</label>
+                <input type="text" class="form-control form-control-sm" id="cfg-llm-vllm-model"
+                       list="cfg-llm-vllm-model-options" placeholder="model name">
+                <datalist id="cfg-llm-vllm-model-options"></datalist>
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-vllm-api-key" class="form-label">API Key (optional)</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-llm-vllm-api-key">
+              </div>
+            </div>
+          </div>
+
+          <div id="cfg-llm-rchat" class="cfg-llm-provider-panel d-none mb-3">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label for="cfg-llm-rchat-host" class="form-label">Server Endpoint URL</label>
+                <input type="url" class="form-control form-control-sm" id="cfg-llm-rchat-host">
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-rchat-model" class="form-label">Model</label>
+                <input type="text" class="form-control form-control-sm" id="cfg-llm-rchat-model">
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-rchat-api-key" class="form-label">API Key (optional)</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-llm-rchat-api-key">
+              </div>
+            </div>
+          </div>
+
+          <div id="cfg-llm-custom" class="cfg-llm-provider-panel d-none mb-3">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label for="cfg-llm-custom-host" class="form-label">Server Endpoint URL</label>
+                <input type="url" class="form-control form-control-sm" id="cfg-llm-custom-host">
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-custom-model" class="form-label">Model</label>
+                <input type="text" class="form-control form-control-sm" id="cfg-llm-custom-model">
+              </div>
+              <div class="col-md-4">
+                <label for="cfg-llm-custom-api-key" class="form-label">API Key (optional)</label>
+                <input type="password" class="form-control form-control-sm" id="cfg-llm-custom-api-key">
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="cfg-llm-test-btn">
+              <i class="bi bi-plug me-1"></i>Test Connection
+            </button>
+          </div>
+          <div id="cfg-llm-feedback" class="alert d-none small mt-2 mb-0 py-2" role="alert"></div>
         </div>
 
         <div class="border rounded">
@@ -288,6 +407,7 @@
     existingModelNames: new Set(),
     modelKinds: {},     // model_name -> "traditional" | "llm-based"
     promptModels: {},   // derived from config.llm + config.topic_modeling
+    llmUiConfig: {},
   };
 
   const dom = {};
@@ -478,6 +598,8 @@
       advancedSettings: $("#advancedSettings"),
       advancedIcon: $("#advancedIcon"),
       toggleAdvancedBtn: $("#toggleAdvanced"),
+      configureLlmSection: $("#configureLlmSection"),
+      cfgLlmProvider: $("#cfg-llm-provider"),
     });
 
     // Safe modal init
@@ -511,6 +633,7 @@
       parseModelNames(names);
 
       setupEventListeners();
+      initConfigureLlmSettings();
 
       if (dom.modelSelect && dom.modelSelect.value) {
         renderParamsIntoModal(dom.modelSelect.value);
@@ -825,24 +948,7 @@ const renderBasicGroupParams = (modelName) => {
     `);
   }
 
-  // 3) LLM settings are in "LLM Settings" modal
-  if (nonLlmEntries.length > 0 || groupKey === "traditional") {
-    parts.push(`
-      <div class="col-12 mt-2">
-        <div class="alert alert-info d-flex align-items-center gap-2 py-2" style="font-size: 0.85rem;">
-          <i class="bi bi-info-circle"></i>
-          <span>
-            <strong>LLM Configuration:</strong> Configure LLM providers and models in the 
-            <button type="button" class="btn btn-link btn-sm p-0 align-baseline" 
-                    data-bs-toggle="modal" data-bs-target="#llmSettingsModal" 
-                    style="text-decoration: underline; font-size: inherit;">
-              LLM Settings
-            </button> modal.
-          </span>
-        </div>
-      </div>
-    `);
-  }
+  // 3) LLM provider settings are rendered inline in #configureLlmSection
 
   dom.basicGroupParams.innerHTML = parts.join("");
 };
@@ -887,6 +993,7 @@ const renderBasicGroupParams = (modelName) => {
 
     // Render the group-level (traditional / llm-based) settings into Basic
     renderBasicGroupParams(modelName);
+    toggleConfigureLlmSection(modelName);
 
     // Advanced: only model-specific params
     const params = { ...specific };
@@ -998,6 +1105,245 @@ const renderBasicGroupParams = (modelName) => {
     dom.paramsArea.innerHTML = html;
   };
 
+  const modelUsesLlm = (modelName) => {
+    const kind = getModelKind(modelName);
+    return kind === "traditional" || kind === "llm_based";
+  };
+
+  const toggleConfigureLlmSection = (modelName) => {
+    if (!dom.configureLlmSection) return;
+    dom.configureLlmSection.classList.toggle("d-none", !modelUsesLlm(modelName));
+  };
+
+  const showCfgLlmFeedback = (message, variant = "danger") => {
+    const fb = document.getElementById("cfg-llm-feedback");
+    if (!fb) return;
+    fb.textContent = message;
+    fb.className = `alert alert-${variant} small mt-2 mb-0 py-2`;
+    fb.classList.remove("d-none");
+    setTimeout(() => fb.classList.add("d-none"), 5000);
+  };
+
+  const showCfgProviderSettings = (provider) => {
+    document.querySelectorAll("#configureLlmSection .cfg-llm-provider-panel").forEach((el) => {
+      el.classList.add("d-none");
+    });
+    if (!provider) return;
+    document.getElementById(`cfg-llm-${provider.replace(/_/g, "-")}`)?.classList.remove("d-none");
+  };
+
+  const fetchCfgLlmModels = async (backend, host, apiKey, datalistId) => {
+    if (!host) return;
+    try {
+      const params = new URLSearchParams({ backend });
+      params.set("host", host);
+      if (apiKey) params.set("api_key", apiKey);
+      const resp = await fetch(`/llm/models?${params}`, { credentials: "same-origin" });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const dl = document.getElementById(datalistId);
+      if (!dl || !Array.isArray(data.models)) return;
+      dl.innerHTML = "";
+      data.models.forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        dl.appendChild(opt);
+      });
+    } catch (_) {
+      /* datalist optional */
+    }
+  };
+
+  const populateCfgLlmProviders = () => {
+    if (!dom.cfgLlmProvider || !state.llmUiConfig) return;
+    const current = dom.cfgLlmProvider.value;
+    dom.cfgLlmProvider.innerHTML = '<option value="">-- Select a provider --</option>';
+    Object.values(state.llmUiConfig).forEach((cfg) => {
+      const option = document.createElement("option");
+      option.value = cfg.form_value || cfg.label;
+      option.textContent = cfg.label;
+      dom.cfgLlmProvider.appendChild(option);
+    });
+    if (current) dom.cfgLlmProvider.value = current;
+  };
+
+  const applyCfgLlmConfigToForm = (config) => {
+    if (!config || !dom.cfgLlmProvider) return;
+    if (!config.provider) return;
+    dom.cfgLlmProvider.value = config.provider;
+    showCfgProviderSettings(config.provider);
+
+    if (config.provider === "openai" && config.model) {
+      const el = document.getElementById("cfg-llm-openai-model");
+      if (el) el.value = config.model;
+    } else if (config.provider === "ollama") {
+      if (config.model) {
+        const el = document.getElementById("cfg-llm-ollama-model");
+        if (el) el.value = config.model;
+      }
+      if (config.host) {
+        const el = document.getElementById("cfg-llm-ollama-host");
+        if (el) el.value = config.host;
+      }
+      fetchCfgLlmModels("ollama", config.host, null, "cfg-llm-ollama-model-options");
+    } else if (config.provider === "llama_cpp" && config.host) {
+      const el = document.getElementById("cfg-llm-llama-cpp-host");
+      if (el) el.value = config.host;
+    } else if (config.provider === "vllm") {
+      if (config.host) {
+        const el = document.getElementById("cfg-llm-vllm-host");
+        if (el) el.value = config.host;
+      }
+      if (config.model) {
+        const el = document.getElementById("cfg-llm-vllm-model");
+        if (el) el.value = config.model;
+      }
+      fetchCfgLlmModels("vllm", config.host, null, "cfg-llm-vllm-model-options");
+    } else if (config.provider === "rchat") {
+      if (config.host) {
+        const el = document.getElementById("cfg-llm-rchat-host");
+        if (el) el.value = config.host;
+      }
+      if (config.model) {
+        const el = document.getElementById("cfg-llm-rchat-model");
+        if (el) el.value = config.model;
+      }
+    } else if (config.provider === "custom") {
+      if (config.host) {
+        const el = document.getElementById("cfg-llm-custom-host");
+        if (el) el.value = config.host;
+      }
+      if (config.model) {
+        const el = document.getElementById("cfg-llm-custom-model");
+        if (el) el.value = config.model;
+      }
+    }
+  };
+
+  const loadConfigureLlmFromSession = async () => {
+    try {
+      const response = await fetch("/get-llm-config", { credentials: "same-origin" });
+      if (!response.ok) return;
+      const config = await response.json();
+      applyCfgLlmConfigToForm(config);
+    } catch (err) {
+      console.warn("Failed to load saved LLM config:", err);
+    }
+  };
+
+  const collectConfigureLlmPayload = () => {
+    const provider = dom.cfgLlmProvider?.value || "";
+    if (!provider) return null;
+
+    const payload = { provider };
+    if (provider === "openai") {
+      const model = document.getElementById("cfg-llm-openai-model")?.value?.trim();
+      const apiKey = document.getElementById("cfg-llm-openai-api-key")?.value?.trim();
+      if (model) payload.model = model;
+      if (apiKey) payload.api_key = apiKey;
+    } else if (provider === "ollama") {
+      const model = document.getElementById("cfg-llm-ollama-model")?.value?.trim();
+      const host = document.getElementById("cfg-llm-ollama-host")?.value?.trim();
+      if (model) payload.model = model;
+      if (host) payload.host = host;
+    } else if (provider === "llama_cpp") {
+      const host = document.getElementById("cfg-llm-llama-cpp-host")?.value?.trim();
+      if (host) payload.host = host;
+    } else if (provider === "vllm") {
+      const host = document.getElementById("cfg-llm-vllm-host")?.value?.trim();
+      const model = document.getElementById("cfg-llm-vllm-model")?.value?.trim();
+      const apiKey = document.getElementById("cfg-llm-vllm-api-key")?.value?.trim();
+      if (host) payload.host = host;
+      if (model) payload.model = model;
+      if (apiKey) payload.api_key = apiKey;
+    } else if (provider === "rchat") {
+      const host = document.getElementById("cfg-llm-rchat-host")?.value?.trim();
+      const model = document.getElementById("cfg-llm-rchat-model")?.value?.trim();
+      const apiKey = document.getElementById("cfg-llm-rchat-api-key")?.value?.trim();
+      if (host) payload.host = host;
+      if (model) payload.model = model;
+      if (apiKey) payload.api_key = apiKey;
+    } else if (provider === "custom") {
+      const host = document.getElementById("cfg-llm-custom-host")?.value?.trim();
+      const model = document.getElementById("cfg-llm-custom-model")?.value?.trim();
+      const apiKey = document.getElementById("cfg-llm-custom-api-key")?.value?.trim();
+      if (host) payload.host = host;
+      if (model) payload.model = model;
+      if (apiKey) payload.api_key = apiKey;
+    }
+    return payload;
+  };
+
+  const initConfigureLlmSettings = async () => {
+    if (!dom.configureLlmSection || !dom.cfgLlmProvider) return;
+
+    try {
+      const response = await fetch("/llm/ui-config", { credentials: "same-origin" });
+      if (response.ok) {
+        state.llmUiConfig = await response.json();
+        populateCfgLlmProviders();
+      }
+    } catch (err) {
+      console.warn("Failed to load LLM UI config:", err);
+    }
+
+    dom.cfgLlmProvider.addEventListener("change", (e) => {
+      showCfgProviderSettings(e.target.value);
+    });
+
+    document.getElementById("cfg-llm-ollama-host")?.addEventListener("blur", (e) => {
+      fetchCfgLlmModels("ollama", e.target.value.trim(), null, "cfg-llm-ollama-model-options");
+    });
+    document.getElementById("cfg-llm-vllm-host")?.addEventListener("blur", (e) => {
+      const apiKey = document.getElementById("cfg-llm-vllm-api-key")?.value.trim() || null;
+      fetchCfgLlmModels("vllm", e.target.value.trim(), apiKey, "cfg-llm-vllm-model-options");
+    });
+
+    document.getElementById("cfg-llm-test-btn")?.addEventListener("click", async () => {
+      const provider = dom.cfgLlmProvider.value;
+      if (!provider) {
+        showCfgLlmFeedback("Select a provider first", "warning");
+        return;
+      }
+
+      const hostMap = {
+        ollama: document.getElementById("cfg-llm-ollama-host")?.value.trim(),
+        vllm: document.getElementById("cfg-llm-vllm-host")?.value.trim(),
+        llama_cpp: document.getElementById("cfg-llm-llama-cpp-host")?.value.trim(),
+        rchat: document.getElementById("cfg-llm-rchat-host")?.value.trim(),
+        custom: document.getElementById("cfg-llm-custom-host")?.value.trim(),
+      };
+      const apiKeyMap = {
+        openai: document.getElementById("cfg-llm-openai-api-key")?.value.trim(),
+        vllm: document.getElementById("cfg-llm-vllm-api-key")?.value.trim(),
+      };
+
+      const testBtn = document.getElementById("cfg-llm-test-btn");
+      testBtn.disabled = true;
+      testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
+      try {
+        const params = new URLSearchParams({ backend: provider });
+        const host = hostMap[provider];
+        const apiKey = apiKeyMap[provider];
+        if (host) params.set("host", host);
+        if (apiKey) params.set("api_key", apiKey);
+        const resp = await fetch(`/llm/models?${params}`, { credentials: "same-origin" });
+        const data = await resp.json();
+        if (resp.ok && Array.isArray(data.models)) {
+          const modelList = data.models.length ? data.models.join(", ") : "(none)";
+          showCfgLlmFeedback(`Connected! ${data.models.length} model(s) available: ${modelList}`, "success");
+        } else {
+          showCfgLlmFeedback(`Connection failed: ${data.detail || data.error || resp.statusText}`, "danger");
+        }
+      } catch (err) {
+        showCfgLlmFeedback(`Connection error: ${err.message}`, "danger");
+      } finally {
+        testBtn.disabled = false;
+        testBtn.innerHTML = '<i class="bi bi-plug me-1"></i>Test Connection';
+      }
+    });
+  };
+
   // ---- Event wiring ----
   const setupEventListeners = () => {
     if (dom.searchInput) {
@@ -1024,7 +1370,7 @@ const renderBasicGroupParams = (modelName) => {
     }
 
     if (dom.form) {
-      dom.form.addEventListener("submit", (e) => {
+      dom.form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const rb = $(".corpus-radio:checked");
         if (!rb) {
@@ -1038,6 +1384,9 @@ const renderBasicGroupParams = (modelName) => {
 
         if (dom.modelSelect && dom.modelSelect.value) {
           renderParamsIntoModal(dom.modelSelect.value);
+        }
+        if (!dom.cfgLlmProvider?.value) {
+          await loadConfigureLlmFromSession();
         }
         if (dom.modelNameInput) {
           dom.modelNameInput.value = "";
@@ -1213,8 +1562,10 @@ const renderBasicGroupParams = (modelName) => {
   const collectAdvancedParams = () =>
     collectParamsFromContainer(dom.paramsArea);
 
-  // Apply LLM settings from session/user config to training_params
+  // Apply inline LLM settings from the configure modal to training_params
   const applyLlmSelection = async (training_params, modelName) => {
+    if (!modelUsesLlm(modelName)) return;
+
     const kind = getModelKind(modelName);
     const pm = state.promptModels || {};
     const backends = pm.backends || {};
@@ -1224,68 +1575,69 @@ const renderBasicGroupParams = (modelName) => {
     if (kind === "traditional") targetModelField = "llm_model_type";
     else if (kind === "llm_based") targetModelField = "llm";
 
-    // Fetch saved LLM config from server (session-based)
+    const savedConfig = collectConfigureLlmPayload();
+    if (!savedConfig?.provider) return;
+
     try {
-      const response = await fetch("/get-llm-config");
-      if (!response.ok) return; // No saved config, use defaults
-      
-      const savedConfig = await response.json();
-      const provider = savedConfig.provider;
-      const model = savedConfig.model;
-      const host = savedConfig.host;
-      const apiKey = savedConfig.api_key; // May not be returned for security
-
-      if (!provider) return; // No provider configured
-
-      training_params.llm_provider = provider;
-
-      if (provider === "openai") {
-        const chosenModel = model || kindCfg.model || (backends.openai?.models?.[0] || null);
-        if (targetModelField && chosenModel) {
-          training_params[targetModelField] = chosenModel;
-        }
-        if (apiKey) {
-          training_params.llm_api_key = apiKey;
-        }
-        // For OpenAI, server is implicit; clear explicit ollama/llama servers
-        if ("llm_server" in training_params && !kindCfg.server) {
-          delete training_params.llm_server;
-        }
-      } else if (provider === "ollama") {
-        const chosenModel = model || kindCfg.model || (backends.ollama?.models?.[0] || null);
-        const serverHost = host || kindCfg.server || backends.ollama?.host || null;
-
-        if (targetModelField && chosenModel) {
-          training_params[targetModelField] = chosenModel;
-        }
-        if (serverHost) {
-          training_params.llm_server = serverHost;
-        }
-      } else if (provider === "llama_cpp") {
-        const serverHost = host || kindCfg.server || backends.llama_cpp?.host || null;
-        if (serverHost) {
-          training_params.llm_server = serverHost;
-        }
-        if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
-          training_params[targetModelField] = kindCfg.model;
-        }
-      } else if (provider === "rchat" || provider === "custom") {
-        const chosenModel = model || kindCfg.model || null;
-        const serverHost = host || kindCfg.server || null;
-        
-        if (targetModelField && chosenModel) {
-          training_params[targetModelField] = chosenModel;
-        }
-        if (serverHost) {
-          training_params.llm_server = serverHost;
-        }
-        if (apiKey) {
-          training_params.llm_api_key = apiKey;
-        }
-      }
+      await fetch("/save-llm-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(savedConfig),
+      });
     } catch (err) {
-      console.warn("Failed to load LLM config from session:", err);
-      // Fall back to defaults from config.yaml if session config fails
+      console.warn("Failed to persist LLM config to session:", err);
+    }
+
+    const provider = savedConfig.provider;
+    const model = savedConfig.model;
+    const host = savedConfig.host;
+    const apiKey = savedConfig.api_key;
+
+    training_params.llm_provider = provider;
+
+    if (provider === "openai") {
+      const chosenModel = model || kindCfg.model || (backends.openai?.models?.[0] || null);
+      if (targetModelField && chosenModel) {
+        training_params[targetModelField] = chosenModel;
+      }
+      if (apiKey) {
+        training_params.llm_api_key = apiKey;
+      }
+      if ("llm_server" in training_params && !kindCfg.server) {
+        delete training_params.llm_server;
+      }
+    } else if (provider === "ollama") {
+      const chosenModel = model || kindCfg.model || (backends.ollama?.models?.[0] || null);
+      const serverHost = host || kindCfg.server || backends.ollama?.host || null;
+
+      if (targetModelField && chosenModel) {
+        training_params[targetModelField] = chosenModel;
+      }
+      if (serverHost) {
+        training_params.llm_server = serverHost;
+      }
+    } else if (provider === "llama_cpp") {
+      const serverHost = host || kindCfg.server || backends.llama_cpp?.host || null;
+      if (serverHost) {
+        training_params.llm_server = serverHost;
+      }
+      if (targetModelField && !training_params[targetModelField] && kindCfg.model) {
+        training_params[targetModelField] = kindCfg.model;
+      }
+    } else if (provider === "vllm" || provider === "rchat" || provider === "custom") {
+      const chosenModel = model || kindCfg.model || null;
+      const serverHost = host || kindCfg.server || null;
+
+      if (targetModelField && chosenModel) {
+        training_params[targetModelField] = chosenModel;
+      }
+      if (serverHost) {
+        training_params.llm_server = serverHost;
+      }
+      if (apiKey) {
+        training_params.llm_api_key = apiKey;
+      }
     }
   };
 
@@ -1371,6 +1723,18 @@ const renderBasicGroupParams = (modelName) => {
 
     // Get default parameters first to compare against
     const defaultParams = getDefaultParams(model);
+    const kind = getModelKind(model);
+
+    if (modelUsesLlm(model)) {
+      const needsLlm =
+        kind === "llm_based" ||
+        !!document.getElementById("tm-trad-do_labeller")?.checked ||
+        !!document.getElementById("tm-trad-do_summarizer")?.checked;
+      if (needsLlm && !collectConfigureLlmPayload()?.provider) {
+        showToast("Please select an LLM provider in LLM Settings.", "warning");
+        return;
+      }
+    }
     
     // Collect all parameters from form
     const basicParams = collectBasicGroupParams();
@@ -1383,7 +1747,6 @@ const renderBasicGroupParams = (modelName) => {
     };
 
     // Inject num_topics for non-external models
-    const kind = getModelKind(model);
 
     // Only traditional models use num_topics
     if (kind === "traditional") {
@@ -1466,10 +1829,19 @@ const renderBasicGroupParams = (modelName) => {
     }
 
     // When user has LLM preference (labeller/summarizer on or provider/model set), send LLM settings
-    if (training_params.do_labeller || training_params.do_summarizer || allCollectedParams.llm_provider || allCollectedParams.llm_model_type) {
+    if (
+      training_params.do_labeller ||
+      training_params.do_summarizer ||
+      allCollectedParams.llm_provider ||
+      allCollectedParams.llm_model_type ||
+      allCollectedParams.llm
+    ) {
       if (allCollectedParams.llm_provider) training_params.llm_provider = allCollectedParams.llm_provider;
       if (allCollectedParams.llm_model_type) training_params.llm_model_type = allCollectedParams.llm_model_type;
-      if (allCollectedParams.llm_server != null && allCollectedParams.llm_server !== "") training_params.llm_server = allCollectedParams.llm_server;
+      if (allCollectedParams.llm) training_params.llm = allCollectedParams.llm;
+      if (allCollectedParams.llm_server != null && allCollectedParams.llm_server !== "") {
+        training_params.llm_server = allCollectedParams.llm_server;
+      }
     }
     
     // console.log("Default params:", defaultParams);

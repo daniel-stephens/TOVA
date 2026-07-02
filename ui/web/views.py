@@ -856,9 +856,12 @@ def create_corpus(request):
             return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
 
     owner_id = payload.get("owner_id") or _request_user_id(request)
+    corpus_name = (payload.get("corpus_name") or "").strip()
+    if not corpus_name:
+        return JsonResponse({"error": "Corpus name is required"}, status=400)
 
     corpus_payload = {
-        "name": payload.get("corpus_name", ""),
+        "name": corpus_name,
         "description": f"Corpus from datasets {', '.join([d['id'] for d in datasets])}",
         "owner_id": owner_id,
         "datasets": datasets_lst,
@@ -1529,7 +1532,7 @@ def get_unique_corpus_names(request):
     pick = {}  # lower(name) -> {"name": original, "created_at": ts}
     for d in items:
         meta = (d or {}).get("metadata") or {}
-        name = (meta.get("name") or "").strip()
+        name = (meta.get("name") or d.get("name") or "").strip()
         if not name:
             continue
         key = name.lower()
@@ -2067,10 +2070,52 @@ def delete_model(request):
 # ------------------------------------------------------------------------------
 # Dashboard-related routes
 # ------------------------------------------------------------------------------
+def _model_nav_context(model_id: str) -> dict:
+    """model_id, model_name, corpus_id for dashboard and active-learning page shells."""
+    model_id = (model_id or "").strip()
+    model_name = ""
+    corpus_id = ""
+    if model_id:
+        try:
+            up = requests.get(
+                f"{R.API}/data/models/{model_id}",
+                timeout=(3.05, 20),
+            )
+            if up.ok:
+                body = up.json() or {}
+                model_name = (body.get("name") or "").strip()
+                meta = body.get("metadata") or {}
+                if not model_name:
+                    tr = meta.get("tr_params") or {}
+                    model_name = (tr.get("model_name") or "").strip()
+                corpus_id = (body.get("corpus_id") or "").strip()
+                if not corpus_id:
+                    tr = meta.get("tr_params") or {}
+                    corpus_id = (
+                        (meta.get("corpus_id") or "").strip()
+                        or (tr.get("corpus_id") or "").strip()
+                    )
+        except requests.RequestException:
+            logger.warning(
+                "model nav context: could not fetch metadata for %s",
+                model_id,
+                exc_info=True,
+            )
+    return {
+        "model_id": model_id,
+        "model_name": model_name,
+        "corpus_id": corpus_id,
+    }
+
+
 @login_required
 def active_learning_two(request):
     model_id = (request.GET.get("model_id") or "").strip()
-    return render(request, "active_learning_two.html", {"model_id": model_id})
+    return render(
+        request,
+        "active_learning_two.html",
+        _model_nav_context(model_id),
+    )
 
 
 @login_required
@@ -2546,43 +2591,11 @@ def active_learning_two_bootstrap(request):
 @login_required
 def dashboard(request):
     model_id = request.POST.get("model_id") or request.GET.get("model_id", "")
-    model_name = ""
-    corpus_id = ""
-    if model_id:
-        try:
-            up = requests.get(
-                f"{R.API}/data/models/{model_id}",
-                timeout=(3.05, 20),
-            )
-            if up.ok:
-                body = up.json() or {}
-                model_name = (body.get("name") or "").strip()
-                meta = body.get("metadata") or {}
-                if not model_name:
-                    tr = meta.get("tr_params") or {}
-                    model_name = (tr.get("model_name") or "").strip()
-                corpus_id = (body.get("corpus_id") or "").strip()
-                if not corpus_id:
-                    tr = meta.get("tr_params") or {}
-                    corpus_id = (
-                        (meta.get("corpus_id") or "").strip()
-                        or (tr.get("corpus_id") or "").strip()
-                    )
-        except requests.RequestException:
-            logger.warning(
-                "dashboard: could not fetch model metadata for %s",
-                model_id,
-                exc_info=True,
-            )
     try:
         return render(
             request,
             "dashboard.html",
-            {
-                "model_id": model_id,
-                "model_name": model_name,
-                "corpus_id": corpus_id,
-            },
+            _model_nav_context(model_id),
         )
     except Exception:
         logger.exception(

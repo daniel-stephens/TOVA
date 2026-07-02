@@ -18,6 +18,36 @@ METADATA_FILENAME = "metadata.json"
 DATA_FILENAME = "data.json"
 
 
+def _corpus_owner_id(corpus: Corpus) -> Optional[str]:
+    return corpus.owner_id or (corpus.metadata or {}).get("owner_id")
+
+
+def _corpus_display_name(corpus: Corpus) -> str:
+    name = corpus.name or (corpus.metadata or {}).get("name") or ""
+    return str(name).strip()
+
+
+def owner_has_corpus_name(
+    owner_id: Optional[str],
+    name: str,
+    *,
+    exclude_id: Optional[str] = None,
+) -> bool:
+    """Return True if the owner already has a corpus with this name (case-insensitive)."""
+    key = str(name or "").strip().lower()
+    if not key:
+        return False
+
+    for corpus in list_corpora():
+        if exclude_id and corpus.id == exclude_id:
+            continue
+        if _corpus_owner_id(corpus) != owner_id:
+            continue
+        if _corpus_display_name(corpus).lower() == key:
+            return True
+    return False
+
+
 def list_corpora() -> List[Corpus]:
     """
     List all corpora, including both the "temporary" and the ones indexed in the database, if any.
@@ -58,10 +88,19 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
     The draft will be later indexed in the persistent DB asynchronously if the user decides to do so.
     """
 
+    corpus_name = (corpus.name or "").strip()
+    if not corpus_name:
+        raise ValueError("Corpus name is required.")
+
+    owner_id = _corpus_owner_id(corpus)
+    if owner_has_corpus_name(owner_id, corpus_name):
+        raise ValueError(f"A corpus named '{corpus_name}' already exists.")
+
     corpus.id = get_unique_id(prefix="c_")
     corpus.created_at = datetime.utcnow().isoformat() + "Z"
     corpus.location = StorageType.temporal
     corpus.metadata = dict(corpus.metadata or {})
+    corpus.name = corpus_name
 
     documents_data = []
     if not corpus.datasets:

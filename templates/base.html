@@ -65,12 +65,145 @@
       font-weight: 800;
     }
 
-    .navbar-nav .nav-link.active {
-      font-weight: 600;
+    .dash-header__main {
+      border-bottom: 1px solid #e2e8f0;
     }
 
-    .navbar-nav .nav-link:hover {
-      text-decoration: underline;
+    .dash-header__main .navbar-nav .nav-link {
+      font-size: 0.875rem;
+      padding: 0.45rem 0.65rem;
+      color: #475569;
+    }
+
+    .dash-header__main .navbar-nav .nav-link.active {
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+
+    .dash-header__main .navbar-nav .nav-link:hover {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    .dash-subnav {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .dash-subnav__inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem 1rem;
+      min-height: 2.75rem;
+      padding-top: 0.35rem;
+      padding-bottom: 0.35rem;
+    }
+
+    .dash-subnav__model {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      min-width: 0;
+    }
+
+    .dash-subnav__label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      flex-shrink: 0;
+    }
+
+    .dash-subnav__name {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: min(20rem, 50vw);
+    }
+
+    .dash-subnav__tabs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .dash-subnav__dropdown .dropdown-menu {
+      font-size: 0.875rem;
+    }
+
+    .dash-subnav__dropdown .dropdown-item.active {
+      font-weight: 600;
+      color: #1d4ed8;
+      background: #eff6ff;
+    }
+
+    .dash-subnav__tab {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #64748b;
+      text-decoration: none;
+      border-radius: 0.375rem;
+      border: 1px solid transparent;
+      transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .dash-subnav__tab:hover {
+      color: #1d4ed8;
+      background: #fff;
+      text-decoration: none;
+    }
+
+    .dash-subnav__tab.is-active {
+      color: #1d4ed8;
+      background: #fff;
+      border-color: #dbeafe;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .dash-subnav__dropdown .dash-subnav__tab.dropdown-toggle::after {
+      margin-left: 0.35rem;
+      vertical-align: 0.15em;
+    }
+
+    .dash-subnav__action {
+      padding: 0.45rem 1rem;
+      background: #0d9488;
+      color: #fff;
+      border: 1px solid #0d9488;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(13, 148, 136, 0.3);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .dash-subnav__action:hover {
+      background: #0f766e;
+      border-color: #0f766e;
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 0 2px 6px rgba(15, 118, 110, 0.35);
+    }
+
+    .dash-subnav__action:focus-visible {
+      outline: 2px solid #5eead4;
+      outline-offset: 2px;
+    }
+
+    .dash-subnav__action.is-active {
+      background: #115e59;
+      border-color: #115e59;
+      color: #fff;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
     }
 
     .tova-profile-trigger {
@@ -314,73 +447,73 @@
 <body>
 
   {% if user.is_authenticated %}
-  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
-         href="{% url_for 'home' %}">TOVA</a>
+  <header class="dash-header">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm dash-header__main py-1">
+      <div class="container-fluid px-3 px-lg-4">
+        <a class="navbar-brand fw-bold me-lg-3{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
+           href="{% url_for 'home' %}">TOVA</a>
 
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon" aria-hidden="true"></span>
-      </button>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+                aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon" aria-hidden="true"></span>
+        </button>
 
-      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_data_page' %}active{% endif %}"
-               href="{% url_for 'load_data_page' %}">
-              Upload Data
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_corpus_page' %}active{% endif %}"
-               href="{% url_for 'load_corpus_page' %}">
-              Corpus library
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'loadModel' %}active{% endif %}"
-               href="{% url_for 'loadModel' %}">
-              Initiate Training
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
-               href="{% url_for 'trained_models' %}">
-              Trained topic models
-            </a>
-          </li>
-          {% if user.is_staff or request.tova_user.is_admin %}
-          <li class="nav-item">
-            <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
-               href="{% url 'admin:index' %}">
-              Admin
-            </a>
-          </li>
-          {% endif %}
-          {# Staff tools page removed; use Django admin /admin/tova/ console instead. #}
-        </ul>
+        <div class="collapse navbar-collapse" id="navbarContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_data_page' %}active{% endif %}"
+                 href="{% url_for 'load_data_page' %}">
+                Upload Data
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_corpus_page' %}active{% endif %}"
+                 href="{% url_for 'load_corpus_page' %}">
+                Corpus library
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'loadModel' %}active{% endif %}"
+                 href="{% url_for 'loadModel' %}">
+                Initiate Training
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
+                 href="{% url_for 'trained_models' %}">
+                Trained topic models
+              </a>
+            </li>
+            {% if user.is_staff or request.tova_user.is_admin %}
+            <li class="nav-item">
+              <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
+                 href="{% url 'admin:index' %}">
+                Admin
+              </a>
+            </li>
+            {% endif %}
+          </ul>
 
-        <div class="d-flex align-items-center gap-2">
-          <div class="dropdown tova-account-dropdown">
-            <button class="btn tova-profile-trigger dropdown-toggle" type="button" id="profileMenu"
-                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
-                    aria-label="Account menu"
-                    title="Open account menu">
-              <span class="tova-profile-avatar" aria-hidden="true">
-                {% if user.name %}
-                  {{ user.name|slice:":1"|upper }}
-                {% else %}
-                  {{ user.email|slice:":1"|upper }}
-                {% endif %}
-              </span>
-              <span class="tova-profile-label d-none d-md-flex flex-column align-items-start text-start">
-                <span class="tova-profile-title">{{ user.name|default:user.email }}</span>
-                <span class="tova-profile-hint">Settings &amp; sign out</span>
-              </span>
-              <i class="bi bi-chevron-down tova-profile-chevron" aria-hidden="true"></i>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end tova-account-menu" aria-labelledby="profileMenu">
+          <div class="d-flex align-items-center">
+            <div class="dropdown tova-account-dropdown">
+              <button class="btn tova-profile-trigger dropdown-toggle" type="button" id="profileMenu"
+                      data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                      aria-label="Account menu"
+                      title="Open account menu">
+                <span class="tova-profile-avatar" aria-hidden="true">
+                  {% if user.name %}
+                    {{ user.name|slice:":1"|upper }}
+                  {% else %}
+                    {{ user.email|slice:":1"|upper }}
+                  {% endif %}
+                </span>
+                <span class="tova-profile-label d-none d-md-flex flex-column align-items-start text-start">
+                  <span class="tova-profile-title">{{ user.name|default:user.email }}</span>
+                  <span class="tova-profile-hint">Settings &amp; sign out</span>
+                </span>
+                <i class="bi bi-chevron-down tova-profile-chevron" aria-hidden="true"></i>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end tova-account-menu" aria-labelledby="profileMenu">
               <li class="tova-account-menu-head">
                 <div class="tova-account-label">Signed in</div>
                 {% if user.name %}
@@ -439,7 +572,65 @@
         </div>
       </div>
     </div>
-  </nav>
+    </nav>
+
+    {% if model_id %}
+    <div class="dash-subnav" role="navigation" aria-label="Current model">
+      <div class="container-fluid px-3 px-lg-4 dash-subnav__inner">
+        <div class="dash-subnav__model">
+          <span class="dash-subnav__label">Model</span>
+          <span class="dash-subnav__name" title="{% if model_name %}{{ model_name }}{% else %}{{ model_id }}{% endif %}">
+            {% if model_name %}{{ model_name }}{% else %}{{ model_id }}{% endif %}
+          </span>
+        </div>
+        <nav class="dash-subnav__tabs" aria-label="Model views">
+          <div class="dropdown dash-subnav__dropdown">
+            <button type="button"
+              class="dash-subnav__tab dropdown-toggle{% if request.resolver_match and request.resolver_match.url_name == 'dashboard' %} is-active{% endif %}"
+              data-bs-toggle="dropdown" aria-expanded="false" id="dashDashboardsMenu">
+              Dashboards
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="dashDashboardsMenu">
+              <li>
+                <a class="dropdown-item{% if request.resolver_match and request.resolver_match.url_name == 'dashboard' and not request.GET.view %} active{% endif %}"
+                   href="{% url_for 'dashboard' %}?model_id={{ model_id|urlencode }}">
+                  Topic model dashboard
+                </a>
+              </li>
+              {% if corpus_id %}
+              <li>
+                <a class="dropdown-item"
+                   href="{% url_for 'training_page_get' %}?corpus_id={{ corpus_id|urlencode }}&amp;model_id={{ model_id|urlencode }}&amp;from_models=1&amp;autopreview=1">
+                  TF-IDF dashboard
+                </a>
+              </li>
+              {% endif %}
+              <li>
+                <a class="dropdown-item{% if request.resolver_match and request.resolver_match.url_name == 'dashboard' and request.GET.view == 'labeled' %} active{% endif %}"
+                   href="{% url_for 'dashboard' %}?model_id={{ model_id|urlencode }}&amp;view=labeled">
+                  Labeled dashboard
+                </a>
+              </li>
+            </ul>
+          </div>
+          {% if request.resolver_match and request.resolver_match.url_name == 'active_learning_two' %}
+          <a class="dash-subnav__tab dash-subnav__action"
+             id="dashActiveLearningLink"
+             href="{% url_for 'dashboard' %}?model_id={{ model_id|urlencode }}">
+            Dashboard
+          </a>
+          {% else %}
+          <a class="dash-subnav__tab dash-subnav__action"
+             id="dashActiveLearningLink"
+             href="{% url_for 'active_learning_two' %}?model_id={{ model_id|urlencode }}">
+            Active learning
+          </a>
+          {% endif %}
+        </nav>
+      </div>
+    </div>
+    {% endif %}
+  </header>
   {% elif not request.resolver_match or request.resolver_match.url_name != 'home' %}
   <nav class="navbar navbar-light bg-light border-bottom shadow-sm">
     <div class="container py-1">

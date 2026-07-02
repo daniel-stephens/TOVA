@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Active Learning 2 - TOVA{% endblock %}
+{% block title %}Active Learning - TOVA{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -18,14 +18,22 @@
     --al2-success-soft: #d1fae5;
     --al2-warning-soft: #fef3c7;
     --al2-warning-text: #92400e;
+    --al2-font-xs: 0.75rem;
+    --al2-font-sm: 0.8125rem;
+    --al2-font-base: 0.875rem;
+    --al2-font-md: 0.9375rem;
+    --al2-font-lg: 1.125rem;
   }
 
   .al2-page {
     background-color: #ffffff;
+    font-size: var(--al2-font-base);
+    color: var(--al2-text);
+    line-height: 1.5;
   }
 
   .al2-page-wrap {
-    max-width: 1320px;
+    max-width: 1440px;
     margin: 0 auto;
     width: 100%;
   }
@@ -65,10 +73,6 @@
       min-height: 0;
     }
 
-    .al2-page-header {
-      flex-shrink: 0;
-    }
-
     .al2-main-row {
       flex: 1 1 0;
       min-height: 0;
@@ -89,34 +93,11 @@
     }
 
     .al2-review-card > .card-header,
-    .al2-queue-card > .card-header,
     .al2-review-card > .card-footer {
       flex-shrink: 0;
     }
 
-    .al2-review-card > .card-body {
-      flex: 1 1 0;
-      min-height: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .al2-review-card .al2-content-toolbar,
-    .al2-review-card .al2-model-label-strip {
-      flex-shrink: 0;
-    }
-
-    .al2-review-card .al2-labels-section {
-      flex-shrink: 0;
-    }
-
-    .al2-review-card .al2-content-area {
-      flex: 1 1 0;
-      min-height: 5rem;
-      overflow-y: auto;
-    }
-
+    .al2-review-card > .card-body,
     .al2-queue-card > .card-body {
       flex: 1 1 0;
       min-height: 0;
@@ -125,35 +106,70 @@
       flex-direction: column;
     }
 
-    .al2-queue-card .al2-context-toolbar {
+    .al2-review-card .al2-review-top,
+    .al2-review-card .al2-labels-panel,
+    .al2-panel-head {
       flex-shrink: 0;
     }
 
-    .al2-queue-card .al2-context-bulk {
+    .al2-review-card .al2-document-section,
+    .al2-queue-list-section {
+      flex: 1 1 0;
+      min-height: 0;
+    }
+
+    .al2-queue-controls {
       flex-shrink: 0;
     }
 
-    .al2-queue-card .al2-context-scroll {
+    .al2-panel-section > .al2-scroll-pane {
       flex: 1 1 0;
       min-height: 0;
       overflow-y: auto;
     }
   }
 
-  /* ---------- Page header ---------- */
-  .al2-page-header {
-    position: relative;
-    z-index: 5;
-    background: #ffffff;
+  .al2-empty-panel {
     border: 1px solid var(--al2-border);
-    border-radius: 0.85rem;
-    padding: 0.55rem 0.85rem;
-    box-shadow: none;
+    border-radius: 0.65rem;
+    background: var(--al2-surface-soft);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    max-width: 32rem;
+    margin: 2rem auto;
   }
 
-  .al2-page-title {
-    font-size: 1.05rem;
-    line-height: 1.25;
+  .al2-empty-panel__title {
+    font-size: var(--al2-font-lg);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--al2-text);
+  }
+
+  .al2-empty-panel__text {
+    font-size: var(--al2-font-base);
+    color: var(--al2-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .al2-complete-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid #86efac;
+    border-radius: 0.5rem;
+    background: var(--al2-success-soft);
+    color: var(--al2-success);
+    font-size: var(--al2-font-sm);
+    font-weight: 600;
+  }
+
+  .al2-complete-banner.is-hidden {
+    display: none;
   }
 
   .al2-eyebrow {
@@ -176,6 +192,11 @@
     overflow: hidden;
   }
 
+  .al2-progress--compact {
+    height: 5px;
+    background: #e8edf4;
+  }
+
   .al2-progress-bar {
     height: 100%;
     background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
@@ -183,197 +204,420 @@
     border-radius: 999px;
   }
 
-  /* ---------- Cards: natural height, no viewport lock ---------- */
+  /* ---------- Cards & panels (shared queue + review) ---------- */
   .al2-card {
-    border: 1px solid var(--al2-border);
-    border-radius: 0.85rem;
-    background: var(--al2-surface);
+    border: none;
+    border-radius: 0.65rem;
+    background: var(--al2-surface-soft);
     box-shadow: none;
     display: flex;
     flex-direction: column;
-    transition: box-shadow 0.2s ease;
+  }
+
+  .al2-queue-card,
+  .al2-review-card {
+    background: var(--al2-surface-soft);
+  }
+
+  .al2-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    min-height: 0;
+  }
+
+  .al2-panel-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .al2-panel-head__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .al2-panel-section > .al2-scroll-pane {
+    flex: 1 1 auto;
+    min-height: 8rem;
+  }
+
+  .al2-scroll-pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .al2-context-scroll.al2-scroll-pane {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .al2-context-scroll .al2-table-wrap {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .al2-scroll-pane::-webkit-scrollbar,
+  .al2-table-wrap::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .al2-scroll-pane::-webkit-scrollbar-thumb,
+  .al2-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
   }
 
   .al2-card .card-header {
-    padding: 0.7rem 0.85rem;
-    background: var(--al2-surface);
-    border-bottom: 1px solid var(--al2-border);
+    padding: 0.55rem 0.75rem;
+    background: transparent;
+    border-bottom: none;
   }
 
   .al2-card .card-body {
-    padding: 0.85rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
   }
 
   .al2-card .card-footer {
-    background: var(--al2-surface);
-    border-top: 1px solid var(--al2-border);
-    padding: 0.65rem 0.85rem;
+    background: transparent;
+    border-top: none;
+    padding: 0.55rem 0.75rem;
   }
 
-  /* Left "document review" card: tighter chrome */
-  .al2-review-card .card-header {
-    padding: 0.4rem 0.65rem;
+  /* Review panel — same shell as queue; labels block is the only accent */
+  .al2-review-card > .card-body {
+    gap: 0.6rem;
   }
 
-  .al2-review-card .card-body {
-    padding: 0.45rem 0.6rem;
+  .al2-review-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
   }
 
-  .al2-review-card .card-footer {
-    padding: 0.45rem 0.6rem;
+  .al2-doc-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--al2-font-sm);
+    font-weight: 600;
+    color: var(--al2-text);
+    line-height: 1.35;
+    word-break: break-all;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
-  .al2-review-card .al2-header-title {
-    font-size: 0.88rem;
+  .al2-labels-panel {
+    background: var(--al2-surface-soft);
+    border: none;
+    border-radius: 0.55rem;
+    padding: 0.65rem 0.75rem 0.75rem;
+    margin-top: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
   }
 
-  .al2-review-card .al2-content-toolbar {
-    margin-bottom: 0.35rem;
-    gap: 0.4rem;
+  .al2-labels-meta {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem 1.5rem;
+    font-size: var(--al2-font-sm);
   }
 
-  .al2-review-card .al2-meta-pill {
-    padding: 0.12rem 0.45rem;
-    font-size: 0.68rem;
+  .al2-labels-meta__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 8rem;
+  }
+
+  .al2-labels-meta__k {
+    font-weight: 600;
+    color: var(--al2-text-muted);
+    white-space: nowrap;
+  }
+
+  .al2-labels-meta__v {
+    font-weight: 600;
+    color: var(--al2-text);
+    word-break: break-word;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .al2-labels-meta__v.is-unlabeled {
+    color: var(--al2-text-muted);
+    font-weight: 500;
+  }
+
+  .al2-labels-meta__v.is-applied {
+    color: var(--al2-success);
   }
 
   .al2-review-card .al2-view-toggle .btn {
     padding: 0.15rem 0.45rem;
-    font-size: 0.72rem;
   }
 
-  .al2-review-card .al2-content-area {
-    padding: 0.5rem 0.65rem;
-    line-height: 1.55;
-    font-size: 0.86rem;
+  .al2-review-card .al2-content-area,
+  .al2-content-area {
+    padding: 0.25rem 0.15rem 0.75rem;
+    line-height: 1.7;
+    font-size: 1rem;
+    min-height: 10rem;
+    color: var(--al2-text);
+    border: none;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
   }
 
-  .al2-review-card .al2-labels-section {
-    margin-top: 0.35rem;
+  .al2-content-area #al2DocumentText,
+  .al2-content-area p {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--al2-text);
   }
 
-  .al2-review-card .al2-section-label {
-    margin-bottom: 0.25rem;
-    font-size: 0.65rem;
+  .al2-review-card .al2-document-section,
+  .al2-queue-list-section {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .al2-review-card .al2-document-section .al2-content-area {
+    flex: 1 1 0;
+    min-height: 12rem;
+    overflow-y: auto;
+  }
+
+  .al2-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 0;
+  }
+
+  /* Queue panel — shares .al2-panel-body / .al2-scroll-pane with review */
+  .al2-queue-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--al2-font-sm);
+  }
+
+  .al2-queue-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .al2-progress-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    font-size: var(--al2-font-xs);
+    color: var(--al2-text-muted);
+  }
+
+  .al2-progress-stats strong {
+    color: var(--al2-text);
+    font-weight: 700;
+  }
+
+  .al2-progress-pct {
+    margin-left: auto;
+    font-size: var(--al2-font-xs);
+    font-weight: 700;
+    color: var(--al2-primary);
+    white-space: nowrap;
+  }
+
+  .al2-queue-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .al2-queue-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .al2-queue-filters .form-select,
+  .al2-context-view-toggle .btn,
+  .al2-view-toggle .btn {
+    font-size: var(--al2-font-sm);
+  }
+
+  .al2-clear-filters-btn {
+    font-size: var(--al2-font-xs);
+    padding: 0;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .al2-clear-filters-btn:not(.is-visible) {
+    display: none;
+  }
+
+  @media (max-width: 575.98px) {
+    .al2-queue-filters {
+      grid-template-columns: 1fr;
+    }
+
+    .al2-clear-filters-btn {
+      justify-self: end;
+    }
+  }
+
+  .al2-review-card .card-header {
+    display: none;
+  }
+
+  .al2-review-card .card-footer {
+    padding: 0.55rem 0.75rem;
+    background: transparent;
+    border-top: none;
+  }
+
+  .al2-review-card .al2-review-top {
+    margin-bottom: 0;
   }
 
   .al2-review-card #al2LabelSuggestions {
     display: flex;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    gap: 0.35rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
     width: 100%;
+    margin-bottom: 0;
+  }
+
+  .al2-suggestions-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .al2-suggestions-heading {
+    font-size: var(--al2-font-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--al2-text-muted);
+    margin: 0;
   }
 
   .al2-review-card .al2-label-chip {
     flex: 1 1 0;
     min-width: 0;
     justify-content: center;
-    padding: 0.28rem 0.55rem;
-    font-size: 0.78rem;
     border-width: 1px;
-    border-radius: 0.45rem;
+    border-radius: 0.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 700;
   }
 
-  .al2-review-card .al2-custom-label-wrap {
-    margin-top: 0.3rem;
+  .al2-review-card .al2-label-chip.is-rank-1 {
+    flex: 1.4 1 0;
+    padding: 0.62rem 0.85rem;
+    font-size: 1rem;
+  }
+
+  .al2-review-card .al2-label-chip.is-rank-2 {
+    flex: 1.15 1 0;
+    padding: 0.52rem 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .al2-review-card .al2-label-chip.is-rank-3 {
+    flex: 1 1 0;
+    padding: 0.44rem 0.65rem;
+    font-size: 0.8125rem;
   }
 
   .al2-review-card .al2-custom-label-wrap .form-label {
-    margin-bottom: 0.2rem !important;
-    font-size: 0.72rem;
-  }
-
-  .al2-review-card .al2-custom-label-row {
-    gap: 0.45rem;
-    max-width: 100%;
+    margin-bottom: 0.35rem !important;
+    font-size: var(--al2-font-sm);
+    color: var(--al2-text);
   }
 
   .al2-review-card .al2-custom-label-row .form-control {
     min-width: 0;
-    height: 34px;
-    font-size: 0.85rem;
+    height: 38px;
+    font-size: var(--al2-font-base);
+    border-color: rgba(29, 78, 216, 0.2);
   }
 
   .al2-review-card .al2-custom-label-row .btn {
-    height: 34px;
-    padding: 0 0.65rem;
-    font-size: 0.8rem;
-  }
-
-  .al2-review-card .al2-save-feedback {
-    min-height: 0;
-    margin-top: 0.2rem;
-    font-size: 0.72rem;
-    line-height: 1.2;
-  }
-
-  .al2-review-card .al2-applied-label {
-    padding: 0.18rem 0.5rem;
-    font-size: 0.68rem;
-    max-width: 160px;
-  }
-
-  /* Queue card body has p-0 + a search row above the table */
-  .al2-card > .card-body.p-0 {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .al2-header-title {
+    height: 38px;
+    padding: 0 1rem;
+    font-size: var(--al2-font-base);
     font-weight: 600;
-    color: var(--al2-text);
-    line-height: 1.2;
-    font-size: 0.95rem;
+    white-space: nowrap;
   }
 
-  .al2-header-subtitle {
-    font-size: 0.74rem;
-    color: var(--al2-text-muted);
-    margin-top: 0.1rem;
+  .al2-review-card .al2-custom-label-wrap {
+    margin-top: 0;
   }
 
-  /* ---------- Content toolbar (meta + view toggle) ---------- */
-  .al2-content-toolbar {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.55rem;
+  .al2-review-card .al2-custom-label-row {
+    gap: 0.5rem;
+    max-width: 100%;
   }
 
-  .al2-meta-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+  .al2-context-view-toggle .btn {
+    padding: 0.2rem 0.5rem;
+    border-color: var(--al2-border);
+    color: #475569;
   }
 
-  .al2-meta-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.22rem 0.6rem;
-    background: var(--al2-surface-alt);
+  .al2-context-view-toggle .btn.is-active {
+    background: var(--al2-primary);
+    border-color: var(--al2-primary);
+    color: #fff;
+  }
+
+  .al2-queue-filters .form-select {
+    padding: 0.22rem 1.6rem 0.22rem 0.45rem;
+    border-color: var(--al2-border);
     color: #334155;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 500;
+    background-color: #fff;
   }
 
-  .al2-meta-pill.is-primary {
-    background: var(--al2-primary-soft);
-    color: #1e3a8a;
+  .al2-queue-filters .form-select:focus {
+    border-color: var(--al2-primary);
+    box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.12);
   }
 
   /* View toggle (Summary / Full text) */
   .al2-view-toggle .btn {
     border-radius: 0.4rem;
-    font-size: 0.78rem;
     padding: 0.2rem 0.55rem;
     border-color: var(--al2-border);
     color: #475569;
@@ -396,20 +640,9 @@
     box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
   }
 
-  /* ---------- Content area (text or summary) — height capped per breakpoint; overflow scrolls ---------- */
-  .al2-content-area {
-    border: 1px solid var(--al2-border);
-    border-radius: 0.4rem;
-    background: #ffffff;
-    padding: 0.85rem 0.95rem;
-    line-height: 1.7;
-    font-size: 0.92rem;
-    color: #1f2937;
-    overflow-y: auto;
-  }
-
+  /* ---------- Content area ---------- */
   .al2-content-area.is-summary {
-    background: #ffffff;
+    background: transparent;
   }
 
   .al2-content-area p {
@@ -420,115 +653,14 @@
     margin-bottom: 0;
   }
 
-  .al2-content-summary-tag {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--al2-primary);
-    margin-bottom: 0.5rem;
-  }
-
-  .al2-content-area::-webkit-scrollbar,
-  .al2-table-wrap::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .al2-content-area::-webkit-scrollbar-thumb,
-  .al2-table-wrap::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-  }
-
-  /* ---------- Applied label ---------- */
-  .al2-applied-label {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.28rem 0.7rem;
-    border-radius: 999px;
-    font-size: 0.74rem;
-    font-weight: 600;
-    background: var(--al2-warning-soft);
-    color: var(--al2-warning-text);
-    transition: background 0.2s ease, color 0.2s ease;
-    white-space: nowrap;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .al2-applied-label.is-applied {
-    background: var(--al2-success-soft);
-    color: var(--al2-success);
-  }
-
-  /* ---------- Model label (above document content) ---------- */
-  .al2-model-label-strip {
-    display: flex;
-    flex-direction: row;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 0.5rem;
-    padding: 0;
-    flex-shrink: 0;
-    min-width: 0;
-  }
-
-  .al2-model-label-strip__k {
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--al2-text-muted);
-    flex-shrink: 0;
-  }
-
-  .al2-model-label-strip__k::after {
-    content: ":";
-  }
-
-  .al2-model-label-strip__v {
-    font-size: 0.95rem;
-    font-weight: 600;
-    line-height: 1.35;
-    color: var(--al2-text);
-    min-width: 0;
-    flex: 1 1 auto;
-    white-space: normal;
-    word-break: break-word;
-  }
-
-  .al2-review-card .al2-model-label-strip {
-    margin-bottom: 0.55rem;
-  }
-
-  .al2-review-card .al2-model-label-strip__v {
-    font-size: 0.98rem;
-  }
-
-  .al2-labels-section {
-    margin-top: 0.6rem;
-  }
-
-  .al2-section-label {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--al2-text-muted);
-    margin-bottom: 0.5rem;
-    display: block;
-  }
+  /* ---------- Document meta (review header) ---------- */
 
   .al2-label-chip {
     display: inline-flex;
     align-items: center;
     padding: 0.5rem 1rem;
     background: #eff6ff;
-    border: 2px solid #93c5fd;
+    border: 1px solid #bfdbfe;
     color: #1e3a8a;
     border-radius: 0.6rem;
     font-size: 0.9rem;
@@ -556,7 +688,7 @@
   }
 
   .al2-custom-label-wrap {
-    margin-top: 0.45rem;
+    margin-top: 0;
   }
 
   .al2-custom-label-row {
@@ -597,10 +729,11 @@
   }
 
   /* ---------- Footer buttons ---------- */
-  .al2-footer-counter {
-    font-size: 0.78rem;
-    color: var(--al2-text-muted);
-    font-weight: 500;
+  .al2-review-card .card-footer .btn {
+    min-width: 6.75rem;
+    padding: 0.5rem 1.1rem;
+    font-size: var(--al2-font-base);
+    font-weight: 600;
   }
 
   .al2-card .btn {
@@ -617,10 +750,10 @@
     box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
   }
 
-  /* ---------- Table: horizontal scroll; vertical scroll when capped (see lg+ rules) ---------- */
+  /* ---------- Table (scrolls with parent .al2-scroll-pane) ---------- */
   .al2-table-wrap {
     overflow-x: auto;
-    overflow-y: auto;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -628,18 +761,24 @@
     margin-bottom: 0;
     width: 100%;
     table-layout: fixed;
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: #f8fafc;
   }
 
   .al2-table-wrap thead th {
-    font-size: 0.75rem;
-    border-bottom: 1px solid var(--al2-border);
-    padding: 0.35rem 0.2rem;
+    font-size: var(--al2-font-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--al2-text-muted);
+    border-bottom: none;
+    padding: 0.45rem 0.3rem 0.4rem;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 2;
-    background-color: #ffffff;
-    box-shadow: 0 1px 0 var(--al2-border-soft);
+    background-color: var(--al2-surface-soft);
+    box-shadow: none;
   }
 
   .al2-table-wrap tbody tr {
@@ -647,31 +786,54 @@
     transition: background-color 0.12s ease;
   }
 
-  .al2-table-wrap tbody tr:hover {
+  .al2-table-wrap tbody tr:hover:not(.is-active) {
     background-color: #f8fafc;
   }
 
   .al2-table-wrap tbody tr.is-active {
-    background-color: #eef2f7;
+    background: #fef3c7;
+    box-shadow: inset 3px 0 0 #d97706;
+  }
+
+  .al2-table-wrap tbody tr.is-active:hover {
+    background: #fde68a;
   }
 
   .al2-table-wrap tbody tr.is-active td {
-    color: #0f172a;
+    color: #78350f;
+  }
+
+  .al2-table-wrap tbody tr.is-active .al2-text-cell {
+    color: #92400e;
+    font-weight: 500;
+  }
+
+  .al2-table-wrap tbody tr.is-active .al2-label-tag {
+    background: #fffbeb;
+    color: #78350f;
+  }
+
+  .al2-table-wrap tbody tr.is-active .al2-row-select {
+    border-color: #d97706;
+    background-color: #d97706;
   }
 
   .al2-table-wrap tbody td {
-    padding: 0.32rem 0.2rem;
-    font-size: 0.81rem;
-    border-color: var(--al2-border-soft);
+    padding: 0.45rem 0.3rem;
+    font-size: var(--al2-font-sm);
+    border: none;
     vertical-align: middle;
   }
 
   .al2-text-cell {
+    font-size: var(--al2-font-base);
+    line-height: 1.55;
+    color: var(--al2-text);
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #475569;
+    font-weight: 500;
   }
 
   .al2-label-tag {
@@ -680,7 +842,7 @@
     background: #f8fafc;
     color: #334155;
     border-radius: 0.35rem;
-    font-size: 0.7rem;
+    font-size: var(--al2-font-xs);
     font-weight: 500;
     white-space: nowrap;
   }
@@ -711,34 +873,20 @@
     cursor: pointer;
   }
 
-  .al2-col-doc {
-    width: 5rem;
-    max-width: 5rem;
-    padding-left: 0.25rem;
-    padding-right: 0.15rem;
-  }
-
-  .al2-doc-id-cell {
-    cursor: help;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .al2-col-preview {
-    width: 38%;
+    width: 58%;
   }
 
   .al2-table-wrap.has-similarity-col .al2-col-preview {
-    width: 30%;
+    width: 42%;
   }
 
   .al2-col-model {
-    width: 18%;
+    width: 16%;
   }
 
   .al2-col-human {
-    width: 18%;
+    width: 16%;
   }
 
   .al2-col-similarity {
@@ -750,15 +898,51 @@
     white-space: nowrap;
   }
 
+  .al2-col-rank {
+    width: 1.75rem;
+    max-width: 1.75rem;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--al2-text-muted);
+    padding-left: 0.15rem !important;
+    padding-right: 0.1rem !important;
+  }
+
+  .al2-col-peek {
+    width: 2rem;
+    max-width: 2rem;
+    text-align: center;
+    padding-left: 0.1rem !important;
+    padding-right: 0.15rem !important;
+  }
+
+  .al2-peek-btn {
+    color: var(--al2-text-muted);
+    line-height: 1;
+  }
+
+  .al2-peek-btn:hover,
+  .al2-peek-btn:focus {
+    color: var(--al2-primary);
+  }
+
+  .al2-similar-preview-text {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--al2-text);
+    max-height: min(50vh, 28rem);
+    overflow-y: auto;
+  }
+
   .al2-empty-state {
     text-align: center;
     color: var(--al2-text-muted);
     padding: 2rem 1rem;
-    font-size: 0.85rem;
+    font-size: var(--al2-font-sm);
   }
 
   .al2-empty-state-note {
-    font-size: 0.8rem;
+    font-size: var(--al2-font-xs);
     color: #94a3b8;
   }
 
@@ -768,80 +952,34 @@
       max-width: 100%;
     }
 
-    .al2-review-card .al2-content-area {
+    .al2-panel-section > .al2-scroll-pane {
       min-height: 10rem;
-      max-height: min(16rem, 34dvh);
-    }
-
-    .al2-queue-card .al2-context-scroll {
-      min-height: 12rem;
-      max-height: min(22rem, 42dvh);
+      max-height: min(18rem, 38dvh);
     }
   }
 
-  /* ---------- Context panel ---------- */
-  .al2-context-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.65rem 0.85rem 0.5rem;
-    border-bottom: 1px solid var(--al2-border-soft);
-  }
-
-  .al2-context-view-toggle .btn {
-    font-size: 0.72rem;
-    padding: 0.2rem 0.5rem;
-    border-color: var(--al2-border);
-    color: #475569;
-  }
-
-  .al2-context-view-toggle .btn.is-active {
-    background: var(--al2-primary);
-    border-color: var(--al2-primary);
-    color: #fff;
-  }
-
-  .al2-context-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0.35rem 0.5rem 0.65rem;
+  .al2-filter-hidden-notice {
+    font-size: var(--al2-font-xs);
+    color: var(--al2-text-muted);
+    padding: 0.35rem 0.5rem 0.15rem;
+    text-align: center;
   }
 
   .al2-context-group {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .al2-context-group:last-child {
+    margin-bottom: 0;
   }
 
   .al2-context-group__title {
-    font-size: 0.68rem;
+    font-size: var(--al2-font-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--al2-text-muted);
-    padding: 0.35rem 0.4rem 0.25rem;
-  }
-
-  .al2-table-wrap tbody tr.is-recommended {
-    background: var(--al2-primary-soft);
-  }
-
-  .al2-table-wrap tbody tr.is-recommended.is-active {
-    background: #eef2ff;
-    box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.12);
-  }
-
-  .al2-context-badge.is-next {
-    display: inline-block;
-    margin-top: 0.15rem;
-    font-size: 0.58rem;
-    font-weight: 600;
-    padding: 0.08rem 0.3rem;
-    border-radius: 0.25rem;
-    background: var(--al2-primary);
-    color: #fff;
-    white-space: nowrap;
+    padding: 0.5rem 0.3rem 0.35rem;
   }
 
   .al2-label-tag.is-unlabeled {
@@ -861,24 +999,7 @@
     font-size: 0.72rem;
     color: var(--al2-text-muted);
     padding: 0.35rem 0.45rem 0.25rem;
-    border-bottom: 1px solid var(--al2-border-soft);
-    background: var(--al2-surface-soft);
-  }
-
-  .al2-context-bulk {
-    flex-shrink: 0;
-    padding: 0.5rem 0.85rem;
-    border-bottom: 1px solid var(--al2-border-soft);
-    background: var(--al2-surface-soft);
-  }
-
-  .al2-context-bulk.is-hidden {
-    display: none;
-  }
-
-  .al2-context-bulk .form-label {
-    font-size: 0.72rem;
-    margin-bottom: 0.2rem;
+    background: transparent;
   }
 
   .al2-chip-loading {
@@ -895,17 +1016,17 @@
     gap: 0.5rem;
     min-height: 8rem;
     color: var(--al2-text-muted);
-    font-size: 0.85rem;
+    font-size: var(--al2-font-sm);
   }
 
   .al2-review-loading.is-hidden {
     display: none;
   }
 
-  .al2-review-card.is-loading .al2-content-toolbar,
+  .al2-review-card.is-loading .al2-review-top,
+  .al2-review-card.is-loading .al2-document-section,
   .al2-review-card.is-loading .al2-content-area,
-  .al2-review-card.is-loading .al2-model-label-strip,
-  .al2-review-card.is-loading .al2-labels-section,
+  .al2-review-card.is-loading .al2-labels-panel,
   .al2-review-card.is-loading .card-footer {
     visibility: hidden;
     pointer-events: none;
@@ -915,8 +1036,7 @@
     font-size: 0.68rem;
     color: var(--al2-text-muted);
     padding: 0.35rem 0.45rem 0.25rem;
-    border-bottom: 1px solid var(--al2-border-soft);
-    background: var(--al2-surface-soft);
+    background: transparent;
   }
 
 </style>
@@ -927,91 +1047,128 @@
   <div class="container-fluid">
     <div class="al2-page-wrap">
 
-      <!-- Page header -->
-      <div class="al2-page-header mb-2">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-1">
-          <div>
-            <div class="d-flex align-items-center gap-2 mb-1">
-              <span class="al2-eyebrow">
-                Active Learning
-              </span>
-            </div>
-            <h4 class="mb-0 fw-bold al2-page-title">Document Review</h4>
-          </div>
-          <div class="d-flex align-items-center gap-3">
-            <a id="al2DashboardLink" href="/dashboard" class="btn btn-outline-secondary btn-sm">
-              Dashboard
-            </a>
-          </div>
-        </div>
+      <div id="al2CompleteBanner" class="al2-complete-banner is-hidden" role="status" aria-live="polite">
+        <span>All documents in this model are labeled.</span>
+        <a id="al2CompleteDashboardLink"
+          href="{% url_for 'dashboard' %}{% if model_id %}?model_id={{ model_id|urlencode }}{% endif %}"
+          class="btn btn-success btn-sm">Return to dashboard</a>
+      </div>
 
-        <div class="d-flex align-items-center gap-3">
-          <div class="flex-grow-1">
-            <div class="al2-progress">
-              <div class="al2-progress-bar" id="al2ProgressBar" style="width: 0%;"></div>
-            </div>
-          </div>
-          <span class="small fw-semibold text-muted text-nowrap" id="al2ProgressLabel">0 of 0 reviewed</span>
+      <div id="al2NoModelState" class="al2-empty-panel{% if model_id %} d-none{% endif %}">
+        <div class="al2-empty-panel__title">No model selected</div>
+        <p class="al2-empty-panel__text mb-0">
+          Active learning needs a trained topic model. Open a model on the dashboard, then use
+          <strong>Active learning</strong> to start reviewing.
+        </p>
+        <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+          <a class="btn btn-primary btn-sm" href="{% url_for 'trained_models' %}">Trained models</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url_for 'dashboard' %}">Dashboard</a>
         </div>
       </div>
 
       <!-- Main 2-column layout -->
-      <div class="row g-2 al2-main-row">
+      <div id="al2MainLayout" class="row g-2 al2-main-row{% if not model_id %} d-none{% endif %}">
 
-        <!-- LEFT: Document + labels -->
-        <div class="col-xl-7 col-lg-6">
-          <div class="card al2-card al2-review-card">
-            <div class="card-header">
-              <div class="d-flex justify-content-between align-items-center gap-2">
-                <div class="d-flex align-items-center gap-2">
-                  <div>
-                    <div class="al2-header-title">Document Review</div>
+        <!-- LEFT: Context panel -->
+        <div class="col-xl-6 col-lg-6">
+          <div class="card al2-card al2-queue-card">
+            <div class="card-body al2-panel-body">
+              <header class="al2-panel-head">
+                <div class="al2-panel-head__row">
+                  <input type="search" class="form-control form-control-sm al2-queue-search" id="al2SearchInput"
+                    placeholder="Search documents" autocomplete="off" aria-label="Search documents">
+                </div>
+                <div class="al2-queue-progress" id="al2ContextProgress"
+                  role="group" aria-label="Labeling progress">
+                  <div class="al2-progress-stats">
+                    <span><strong id="al2LabeledCount">0</strong> labeled</span>
+                    <span aria-hidden="true">·</span>
+                    <span><strong id="al2RemainingCount">0</strong> remaining</span>
+                    <span class="al2-progress-pct" id="al2ProgressPct">0%</span>
+                  </div>
+                  <div class="al2-progress al2-progress--compact" id="al2ProgressTrack"
+                    role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+                    aria-labelledby="al2ProgressPct">
+                    <div class="al2-progress-bar" id="al2ProgressBar" style="width: 0%;"></div>
                   </div>
                 </div>
-                <span class="al2-applied-label" id="al2AppliedLabel">
-                  <span id="al2AppliedLabelText">Unlabeled</span>
-                </span>
+              </header>
+
+              <div class="al2-queue-controls" id="al2ContextFilters">
+                <div class="btn-group btn-group-sm al2-context-view-toggle" role="group" id="al2ContextViewToggle">
+                  <button type="button" class="btn is-active" data-context-view="recommended">Recommended</button>
+                  <button type="button" class="btn" data-context-view="by_model_label">By model label</button>
+                  <button type="button" class="btn" data-context-view="similar">Similar</button>
+                </div>
+                <div class="al2-queue-filters">
+                  <select class="form-select form-select-sm" id="al2ReviewStatusFilter"
+                    aria-label="Filter by review status">
+                    <option value="unlabeled" selected>Unlabeled only</option>
+                    <option value="labeled">Labeled only</option>
+                    <option value="all">All documents</option>
+                  </select>
+                  <select class="form-select form-select-sm" id="al2ModelLabelFilter"
+                    aria-label="Filter by model label">
+                    <option value="">All model labels</option>
+                  </select>
+                  <select class="form-select form-select-sm" id="al2HumanLabelFilter"
+                    aria-label="Filter by human label">
+                    <option value="">All human labels</option>
+                  </select>
+                  <button type="button" class="btn btn-link btn-sm al2-clear-filters-btn" id="al2ClearFiltersBtn">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div class="al2-queue-list-section al2-panel-section">
+                <div class="al2-scroll-pane al2-context-scroll" id="al2ContextPanel"></div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="card-body">
+        <!-- RIGHT: Document Review (primary) -->
+        <div class="col-xl-6 col-lg-6">
+          <div class="card al2-card al2-review-card">
+            <div class="card-body al2-panel-body">
               <div id="al2ReviewLoading" class="al2-review-loading" aria-live="polite">
                 <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
                 <span>Loading documents…</span>
               </div>
-              <!-- Toolbar: meta info + view toggle -->
-              <div class="al2-content-toolbar">
-                <div class="al2-meta-pills" id="al2MetaPills"></div>
+
+              <div class="al2-review-top">
+                <div class="al2-doc-id" id="al2DocId" aria-live="polite">—</div>
                 <div class="btn-group btn-group-sm al2-view-toggle" role="group" id="al2ViewToggle">
-                  <button type="button" class="btn" data-view="text">
-                    Full text
-                  </button>
-                  <button type="button" class="btn" data-view="summary">
-                    Summary
-                  </button>
+                  <button type="button" class="btn" data-view="text">Full text</button>
+                  <button type="button" class="btn" data-view="summary">Summary</button>
                 </div>
               </div>
 
-              <div class="al2-model-label-strip" id="al2ModelLabelStrip" aria-live="polite">
-                <span class="al2-model-label-strip__k">Model label</span>
-                <span class="al2-model-label-strip__v" id="al2ModelLabelText">—</span>
-              </div>
-
-              <!-- Content area: text or summary -->
-              <div class="al2-content-area" id="al2ContentArea">
-                <p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;"></p>
-              </div>
-
-              <!-- Suggested labels -->
-              <div class="al2-labels-section">
-                <div class="al2-section-label">
-                  Suggested labels
+              <div class="al2-document-section al2-panel-section">
+                <div class="al2-scroll-pane al2-content-area" id="al2ContentArea">
+                  <p id="al2DocumentText" class="mb-0" style="white-space: pre-wrap;"></p>
                 </div>
-                <div id="al2LabelSuggestions"></div>
+              </div>
+
+              <div class="al2-labels-panel">
+                <div class="al2-labels-meta" aria-live="polite">
+                  <div class="al2-labels-meta__item">
+                    <span class="al2-labels-meta__k">Model label</span>
+                    <span class="al2-labels-meta__v" id="al2MetaModelLabel">—</span>
+                  </div>
+                  <div class="al2-labels-meta__item">
+                    <span class="al2-labels-meta__k">Human label</span>
+                    <span class="al2-labels-meta__v is-unlabeled" id="al2MetaHumanLabel">Unlabeled</span>
+                  </div>
+                </div>
+                <div class="al2-suggestions-block">
+                  <h3 class="al2-suggestions-heading">Suggested labels</h3>
+                  <div id="al2LabelSuggestions"></div>
+                </div>
                 <div class="al2-custom-label-wrap">
-                  <label for="al2CustomLabelInput" class="form-label fw-semibold mb-1">Label</label>
                   <div class="al2-custom-label-row">
-                    <input type="text" class="form-control form-control-sm" id="al2CustomLabelInput"
+                    <input type="text" class="form-control" id="al2CustomLabelInput"
                       list="al2HumanLabelList" placeholder="Type or select a label" maxlength="120" autocomplete="off">
                     <button type="button" class="btn btn-success" id="al2ApplyBtn" disabled>
                       Save Label &amp; Continue
@@ -1024,54 +1181,10 @@
             </div>
 
             <div class="card-footer">
-              <div class="d-flex justify-content-between align-items-center gap-2">
-                <span class="al2-footer-counter" id="al2DocCounter">Document 1 of 1</span>
-                <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-outline-secondary btn-sm" id="al2PrevBtn">
-                    Previous
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" id="al2NextBtn">
-                    Next
-                  </button>
-                </div>
+              <div class="d-flex justify-content-end align-items-center gap-2">
+                <button type="button" class="btn btn-outline-secondary" id="al2PrevBtn">Previous</button>
+                <button type="button" class="btn btn-outline-secondary" id="al2NextBtn">Skip</button>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- RIGHT: Context panel -->
-        <div class="col-xl-5 col-lg-6">
-          <div class="card al2-card al2-queue-card">
-            <div class="card-header py-2">
-              <div class="al2-header-title">Context</div>
-              <div class="al2-header-subtitle">
-                <span id="al2QueueCount">0</span> documents ·
-                <span id="al2UnlabeledCount">0</span> unlabeled
-              </div>
-            </div>
-            <div class="card-body p-0 d-flex flex-column">
-              <div class="al2-context-toolbar">
-                <div class="btn-group btn-group-sm al2-context-view-toggle" role="group" id="al2ContextViewToggle">
-                  <button type="button" class="btn is-active" data-context-view="recommended">Recommended</button>
-                  <button type="button" class="btn" data-context-view="by_model_label">By model label</button>
-                  <button type="button" class="btn" data-context-view="similar">Similar</button>
-                </div>
-                <div class="al2-search flex-grow-1" style="min-width: 8rem;">
-                  <input type="search" class="form-control form-control-sm" id="al2SearchInput"
-                    placeholder="Search documents" autocomplete="off">
-                </div>
-              </div>
-              <div class="al2-context-bulk" id="al2ContextBulkBar">
-                <label for="al2ContextBulkLabelInput" class="form-label fw-semibold mb-1">Label selected documents</label>
-                <div class="d-flex flex-wrap gap-2 align-items-stretch">
-                  <input type="text" class="form-control form-control-sm flex-grow-1" id="al2ContextBulkLabelInput"
-                    list="al2HumanLabelList" maxlength="120" placeholder="Type or select a label" autocomplete="off">
-                  <button type="button" class="btn btn-success btn-sm text-nowrap" id="al2ContextBulkApplyBtn" disabled>
-                    Label selected (0)
-                  </button>
-                </div>
-              </div>
-              <div class="al2-context-scroll" id="al2ContextPanel"></div>
             </div>
           </div>
         </div>
@@ -1080,6 +1193,24 @@
     </div>
   </div>
 
+  <div class="modal fade" id="al2SimilarPreviewModal" tabindex="-1"
+    aria-labelledby="al2SimilarPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h5 class="modal-title fs-6" id="al2SimilarPreviewModalLabel">Document preview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="al2SimilarPreviewBody"></div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary btn-sm" id="al2SimilarPreviewOpenBtn">
+            Open in review panel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </div>
 {% endblock %}
@@ -1097,7 +1228,6 @@
 
   const AL2_RANKINGS_URL = "/api/active-learning-2/rankings";
   const AL2_RELATED_URL = "/api/active-learning-2/related";
-  const AL2_BULK_URL = "/api/active-learning-2/labels/bulk";
 
   const escapeHtml = (str) =>
     String(str ?? "").replace(/[&<>"']/g, (m) => (
@@ -1121,18 +1251,20 @@
   let contextSimilarAnchorId = null;
   let contextSimilarLoading = false;
   const selectedDocIds = new Set();
+  let similarPreviewDocId = null;
   let pageReady = false;
   let lastRecommendation = null;
   let contextPanelTimer = null;
   let suggestionsDeferTimer = null;
+  let reviewStatusFilter = "unlabeled";
+  let selectedModelLabelFilter = "";
+  let selectedHumanLabelFilter = "";
 
   const CONTEXT_PANEL_CAP = 200;
   const CONTEXT_LABELED_CAP = 80;
   const RECOMMEND_URL = `{% url_for 'active_learning_two_recommend' %}?model_id=${encodeURIComponent(modelId)}`;
 
   const displayId = (id) => String(id || "").slice(0, Math.max(0, String(id || "").length - 4));
-  const TABLE_ID_PREVIEW_LEN = 7;
-  const shortTableId = (id) => String(id || "").slice(0, TABLE_ID_PREVIEW_LEN);
   const truncate = (str, maxLen) => {
     const s = String(str ?? "");
     if (s.length <= maxLen) return s;
@@ -1368,25 +1500,6 @@
     return buildRelatedFallback(anchorDocId);
   };
 
-  const postBulkLabels = async (label, docIds) => {
-    const body = { model_id: modelId, label, doc_ids: docIds };
-    const live = await tryJsonFetch(AL2_BULK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (live) return live;
-    let lastRec = null;
-    for (const docId of docIds) {
-      lastRec = await jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId, doc_id: docId, label }),
-      });
-    }
-    return lastRec;
-  };
-
   const loadBootstrap = async () => {
     const data = await jsonFetch(`{% url_for 'active_learning_two_bootstrap' %}`, {
       method: "POST",
@@ -1499,6 +1612,7 @@
       if (cur?.id) navHistory.push(cur.id);
     }
     activeLearningIndex = ix;
+    syncCurrentDocSelection();
     renderActiveLearningTwo({ refreshContext: false });
     onDocFocusChange();
   };
@@ -1510,9 +1624,36 @@
     goToDocId(target);
   };
 
+  const skipToNextRecommended = () => {
+    const current = getCurrentDoc();
+    const unlabeled = sortDocsForContext(getDocs().filter((d) => !d.reviewed));
+    if (
+      recommendedDocId
+      && current?.id !== recommendedDocId
+      && unlabeled.some((d) => d.id === recommendedDocId)
+    ) {
+      goToRecommended(recommendedDocId);
+      return;
+    }
+    const next = unlabeled.find((d) => d.id !== current?.id);
+    if (next) goToRecommended(next.id);
+  };
+
+  const canSkipToNext = () => {
+    const current = getCurrentDoc();
+    const unlabeled = sortDocsForContext(getDocs().filter((d) => !d.reviewed));
+    if (
+      recommendedDocId
+      && current?.id !== recommendedDocId
+      && unlabeled.some((d) => d.id === recommendedDocId)
+    ) return true;
+    return unlabeled.some((d) => d.id !== current?.id);
+  };
+
   const goTo = (newIndex) => {
     if (newIndex < 0 || newIndex >= getDocs().length) return;
     activeLearningIndex = newIndex;
+    syncCurrentDocSelection();
     renderActiveLearningTwo({ refreshContext: false });
     onDocFocusChange();
   };
@@ -1523,6 +1664,7 @@
       const ix = docOrder.indexOf(target);
       if (ix >= 0) {
         activeLearningIndex = ix;
+        syncCurrentDocSelection();
         renderActiveLearningTwo({ refreshContext: false });
         onDocFocusChange();
         return;
@@ -1551,6 +1693,136 @@
     );
   };
 
+  const docMatchesFilters = (doc) => {
+    if (reviewStatusFilter === "unlabeled" && doc.reviewed) return false;
+    if (reviewStatusFilter === "labeled" && !doc.reviewed) return false;
+    if (selectedModelLabelFilter) {
+      const ml = doc.label || "—";
+      if (ml !== selectedModelLabelFilter) return false;
+    }
+    if (selectedHumanLabelFilter) {
+      const hl = doc.appliedLabel || "Unlabeled";
+      if (hl !== selectedHumanLabelFilter) return false;
+    }
+    return true;
+  };
+
+  const docMatchesContext = (doc) => docMatchesSearch(doc) && docMatchesFilters(doc);
+
+  const isCurrentDocHiddenByFilters = () => {
+    const current = getCurrentDoc();
+    if (!current) return false;
+    return !docMatchesContext(current);
+  };
+
+  const renderFilterHiddenNotice = () => {
+    if (!isCurrentDocHiddenByFilters()) return "";
+    return `<div class="al2-filter-hidden-notice">
+      Current document is hidden by filters —
+      <button type="button" class="btn btn-link btn-sm p-0 al2-clear-filters-btn">Show all</button>
+    </div>`;
+  };
+
+  const hasActiveFilters = () => (
+    reviewStatusFilter !== "unlabeled"
+    || Boolean(selectedModelLabelFilter)
+    || Boolean(selectedHumanLabelFilter)
+    || Boolean(searchTerm.trim())
+  );
+
+  const clearAllFilters = ({ showAll = false } = {}) => {
+    reviewStatusFilter = showAll ? "all" : "unlabeled";
+    selectedModelLabelFilter = "";
+    selectedHumanLabelFilter = "";
+    searchTerm = "";
+    const searchInput = document.getElementById("al2SearchInput");
+    if (searchInput) searchInput.value = "";
+    renderFilterControls();
+    scheduleContextPanelRender();
+  };
+
+  const renderFilterControls = () => {
+    const statusSelect = document.getElementById("al2ReviewStatusFilter");
+    const modelSelect = document.getElementById("al2ModelLabelFilter");
+    const humanSelect = document.getElementById("al2HumanLabelFilter");
+    const clearBtn = document.getElementById("al2ClearFiltersBtn");
+
+    if (statusSelect) statusSelect.value = reviewStatusFilter;
+
+    if (modelSelect) {
+      const modelLabels = new Set();
+      getDocs().forEach((d) => modelLabels.add(d.label || "—"));
+      const sortedModel = [...modelLabels].sort((a, b) => a.localeCompare(b));
+      const prev = selectedModelLabelFilter;
+      modelSelect.innerHTML = `<option value="">All model labels</option>${sortedModel.map((label) =>
+        `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("")}`;
+      if (prev && sortedModel.includes(prev)) {
+        modelSelect.value = prev;
+      } else {
+        selectedModelLabelFilter = "";
+        modelSelect.value = "";
+      }
+    }
+
+    if (humanSelect) {
+      const humanLabels = new Set();
+      Object.keys(statusState.class_distribution || {}).forEach((label) => {
+        const trimmed = String(label || "").trim();
+        if (trimmed) humanLabels.add(trimmed);
+      });
+      getDocs().forEach((d) => {
+        if (d.appliedLabel) humanLabels.add(d.appliedLabel);
+      });
+      if (getDocs().some((d) => !d.reviewed)) humanLabels.add("Unlabeled");
+
+      const sortedHuman = [...humanLabels].sort((a, b) => a.localeCompare(b));
+      const prev = selectedHumanLabelFilter;
+      humanSelect.innerHTML = `<option value="">All human labels</option>${sortedHuman.map((label) =>
+        `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("")}`;
+      if (prev && sortedHuman.includes(prev)) {
+        humanSelect.value = prev;
+      } else {
+        selectedHumanLabelFilter = "";
+        humanSelect.value = "";
+      }
+    }
+
+    if (clearBtn) clearBtn.classList.toggle("is-visible", hasActiveFilters());
+  };
+
+  const scrollActiveRowIntoView = () => {
+    const panel = document.getElementById("al2ContextPanel");
+    if (!panel) return;
+    const active = panel.querySelector("tr.is-active[data-doc-id]");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  };
+
+  const syncCurrentDocSelection = () => {
+    const doc = getCurrentDoc();
+    selectedDocIds.clear();
+    if (!doc?.id || doc.reviewed) {
+      return;
+    }
+    selectedDocIds.add(doc.id);
+  };
+
+  const syncContextRowSelectionState = () => {
+    const panel = document.getElementById("al2ContextPanel");
+    const currentId = getCurrentDoc()?.id;
+    if (!panel || !currentId) return;
+    panel.querySelectorAll("tr[data-doc-id]").forEach((row) => {
+      const isCurrent = row.dataset.docId === currentId;
+      const cb = row.querySelector(".al2-row-select");
+      if (!cb || cb.disabled) return;
+      if (isCurrent) {
+        cb.checked = true;
+        selectedDocIds.add(currentId);
+      } else {
+        cb.checked = selectedDocIds.has(row.dataset.docId);
+      }
+    });
+  };
+
   const getRankScore = (docId) => rankingsByDocId.get(docId)?.score ?? 0;
 
   const sortDocsForContext = (docs) => {
@@ -1577,7 +1849,30 @@
 
   const getContextTableOpts = () => ({
     showSimilarity: contextView === "similar",
+    showRank: contextView === "similar",
+    showPeek: contextView === "similar",
   });
+
+  const buildSimilarRows = (anchor) => {
+    if (!anchor) return [];
+    const rows = [{ doc: anchor, similarity: 1, rank: 1, isAnchor: true }];
+    const seen = new Set([anchor.id]);
+    const candidates = [];
+    for (const cluster of contextSimilarClusters) {
+      for (const row of cluster.documents || []) {
+        const doc = upsertRelatedDoc(row);
+        if (!doc || doc.reviewed || !docMatchesContext(doc) || seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        candidates.push({ doc, similarity: row.similarity ?? 0 });
+      }
+    }
+    candidates.sort((a, b) => b.similarity - a.similarity);
+    let rank = 2;
+    for (const item of candidates) {
+      rows.push({ ...item, rank: rank++, isAnchor: false });
+    }
+    return rows;
+  };
 
   const upsertRelatedDoc = (row) => {
     if (!row?.doc_id) return null;
@@ -1604,25 +1899,12 @@
     return docsById.get(row.doc_id);
   };
 
-  const syncContextBulkBar = () => {
-    const bulkBtn = document.getElementById("al2ContextBulkApplyBtn");
-    const bulkInput = document.getElementById("al2ContextBulkLabelInput");
-    const count = selectedDocIds.size;
-    if (bulkBtn) {
-      bulkBtn.disabled = count === 0 || !(bulkInput?.value || "").trim();
-      bulkBtn.textContent = count
-        ? `Label selected (${count})`
-        : "Label selected (0)";
-    }
-  };
-
   const setDocSelected = (docId, selected) => {
     if (!docId) return;
     const doc = docsById.get(docId);
     if (!doc || doc.reviewed) return;
     if (selected) selectedDocIds.add(docId);
     else selectedDocIds.delete(docId);
-    syncContextBulkBar();
   };
 
   const pruneSelectedDocIds = () => {
@@ -1630,7 +1912,6 @@
       const doc = docsById.get(id);
       if (!doc || doc.reviewed) selectedDocIds.delete(id);
     }
-    syncContextBulkBar();
   };
 
   const loadContextSimilar = async ({ force = false } = {}) => {
@@ -1650,66 +1931,77 @@
       for (const cluster of contextSimilarClusters) {
         for (const row of cluster.documents || []) upsertRelatedDoc(row);
       }
-      const bulkInput = document.getElementById("al2ContextBulkLabelInput");
-      if (bulkInput && !bulkInput.value.trim()) {
-        bulkInput.value = anchor.appliedLabel || lastUsedLabel || selectedSuggestion || "";
-      }
     } finally {
       contextSimilarLoading = false;
+      if (contextView === "similar") scheduleContextPanelRender();
     }
   };
 
-  const renderContextTableHead = ({ showSimilarity = false } = {}) => `
+  const renderContextTableHead = ({ showSimilarity = false, showRank = false, showPeek = false } = {}) => `
     <thead>
       <tr>
+        ${showRank ? '<th scope="col" class="al2-col-rank">#</th>' : ""}
         <th scope="col" class="al2-col-select">
           <input type="checkbox" class="form-check-input al2-select-all" title="Select all unlabeled" aria-label="Select all">
         </th>
-        <th scope="col" class="al2-col-doc">Doc</th>
         <th scope="col" class="al2-col-preview">Preview</th>
         <th scope="col" class="al2-col-model">Model label</th>
         <th scope="col" class="al2-col-human">Human label</th>
         ${showSimilarity ? '<th scope="col" class="al2-col-similarity">Match</th>' : ""}
+        ${showPeek ? '<th scope="col" class="al2-col-peek"><span class="visually-hidden">Preview</span></th>' : ""}
       </tr>
     </thead>`;
 
-  const renderContextTableRow = (doc, { similarity = null } = {}) => {
+  const renderContextTableRow = (doc, { similarity = null, rank = null, isAnchor = false } = {}) => {
     const isCurrent = getCurrentDoc()?.id === doc.id;
-    const isRec = recommendedDocId && doc.id === recommendedDocId;
+    if (isCurrent && !doc.reviewed) selectedDocIds.add(doc.id);
     const trClass = [
       isCurrent ? "is-active" : "",
-      isRec ? "is-recommended" : "",
+      isAnchor ? "is-anchor-row" : "",
     ].filter(Boolean).join(" ");
     const modelLabel = doc.label || "—";
     const humanLabel = doc.appliedLabel || "Unlabeled";
     const humanTagClass = doc.appliedLabel ? "al2-label-tag is-applied" : "al2-label-tag is-unlabeled";
     const canSelect = !doc.reviewed;
     const checked = selectedDocIds.has(doc.id);
-    const simCell = similarity != null
-      ? `<td class="al2-col-similarity">${Math.round(similarity * 100)}%</td>`
+    const showSimilarity = similarity != null;
+    const showRank = rank != null;
+    const showPeek = showRank;
+    const simCell = showSimilarity
+      ? `<td class="al2-col-similarity">${isAnchor ? "100%" : `${Math.round(similarity * 100)}%`}</td>`
+      : "";
+    const rankCell = showRank
+      ? `<td class="al2-col-rank">${rank}</td>`
+      : "";
+    const peekCell = showPeek
+      ? `<td class="al2-col-peek">
+          <button type="button" class="btn btn-link btn-sm al2-peek-btn p-0" data-peek-doc-id="${escapeHtml(doc.id)}"
+            title="Preview document" aria-label="Preview document">
+            <i class="bi bi-eye" aria-hidden="true"></i>
+          </button>
+        </td>`
       : "";
     return `
-      <tr class="${trClass}" data-doc-id="${escapeHtml(doc.id)}" role="button" tabindex="0">
+      <tr class="${trClass}" data-doc-id="${escapeHtml(doc.id)}" role="button" tabindex="0"
+        ${isCurrent ? 'aria-current="true"' : ""}>
+        ${rankCell}
         <td class="al2-col-select">
           <input type="checkbox" class="form-check-input al2-row-select" data-doc-id="${escapeHtml(doc.id)}"
             ${canSelect ? "" : "disabled"} ${checked ? "checked" : ""}
-            aria-label="Select ${escapeHtml(displayId(doc.id))}">
+            aria-label="Select document">
         </td>
-        <td class="font-monospace small text-muted al2-doc-id-cell al2-col-doc" title="${escapeHtml(doc.id)}">
-          ${escapeHtml(shortTableId(doc.id))}
-          ${isRec ? '<span class="al2-context-badge is-next">Next</span>' : ""}
-        </td>
-        <td class="al2-text-cell al2-col-preview" title="${escapeHtml(doc.text)}">${escapeHtml(truncate(doc.text, 72))}</td>
+        <td class="al2-text-cell al2-col-preview" title="${escapeHtml(doc.text)}">${escapeHtml(doc.text)}</td>
         <td class="al2-truncate-cell al2-col-model"><span class="al2-label-tag" title="${escapeHtml(modelLabel)}">${escapeHtml(modelLabel)}</span></td>
         <td class="al2-truncate-cell al2-col-human"><span class="${humanTagClass}" title="${escapeHtml(humanLabel)}">${escapeHtml(humanLabel)}</span></td>
         ${simCell}
+        ${peekCell}
       </tr>`;
   };
 
-  const wrapContextTable = (rowsHtml, { showSimilarity = false } = {}) => `
+  const wrapContextTable = (rowsHtml, { showSimilarity = false, showRank = false, showPeek = false } = {}) => `
     <div class="al2-table-wrap${showSimilarity ? " has-similarity-col" : ""}">
-      <table class="table table-sm table-hover mb-0">
-        ${renderContextTableHead({ showSimilarity })}
+      <table class="table table-borderless table-hover mb-0">
+        ${renderContextTableHead({ showSimilarity, showRank, showPeek })}
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>`;
@@ -1726,54 +2018,64 @@
     });
   };
 
+  const openSimilarPreview = (docId) => {
+    const doc = docsById.get(docId);
+    if (!doc) return;
+    similarPreviewDocId = docId;
+    const body = document.getElementById("al2SimilarPreviewBody");
+    const title = document.getElementById("al2SimilarPreviewModalLabel");
+    if (title) title.textContent = `Preview · ${displayId(doc.id)}`;
+    if (body) {
+      const human = doc.appliedLabel || "Unlabeled";
+      body.innerHTML = `
+        <div class="d-flex flex-wrap gap-3 mb-2 small text-muted">
+          <span>Model label: <strong class="text-body">${escapeHtml(doc.label || "—")}</strong></span>
+          <span>Human label: <strong class="text-body">${escapeHtml(human)}</strong></span>
+        </div>
+        <div class="al2-similar-preview-text">${escapeHtml(doc.text)}</div>`;
+    }
+    const modalEl = document.getElementById("al2SimilarPreviewModal");
+    if (modalEl && window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+  };
+
   const renderContextPanel = () => {
     const panel = document.getElementById("al2ContextPanel");
-    const countEl = document.getElementById("al2QueueCount");
-    const unlabeledEl = document.getElementById("al2UnlabeledCount");
     if (!panel) return;
 
+    renderFilterControls();
+    renderProgress();
     pruneSelectedDocIds();
     const all = getDocs();
-    const unlabeled = sortDocsForContext(all.filter((d) => !d.reviewed && docMatchesSearch(d)));
-    const labeled = all.filter((d) => d.reviewed && docMatchesSearch(d));
+    const matching = all.filter(docMatchesContext);
+    const unlabeled = sortDocsForContext(matching.filter((d) => !d.reviewed));
+    const labeled = matching.filter((d) => d.reviewed);
     const tableOpts = getContextTableOpts();
-
-    if (countEl) countEl.textContent = String(statusState.num_total || all.length);
-    if (unlabeledEl) unlabeledEl.textContent = String(unlabeled.length);
+    const hiddenNotice = renderFilterHiddenNotice();
 
     if (contextView === "similar") {
       const anchor = getCurrentDoc();
       if (!anchor) {
-        panel.innerHTML = `<div class="al2-empty-state">Open a document to see similar items.</div>`;
+        panel.innerHTML = `${hiddenNotice}<div class="al2-empty-state">Open a document to see similar items.</div>`;
         syncSelectAllCheckbox(panel);
-        syncContextBulkBar();
         return;
       }
       if (contextSimilarLoading) {
-        panel.innerHTML = `<div class="al2-empty-state">Loading similar documents…</div>`;
-        syncContextBulkBar();
+        panel.innerHTML = `${hiddenNotice}<div class="al2-empty-state">Loading similar documents…</div>`;
         return;
       }
-      let html = `<div class="al2-context-anchor-note">Similar to <span class="font-monospace">${escapeHtml(displayId(anchor.id))}</span> · model label: ${escapeHtml(anchor.label || "—")}</div>`;
-      let hasRows = false;
-      for (const cluster of contextSimilarClusters) {
-        const rows = [];
-        for (const row of cluster.documents || []) {
-          const doc = upsertRelatedDoc(row);
-          if (!doc || doc.reviewed || !docMatchesSearch(doc)) continue;
-          rows.push(renderContextTableRow(doc, { similarity: row.similarity }));
-        }
-        if (!rows.length) continue;
-        hasRows = true;
-        html += `
-          <div class="al2-context-group">
-            <div class="al2-context-group__title">${escapeHtml(cluster.title)} (${rows.length})</div>
-            ${wrapContextTable(rows.join(""), tableOpts)}
-          </div>`;
-      }
-      panel.innerHTML = hasRows
-        ? html
-        : `${html}<div class="al2-empty-state">No similar unlabeled documents match.</div>`;
+      const similarRows = buildSimilarRows(anchor);
+      const tableRows = similarRows
+        .map(({ doc, similarity, rank, isAnchor }) =>
+          renderContextTableRow(doc, { similarity, rank, isAnchor }))
+        .join("");
+      const soloNote = similarRows.length === 1
+        ? '<div class="al2-empty-state-note px-2 pb-1">No other similar unlabeled documents found.</div>'
+        : "";
+      panel.innerHTML = similarRows.length
+        ? `${hiddenNotice}${wrapContextTable(tableRows, tableOpts)}${soloNote}`
+        : `${hiddenNotice}<div class="al2-empty-state">No similar unlabeled documents match.</div>`;
     } else if (contextView === "by_model_label") {
       const groups = new Map();
       unlabeled.forEach((d) => {
@@ -1783,68 +2085,64 @@
       });
       const keys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
       panel.innerHTML = keys.length
-        ? keys.map((k) => `
+        ? `${hiddenNotice}${keys.map((k) => `
             <div class="al2-context-group">
               <div class="al2-context-group__title">${escapeHtml(k)} (${groups.get(k).length})</div>
               ${wrapContextTable(groups.get(k).map((d) => renderContextTableRow(d)).join(""), tableOpts)}
-            </div>`).join("")
-        : `<div class="al2-empty-state">No unlabeled documents match.</div>`;
+            </div>`).join("")}`
+        : `${hiddenNotice}<div class="al2-empty-state">No documents match.</div>`;
+    } else if (reviewStatusFilter === "labeled") {
+      const labeledCap = capDocList(sortDocsForContext(labeled), CONTEXT_PANEL_CAP);
+      if (labeledCap.shown.length) {
+        let html = wrapContextTable(labeledCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts);
+        if (labeledCap.truncated) {
+          html = `<div class="al2-context-cap-note">Showing first ${CONTEXT_PANEL_CAP} of ${labeledCap.total} labeled — use search or filters to narrow.</div>${html}`;
+        }
+        panel.innerHTML = `${hiddenNotice}${html}`;
+      } else {
+        panel.innerHTML = `${hiddenNotice}<div class="al2-empty-state">No labeled documents match.</div>`;
+      }
+    } else if (reviewStatusFilter === "all") {
+      const combined = [...unlabeled, ...labeled];
+      const combinedCap = capDocList(combined, CONTEXT_PANEL_CAP);
+      if (combinedCap.shown.length) {
+        let html = wrapContextTable(combinedCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts);
+        if (combinedCap.truncated) {
+          html = `<div class="al2-context-cap-note">Showing first ${CONTEXT_PANEL_CAP} of ${combinedCap.total} — use search or filters to narrow.</div>${html}`;
+        }
+        panel.innerHTML = `${hiddenNotice}${html}`;
+      } else {
+        panel.innerHTML = `${hiddenNotice}<div class="al2-empty-state">No documents match.</div>`;
+      }
     } else {
       const unlabeledCap = capDocList(unlabeled, CONTEXT_PANEL_CAP);
-      const labeledCap = capDocList(labeled, CONTEXT_LABELED_CAP);
+      const labeledForCompleted = all.filter((d) => d.reviewed && docMatchesContext(d));
+      const labeledCap = capDocList(labeledForCompleted, CONTEXT_LABELED_CAP);
       let html = "";
       if (unlabeledCap.shown.length) {
         html = wrapContextTable(unlabeledCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts);
         if (unlabeledCap.truncated) {
-          html = `<div class="al2-context-cap-note">Showing top ${CONTEXT_PANEL_CAP} of ${unlabeledCap.total} unlabeled — use search to narrow.</div>${html}`;
+          html = `<div class="al2-context-cap-note">Showing top ${CONTEXT_PANEL_CAP} of ${unlabeledCap.total} unlabeled — use search or filters to narrow.</div>${html}`;
         }
       } else {
         html = `<div class="al2-empty-state">No unlabeled documents match.</div>`;
       }
-      panel.innerHTML = html;
+      panel.innerHTML = `${hiddenNotice}${html}`;
       if (labeledCap.shown.length) {
         const labeledNote = labeledCap.truncated
           ? ` <span class="text-muted fw-normal">(first ${CONTEXT_LABELED_CAP} of ${labeledCap.total})</span>`
           : "";
         panel.innerHTML += `
           <details class="al2-context-completed mt-2">
-            <summary>Completed (${labeled.length})${labeledNote}</summary>
+            <summary>Completed (${labeledForCompleted.length})${labeledNote}</summary>
             ${wrapContextTable(labeledCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts)}
           </details>`;
       }
     }
 
     syncSelectAllCheckbox(panel);
-    syncContextBulkBar();
-    const active = panel.querySelector("tr.is-active[data-doc-id]");
-    if (active) active.scrollIntoView({ block: "nearest" });
-  };
-
-  const applyContextBulkLabels = async () => {
-    const bulkInput = document.getElementById("al2ContextBulkLabelInput");
-    const label = (bulkInput?.value || "").trim();
-    const docIds = [...selectedDocIds];
-    if (!label || !docIds.length) return;
-    lastUsedLabel = label;
-    try {
-      const rec = await postBulkLabels(label, docIds);
-      syncLabels(rec?.current_labels || {});
-      docIds.forEach((id) => selectedDocIds.delete(id));
-      await refreshStatusAndRankings();
-      if (contextView === "similar") {
-        contextSimilarAnchorId = null;
-        await loadContextSimilar({ force: true });
-      }
-      if (rec?.doc_id) {
-        goToRecommended(rec.doc_id);
-      } else {
-        renderActiveLearningTwo();
-      }
-      scheduleContextPanelRender();
-      showSaveFeedback(`Labeled ${docIds.length} document(s).`);
-    } catch (err) {
-      alert(err.message || "Bulk label failed.");
-    }
+    syncContextRowSelectionState();
+    scrollActiveRowIntoView();
   };
 
   const showSaveFeedback = (message) => {
@@ -1868,58 +2166,69 @@
     if (activeLearningIndex > docs.length - 1) activeLearningIndex = docs.length - 1;
   };
 
-  const wordCount = (text) => text.trim().split(/\s+/).filter(Boolean).length;
-  const readingTime = (text) => Math.max(1, Math.round(wordCount(text) / 220));
   const getActiveView = (doc) => doc.viewPreference || "text";
-
-  const renderMetaPills = (doc) => {
-    const bar = document.getElementById("al2MetaPills");
-    if (!bar) return;
-    const wc = wordCount(doc.text);
-    const rt = readingTime(doc.text);
-    const isRec = recommendedDocId && doc.id === recommendedDocId;
-    bar.innerHTML = `
-      <span class="al2-meta-pill is-primary">${escapeHtml(displayId(doc.id))}</span>
-      <span class="al2-meta-pill">${wc.toLocaleString()} words</span>
-      <span class="al2-meta-pill">~${rt} min</span>
-      ${isRec ? '<span class="al2-meta-pill is-primary">Next to review</span>' : ""}
-    `;
-  };
 
   const renderProgress = () => {
     const reviewedCount = Number(statusState.num_labeled || getDocs().filter((d) => d.reviewed).length || 0);
     const total = Number(statusState.num_total || getDocs().length || 0);
-    const pct = total ? (reviewedCount / total) * 100 : 0;
+    const remaining = Math.max(0, total - reviewedCount);
+    const pct = total ? Math.round((reviewedCount / total) * 100) : 0;
     const bar = document.getElementById("al2ProgressBar");
-    const label = document.getElementById("al2ProgressLabel");
+    const track = document.getElementById("al2ProgressTrack");
+    const labeledEl = document.getElementById("al2LabeledCount");
+    const remainingEl = document.getElementById("al2RemainingCount");
+    const pctEl = document.getElementById("al2ProgressPct");
+    const completeBanner = document.getElementById("al2CompleteBanner");
     if (bar) bar.style.width = `${pct}%`;
-    if (label) label.textContent = `${reviewedCount} of ${total} reviewed`;
-  };
-
-  const renderAppliedLabel = (doc) => {
-    const wrap = document.getElementById("al2AppliedLabel");
-    const text = document.getElementById("al2AppliedLabelText");
-    if (!wrap || !text) return;
-    if (doc.appliedLabel) {
-      wrap.classList.add("is-applied");
-      text.textContent = doc.appliedLabel;
-    } else {
-      wrap.classList.remove("is-applied");
-      text.textContent = "Unlabeled";
+    if (track) {
+      track.setAttribute("aria-valuenow", String(pct));
+      track.setAttribute("aria-valuetext", `${reviewedCount} of ${total} labeled`);
+    }
+    if (labeledEl) labeledEl.textContent = String(reviewedCount);
+    if (remainingEl) remainingEl.textContent = String(remaining);
+    if (pctEl) pctEl.textContent = total ? `${pct}%` : "—";
+    if (completeBanner) {
+      completeBanner.classList.toggle("is-hidden", !(total > 0 && remaining === 0));
     }
   };
 
-  const renderModelLabelStrip = (doc) => {
-    const el = document.getElementById("al2ModelLabelText");
-    if (!el) return;
+  const syncDashboardLinks = () => {
+    const mid = modelId || new URLSearchParams(window.location.search).get("model_id") || "";
+    const dashHref = mid
+      ? `{% url_for 'dashboard' %}?model_id=${encodeURIComponent(mid)}`
+      : "{% url_for 'dashboard' %}";
+    const completeLink = document.getElementById("al2CompleteDashboardLink");
+    if (completeLink) completeLink.href = dashHref;
+  };
+
+  const renderDocMeta = (doc) => {
+    const idEl = document.getElementById("al2DocId");
+    const modelEl = document.getElementById("al2MetaModelLabel");
+    const humanEl = document.getElementById("al2MetaHumanLabel");
+    if (!idEl || !modelEl || !humanEl) return;
     if (!doc) {
-      el.textContent = "—";
-      el.title = "";
+      idEl.textContent = "—";
+      modelEl.textContent = "—";
+      humanEl.textContent = "Unlabeled";
+      humanEl.classList.add("is-unlabeled");
+      humanEl.classList.remove("is-applied");
       return;
     }
-    const raw = doc.label != null ? String(doc.label) : "—";
-    el.textContent = raw || "—";
-    el.title = raw && raw !== "—" ? raw : "";
+    idEl.textContent = doc.id || "—";
+    const modelLabel = doc.label != null ? String(doc.label).trim() : "";
+    modelEl.textContent = modelLabel || "—";
+    modelEl.title = modelLabel || "";
+    if (doc.appliedLabel) {
+      humanEl.textContent = doc.appliedLabel;
+      humanEl.classList.remove("is-unlabeled");
+      humanEl.classList.add("is-applied");
+      humanEl.title = doc.appliedLabel;
+    } else {
+      humanEl.textContent = "Unlabeled";
+      humanEl.classList.add("is-unlabeled");
+      humanEl.classList.remove("is-applied");
+      humanEl.title = "";
+    }
   };
 
   const renderViewToggle = (doc) => {
@@ -1937,9 +2246,7 @@
     const view = getActiveView(doc);
     if (view === "summary") {
       area.classList.add("is-summary");
-      area.innerHTML = `
-        <div class="al2-content-summary-tag">Summary</div>
-        <p class="mb-0">${escapeHtml(ensureDocSummary(doc))}</p>`;
+      area.innerHTML = `<p class="mb-0">${escapeHtml(ensureDocSummary(doc))}</p>`;
     } else {
       area.classList.remove("is-summary");
       area.innerHTML = `<p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(doc.text)}</p>`;
@@ -1953,12 +2260,15 @@
     if (!panel || !currentId) return;
     panel.querySelectorAll("tr[data-doc-id]").forEach((row) => {
       const isCurrent = row.dataset.docId === currentId;
-      const isRec = recommendedDocId && row.dataset.docId === recommendedDocId;
       row.classList.toggle("is-active", isCurrent);
-      row.classList.toggle("is-recommended", isRec);
+      if (isCurrent) {
+        row.setAttribute("aria-current", "true");
+      } else {
+        row.removeAttribute("aria-current");
+      }
     });
-    const active = panel.querySelector("tr.is-active[data-doc-id]");
-    if (active) active.scrollIntoView({ block: "nearest" });
+    syncContextRowSelectionState();
+    scrollActiveRowIntoView();
   };
 
   const renderLabelChips = (doc, { loading = false } = {}) => {
@@ -1973,10 +2283,11 @@
       labelsEl.appendChild(hint);
       return;
     }
-    getSuggestionSet(doc).forEach((label) => {
+    getSuggestionSet(doc).forEach((label, index) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `al2-label-chip${selectedSuggestion === label ? " is-selected" : ""}`;
+      const rank = Math.min(index + 1, 3);
+      btn.className = `al2-label-chip is-rank-${rank}${selectedSuggestion === label ? " is-selected" : ""}`;
       btn.dataset.label = label;
       btn.textContent = label;
       labelsEl.appendChild(btn);
@@ -1987,30 +2298,24 @@
     ensureCurrentInRange();
     const docs = getDocs();
     const doc = docs[activeLearningIndex];
-    const counterEl = document.getElementById("al2DocCounter");
     const prevBtn = document.getElementById("al2PrevBtn");
     const nextBtn = document.getElementById("al2NextBtn");
-    const applyBtn = document.getElementById("al2ApplyBtn");
 
-    if (!doc || !counterEl || !prevBtn || !nextBtn) {
+    if (!doc || !prevBtn || !nextBtn) {
       syncLabelControlsForDoc(null);
-      renderModelLabelStrip(null);
+      renderDocMeta(null);
       if (refreshContext) scheduleContextPanelRender();
       return;
     }
 
     syncLabelControlsForDoc(doc);
 
-    counterEl.textContent =
-      `Document ${activeLearningIndex + 1} of ${Math.max(docs.length, Number(statusState.num_total || 0))} · ${displayId(doc.id)}`;
     prevBtn.disabled = activeLearningIndex === 0 && navHistory.length === 0;
-    nextBtn.disabled = activeLearningIndex >= docs.length - 1;
+    nextBtn.disabled = !canSkipToNext();
 
-    renderMetaPills(doc);
     renderViewToggle(doc);
     renderContent(doc);
-    renderModelLabelStrip(doc);
-    renderAppliedLabel(doc);
+    renderDocMeta(doc);
     if (refreshContext) scheduleContextPanelRender();
     else updateContextRowHighlight();
     renderProgress();
@@ -2061,6 +2366,7 @@
     }
     ensureCurrentInRange();
     pageReady = true;
+    syncCurrentDocSelection();
     renderActiveLearningTwo();
     onDocFocusChange();
   };
@@ -2086,12 +2392,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", () => {
-    const dashLink = document.getElementById("al2DashboardLink");
-    if (dashLink) {
-      const mid = modelId || new URLSearchParams(window.location.search).get("model_id") || "";
-      dashLink.href = mid ? `/dashboard?model_id=${encodeURIComponent(mid)}` : "/dashboard";
-    }
-
+    syncDashboardLinks();
     const prevBtn = document.getElementById("al2PrevBtn");
     const nextBtn = document.getElementById("al2NextBtn");
     const applyBtn = document.getElementById("al2ApplyBtn");
@@ -2101,11 +2402,10 @@
     const viewToggle = document.getElementById("al2ViewToggle");
     const customLabelInput = document.getElementById("al2CustomLabelInput");
     const contextViewToggle = document.getElementById("al2ContextViewToggle");
-    const contextBulkApplyBtn = document.getElementById("al2ContextBulkApplyBtn");
-    const contextBulkInput = document.getElementById("al2ContextBulkLabelInput");
+    const contextFilters = document.getElementById("al2ContextFilters");
 
     if (prevBtn) prevBtn.addEventListener("click", goBack);
-    if (nextBtn) nextBtn.addEventListener("click", () => goTo(activeLearningIndex + 1));
+    if (nextBtn) nextBtn.addEventListener("click", skipToNextRecommended);
     if (applyBtn) applyBtn.addEventListener("click", applyAndContinue);
 
     if (customLabelInput) {
@@ -2151,7 +2451,20 @@
 
     if (contextPanel) {
       contextPanel.addEventListener("click", (e) => {
-        if (e.target.closest(".al2-col-select")) return;
+        if (e.target.closest(".al2-clear-filters-btn")) {
+          e.preventDefault();
+          const showAll = Boolean(e.target.closest(".al2-filter-hidden-notice"));
+          clearAllFilters({ showAll });
+          return;
+        }
+        const peekBtn = e.target.closest("[data-peek-doc-id]");
+        if (peekBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          openSimilarPreview(peekBtn.dataset.peekDocId);
+          return;
+        }
+        if (e.target.closest(".al2-col-select, .al2-col-peek")) return;
         const row = e.target.closest("tr[data-doc-id]");
         if (!row) return;
         goToDocId(row.dataset.docId, { pushHistory: true });
@@ -2169,7 +2482,13 @@
         }
         const rowCb = e.target.closest(".al2-row-select");
         if (!rowCb) return;
-        setDocSelected(rowCb.dataset.docId, rowCb.checked);
+        const docId = rowCb.dataset.docId;
+        const currentId = getCurrentDoc()?.id;
+        if (docId === currentId && !rowCb.checked) {
+          rowCb.checked = true;
+          return;
+        }
+        setDocSelected(docId, rowCb.checked);
         syncSelectAllCheckbox(document.getElementById("al2ContextPanel"));
       });
     }
@@ -2190,26 +2509,63 @@
       });
     }
 
+    if (contextFilters) {
+      const statusFilterSelect = document.getElementById("al2ReviewStatusFilter");
+      const modelFilterSelect = document.getElementById("al2ModelLabelFilter");
+      const humanFilterSelect = document.getElementById("al2HumanLabelFilter");
+      const clearFiltersBtn = document.getElementById("al2ClearFiltersBtn");
+
+      if (statusFilterSelect) {
+        statusFilterSelect.addEventListener("change", (e) => {
+          reviewStatusFilter = e.target.value || "unlabeled";
+          renderFilterControls();
+          scheduleContextPanelRender();
+        });
+      }
+      if (modelFilterSelect) {
+        modelFilterSelect.addEventListener("change", (e) => {
+          selectedModelLabelFilter = e.target.value || "";
+          renderFilterControls();
+          scheduleContextPanelRender();
+        });
+      }
+      if (humanFilterSelect) {
+        humanFilterSelect.addEventListener("change", (e) => {
+          selectedHumanLabelFilter = e.target.value || "";
+          renderFilterControls();
+          scheduleContextPanelRender();
+        });
+      }
+      if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          clearAllFilters();
+        });
+      }
+    }
+
     if (searchInput) {
       let searchDebounce = null;
       searchInput.addEventListener("input", (e) => {
         searchTerm = e.target.value;
         if (searchDebounce) clearTimeout(searchDebounce);
         searchDebounce = setTimeout(() => {
+          renderFilterControls();
           scheduleContextPanelRender();
         }, 200);
       });
     }
 
 
-    if (contextBulkApplyBtn) contextBulkApplyBtn.addEventListener("click", applyContextBulkLabels);
-    if (contextBulkInput) {
-      contextBulkInput.addEventListener("input", syncContextBulkBar);
-      contextBulkInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !contextBulkApplyBtn?.disabled) {
-          e.preventDefault();
-          applyContextBulkLabels();
+    const similarPreviewOpenBtn = document.getElementById("al2SimilarPreviewOpenBtn");
+    if (similarPreviewOpenBtn) {
+      similarPreviewOpenBtn.addEventListener("click", () => {
+        if (!similarPreviewDocId) return;
+        const modalEl = document.getElementById("al2SimilarPreviewModal");
+        if (modalEl && window.bootstrap?.Modal) {
+          window.bootstrap.Modal.getInstance(modalEl)?.hide();
         }
+        goToDocId(similarPreviewDocId, { pushHistory: true });
       });
     }
 
@@ -2221,7 +2577,7 @@
         goBack();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        goTo(activeLearningIndex + 1);
+        skipToNextRecommended();
       } else if (e.key === "Enter" && selectedSuggestion) {
         e.preventDefault();
         applyAndContinue();
@@ -2229,10 +2585,6 @@
     });
 
     if (!modelId) {
-      const content = document.getElementById("al2ContentArea");
-      if (content) {
-        content.innerHTML = "<p class=\"mb-0\">Select a model from the dashboard first, then open Active Learning.</p>";
-      }
       return;
     }
 
