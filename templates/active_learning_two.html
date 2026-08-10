@@ -10,12 +10,13 @@
     --al2-surface: #ffffff;
     --al2-surface-soft: #f8fafc;
     --al2-surface-alt: #f1f5f9;
-    --al2-primary: #1d4ed8;
-    --al2-primary-soft: #eff4ff;
+    --al2-primary: #0d6efd;
+    --al2-primary-soft: #eff6ff;
     --al2-text: #0f172a;
     --al2-text-muted: #64748b;
-    --al2-success: #047857;
-    --al2-success-soft: #d1fae5;
+    --al2-success: #198754;
+    --al2-success-soft: #d1e7dd;
+    --al2-model-soft: #eff6ff;
     --al2-warning-soft: #fef3c7;
     --al2-warning-text: #92400e;
     --al2-font-xs: 0.75rem;
@@ -199,9 +200,49 @@
 
   .al2-progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+    background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%);
     transition: width 0.35s ease;
     border-radius: 999px;
+  }
+
+  /* Subnav progress (rendered in base.html on active learning pages) */
+  .dash-subnav__inner:has(.al2-subnav-progress) {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(12rem, 1fr) minmax(0, max-content);
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+  }
+
+  .dash-subnav__inner:has(.al2-subnav-progress) .dash-subnav__model {
+    justify-self: start;
+  }
+
+  .dash-subnav__inner:has(.al2-subnav-progress) .dash-subnav__tabs {
+    justify-self: end;
+  }
+
+  .al2-subnav-progress {
+    justify-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .al2-subnav-progress .al2-progress {
+    height: 8px;
+  }
+
+  .al2-subnav-progress .al2-progress--compact {
+    height: 8px;
+  }
+
+  .al2-subnav-progress .al2-progress-stats {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .al2-subnav-progress .al2-progress-pct {
+    margin-left: 0.35rem;
   }
 
   /* ---------- Cards & panels (shared queue + review) ---------- */
@@ -370,8 +411,9 @@
     font-weight: 500;
   }
 
-  .al2-labels-meta__v.is-applied {
-    color: var(--al2-success);
+  .al2-labels-meta__v.is-human,
+  .al2-labels-meta__v.is-model {
+    color: var(--al2-topic-color, var(--al2-primary));
   }
 
   .al2-review-card .al2-view-toggle .btn {
@@ -535,30 +577,14 @@
     flex: 1 1 0;
     min-width: 0;
     justify-content: center;
+    padding: 0.52rem 0.75rem;
+    font-size: 0.9rem;
     border-width: 1px;
     border-radius: 0.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 700;
-  }
-
-  .al2-review-card .al2-label-chip.is-rank-1 {
-    flex: 1.4 1 0;
-    padding: 0.62rem 0.85rem;
-    font-size: 1rem;
-  }
-
-  .al2-review-card .al2-label-chip.is-rank-2 {
-    flex: 1.15 1 0;
-    padding: 0.52rem 0.75rem;
-    font-size: 0.9rem;
-  }
-
-  .al2-review-card .al2-label-chip.is-rank-3 {
-    flex: 1 1 0;
-    padding: 0.44rem 0.65rem;
-    font-size: 0.8125rem;
   }
 
   .al2-review-card .al2-custom-label-wrap .form-label {
@@ -659,9 +685,9 @@
     display: inline-flex;
     align-items: center;
     padding: 0.5rem 1rem;
-    background: #eff6ff;
+    background: var(--al2-primary-soft);
     border: 1px solid #bfdbfe;
-    color: #1e3a8a;
+    color: #0a58ca;
     border-radius: 0.6rem;
     font-size: 0.9rem;
     font-weight: 700;
@@ -679,11 +705,11 @@
     background: var(--al2-primary);
     border-color: var(--al2-primary);
     color: #ffffff;
-    box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.25);
   }
 
   .al2-label-chip.is-selected:hover {
-    background: #1e40af;
+    background: #0a58ca;
     color: #ffffff;
   }
 
@@ -726,6 +752,23 @@
 
   .al2-save-feedback.is-visible {
     opacity: 1;
+  }
+
+  .al2-undo-btn {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--al2-primary);
+    background: transparent;
+    border: 1px solid var(--al2-primary);
+    border-radius: 0.3rem;
+    cursor: pointer;
+  }
+
+  .al2-undo-btn:hover {
+    color: #fff;
+    background: var(--al2-primary);
   }
 
   /* ---------- Footer buttons ---------- */
@@ -790,8 +833,17 @@
     background-color: #f8fafc;
   }
 
+  .al2-table-wrap tbody tr.is-selected:not(.is-active) {
+    background-color: var(--al2-primary-soft);
+    box-shadow: inset 3px 0 0 var(--al2-primary);
+  }
+
+  .al2-table-wrap tbody tr.is-selected:not(.is-active):hover {
+    background-color: #dbeafe;
+  }
+
   .al2-table-wrap tbody tr.is-active {
-    background: #fef3c7;
+    background-color: var(--al2-warning-soft) !important;
     box-shadow: inset 3px 0 0 #d97706;
   }
 
@@ -809,8 +861,7 @@
   }
 
   .al2-table-wrap tbody tr.is-active .al2-label-tag {
-    background: #fffbeb;
-    color: #78350f;
+    color: #78350f !important;
   }
 
   .al2-table-wrap tbody tr.is-active .al2-row-select {
@@ -837,19 +888,113 @@
   }
 
   .al2-label-tag {
-    display: inline-block;
+    display: block;
+    max-width: 100%;
     padding: 0.18rem 0.55rem;
-    background: #f8fafc;
-    color: #334155;
+    background: transparent;
+    color: var(--al2-text);
     border-radius: 0.35rem;
     font-size: var(--al2-font-xs);
-    font-weight: 500;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .al2-label-tag.is-human {
+    color: var(--al2-topic-color, var(--al2-primary));
+    font-weight: 700;
+  }
+
+  .al2-label-tag.is-model {
+    font-weight: 600;
+    color: var(--al2-topic-color, var(--al2-primary));
+  }
+
+  .al2-label-human-marker {
+    font-size: 0.85em;
+    margin-right: 0.3rem;
+    opacity: 0.95;
+    vertical-align: baseline;
+  }
+
+  /* ---------- Confidence meter (under model labels) ---------- */
+  .al2-conf {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 3px;
+    margin-top: 3px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+  }
+
+  .al2-conf__fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+  }
+
+  .al2-meta-conf__body {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1 1 8rem;
+  }
+
+  .al2-meta-conf__body .al2-conf {
+    flex: 1 1 auto;
+    max-width: 8rem;
+  }
+
+  .al2-meta-conf__pct {
+    font-weight: 700;
+    color: var(--al2-text-muted);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  .al2-label-tag.is-applied {
+  .al2-label-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem 1rem;
+    font-size: var(--al2-font-xs);
+    color: var(--al2-text-muted);
+    padding: 0.15rem 0.05rem 0.35rem;
+  }
+
+  .al2-label-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
+  .al2-label-legend__marker {
+    font-size: 0.85rem;
+    color: var(--al2-text);
+  }
+
+  .al2-label-legend__conf {
+    width: 2rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    display: inline-block;
     background: #e2e8f0;
-    color: #0f172a;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+
+  .al2-label-legend__conf-fill {
+    display: block;
+    width: 65%;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--al2-primary);
   }
 
   .al2-truncate-cell {
@@ -873,20 +1018,31 @@
     cursor: pointer;
   }
 
+  .al2-col-marker {
+    width: 1.5rem;
+    max-width: 1.5rem;
+    text-align: center;
+    padding-left: 0.15rem !important;
+    padding-right: 0.05rem !important;
+  }
+
+  .al2-row-human-marker {
+    font-size: 0.82rem;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
   .al2-col-preview {
-    width: 58%;
+    width: 68%;
   }
 
   .al2-table-wrap.has-similarity-col .al2-col-preview {
-    width: 42%;
+    width: 48%;
   }
 
-  .al2-col-model {
-    width: 16%;
-  }
-
-  .al2-col-human {
-    width: 16%;
+  .al2-col-label {
+    width: 22%;
+    max-width: 9rem;
   }
 
   .al2-col-similarity {
@@ -1039,6 +1195,81 @@
     background: transparent;
   }
 
+  /* ---------- Keyboard-shortcut affordances ---------- */
+  .al2-chip-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15em;
+    height: 1.15em;
+    margin-right: 0.4rem;
+    padding: 0 0.28em;
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--al2-text-muted);
+    background: var(--al2-surface);
+    border: 1px solid var(--al2-border);
+    border-radius: 0.3rem;
+  }
+
+  .al2-label-chip.is-selected .al2-chip-kbd {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  .al2-kbd-hint {
+    margin: 0.15rem 0 0;
+    font-size: var(--al2-font-xs);
+    color: var(--al2-text-muted);
+  }
+
+  .al2-kbd-hint kbd {
+    padding: 0.05rem 0.3rem;
+    font-size: 0.9em;
+    color: var(--al2-text);
+    background: var(--al2-surface);
+    border: 1px solid var(--al2-border);
+    border-radius: 0.25rem;
+  }
+
+  /* ---------- Bulk-label bar ---------- */
+  .al2-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.5rem;
+    background: var(--al2-primary-soft);
+  }
+
+  .al2-bulk-bar.is-hidden {
+    display: none;
+  }
+
+  .al2-bulk-count {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--al2-font-sm);
+    color: var(--al2-text);
+  }
+
+  .al2-bulk-count strong {
+    color: var(--al2-primary);
+  }
+
+  .al2-bulk-bar > .bi {
+    color: var(--al2-primary);
+    flex-shrink: 0;
+  }
+
+  .al2-bulk-bar .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
 </style>
 {% endblock %}
 
@@ -1078,20 +1309,6 @@
                   <input type="search" class="form-control form-control-sm al2-queue-search" id="al2SearchInput"
                     placeholder="Search documents" autocomplete="off" aria-label="Search documents">
                 </div>
-                <div class="al2-queue-progress" id="al2ContextProgress"
-                  role="group" aria-label="Labeling progress">
-                  <div class="al2-progress-stats">
-                    <span><strong id="al2LabeledCount">0</strong> labeled</span>
-                    <span aria-hidden="true">·</span>
-                    <span><strong id="al2RemainingCount">0</strong> remaining</span>
-                    <span class="al2-progress-pct" id="al2ProgressPct">0%</span>
-                  </div>
-                  <div class="al2-progress al2-progress--compact" id="al2ProgressTrack"
-                    role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
-                    aria-labelledby="al2ProgressPct">
-                    <div class="al2-progress-bar" id="al2ProgressBar" style="width: 0%;"></div>
-                  </div>
-                </div>
               </header>
 
               <div class="al2-queue-controls" id="al2ContextFilters">
@@ -1107,17 +1324,32 @@
                     <option value="labeled">Labeled only</option>
                     <option value="all">All documents</option>
                   </select>
-                  <select class="form-select form-select-sm" id="al2ModelLabelFilter"
-                    aria-label="Filter by model label">
-                    <option value="">All model labels</option>
-                  </select>
-                  <select class="form-select form-select-sm" id="al2HumanLabelFilter"
-                    aria-label="Filter by human label">
-                    <option value="">All human labels</option>
+                  <select class="form-select form-select-sm" id="al2LabelFilter"
+                    aria-label="Filter by label">
+                    <option value="">All labels</option>
                   </select>
                   <button type="button" class="btn btn-link btn-sm al2-clear-filters-btn" id="al2ClearFiltersBtn">
                     Clear
                   </button>
+                </div>
+                <div class="al2-label-legend" aria-label="Label legend">
+                  <span class="al2-label-legend__item">
+                    <i class="bi bi-person-fill al2-label-legend__marker" aria-hidden="true"></i>
+                    Human-applied label
+                  </span>
+                  <span class="al2-label-legend__item">
+                    <span class="al2-label-legend__conf" aria-hidden="true">
+                      <span class="al2-label-legend__conf-fill"></span>
+                    </span>
+                    Bar = model confidence
+                  </span>
+                </div>
+                <div class="al2-bulk-bar is-hidden" id="al2BulkBar" role="status" aria-live="polite">
+                  <i class="bi bi-check2-square" aria-hidden="true"></i>
+                  <span class="al2-bulk-count">
+                    <strong id="al2BulkCount">0</strong> selected — the label below applies to all
+                  </span>
+                  <button type="button" class="btn btn-link btn-sm al2-bulk-clear" id="al2BulkClearBtn">Clear</button>
                 </div>
               </div>
 
@@ -1154,17 +1386,24 @@
               <div class="al2-labels-panel">
                 <div class="al2-labels-meta" aria-live="polite">
                   <div class="al2-labels-meta__item">
-                    <span class="al2-labels-meta__k">Model label</span>
-                    <span class="al2-labels-meta__v" id="al2MetaModelLabel">—</span>
+                    <span class="al2-labels-meta__k">Label</span>
+                    <span class="al2-labels-meta__v is-model" id="al2MetaLabel">—</span>
                   </div>
-                  <div class="al2-labels-meta__item">
-                    <span class="al2-labels-meta__k">Human label</span>
-                    <span class="al2-labels-meta__v is-unlabeled" id="al2MetaHumanLabel">Unlabeled</span>
+                  <div class="al2-labels-meta__item al2-meta-conf" id="al2MetaConf" hidden>
+                    <span class="al2-labels-meta__k">Confidence</span>
+                    <span class="al2-meta-conf__body">
+                      <span class="al2-conf"><span class="al2-conf__fill" id="al2MetaConfFill"></span></span>
+                      <span class="al2-meta-conf__pct" id="al2MetaConfPct"></span>
+                    </span>
                   </div>
                 </div>
                 <div class="al2-suggestions-block">
                   <h3 class="al2-suggestions-heading">Suggested labels</h3>
                   <div id="al2LabelSuggestions"></div>
+                  <p class="al2-kbd-hint" aria-hidden="true">
+                    <kbd>1</kbd>–<kbd>3</kbd> pick · <kbd>Enter</kbd> save &amp; next ·
+                    <kbd>←</kbd>/<kbd>→</kbd> prev/skip · <kbd>/</kbd> search
+                  </p>
                 </div>
                 <div class="al2-custom-label-wrap">
                   <div class="al2-custom-label-row">
@@ -1182,8 +1421,10 @@
 
             <div class="card-footer">
               <div class="d-flex justify-content-end align-items-center gap-2">
-                <button type="button" class="btn btn-outline-secondary" id="al2PrevBtn">Previous</button>
-                <button type="button" class="btn btn-outline-secondary" id="al2NextBtn">Skip</button>
+                <button type="button" class="btn btn-outline-secondary" id="al2PrevBtn"
+                  title="Previous document (←)">Previous</button>
+                <button type="button" class="btn btn-outline-secondary" id="al2NextBtn"
+                  title="Skip to next unlabeled document (→)">Skip</button>
               </div>
             </div>
           </div>
@@ -1224,7 +1465,11 @@
   const initialDocId = (urlParams.get("doc_id") || "").trim();
 
   const emptySummary = "No summary available.";
-  const defaultSuggestions = ["Security Incident", "Program Management", "Policy Update"];
+  const defaultSuggestions = [
+    { label: "Security Incident", description: "", rank: 1 },
+    { label: "Program Management", description: "", rank: 2 },
+    { label: "Policy Update", description: "", rank: 3 },
+  ];
 
   const AL2_RANKINGS_URL = "/api/active-learning-2/rankings";
   const AL2_RELATED_URL = "/api/active-learning-2/related";
@@ -1246,6 +1491,7 @@
   let rankingsByDocId = new Map();
   let contextView = "recommended";
   let lastUsedLabel = "";
+  let lastLabelAction = null;
   let suggestionsAbort = null;
   let contextSimilarClusters = [];
   let contextSimilarAnchorId = null;
@@ -1257,8 +1503,15 @@
   let contextPanelTimer = null;
   let suggestionsDeferTimer = null;
   let reviewStatusFilter = "unlabeled";
-  let selectedModelLabelFilter = "";
-  let selectedHumanLabelFilter = "";
+  let selectedLabelFilter = "";
+  let topicColorById = {};
+  let topicColorByLabel = {};
+  const CUSTOM_LABEL_PALETTE = [
+    "#7c3aed", "#db2777", "#0891b2", "#ca8a04",
+    "#4f46e5", "#be123c", "#0d9488", "#c2410c",
+  ];
+  let customLabelColorByText = {};
+  let customLabelColorCursor = 0;
 
   const CONTEXT_PANEL_CAP = 200;
   const CONTEXT_LABELED_CAP = 80;
@@ -1274,9 +1527,143 @@
     const firstSentence = String(text || "").split(/(?<=[.?!])\s+/)[0] || "";
     return firstSentence.trim() || emptySummary;
   };
+  const getDisplayText = (doc) => {
+    if (!doc) return "";
+    return doc.rawText || doc.text || "";
+  };
+  const getEffectiveLabel = (doc) => {
+    if (!doc) return "—";
+    const human = String(doc.appliedLabel || "").trim();
+    if (human) return human;
+    const model = String(doc.label || "").trim();
+    return model && model !== "—" ? model : "—";
+  };
+  const getLabelSource = (doc) => (
+    String(doc?.appliedLabel || "").trim() ? "human" : "model"
+  );
+  const getDocTopicColor = (doc) => {
+    if (!doc?.topicId) return "#0d6efd";
+    return topicColorById[String(doc.topicId)] || "#0d6efd";
+  };
+  // A brand-new human label (not one of the model's topics) gets its own
+  // stable color, cycling through a palette distinct from the topic colors.
+  const getCustomLabelColor = (label) => {
+    const key = String(label || "").trim().toLowerCase();
+    if (!key) return CUSTOM_LABEL_PALETTE[0];
+    if (!(key in customLabelColorByText)) {
+      customLabelColorByText[key] =
+        CUSTOM_LABEL_PALETTE[customLabelColorCursor % CUSTOM_LABEL_PALETTE.length];
+      customLabelColorCursor += 1;
+    }
+    return customLabelColorByText[key];
+  };
+  // Base color for a doc's effective label: labels that match a topic keep
+  // that topic's color; brand-new human labels get their own distinct color.
+  const getLabelBaseColor = (doc) => {
+    const label = String(getEffectiveLabel(doc) || "").trim();
+    if (label && label !== "—" && topicColorByLabel[label]) return topicColorByLabel[label];
+    if (getLabelSource(doc) === "model") return getDocTopicColor(doc);
+    if (label && label !== "—") return getCustomLabelColor(label);
+    return getDocTopicColor(doc);
+  };
+
+  const getDocConfidence = (doc) => (
+    typeof doc?.confidence === "number" ? doc.confidence : null
+  );
+
+  // Labels always render in their full topic/custom color; model confidence is
+  // shown separately as a meter bar under the label (renderConfidenceBar).
+  const getLabelColor = (doc) => getLabelBaseColor(doc);
+
+  // Confidence meter shown under a model label: fill width = confidence, so a
+  // long, deep-colored bar = high confidence; a short, mostly-grey track = low.
+  const renderConfidenceBar = (doc) => {
+    if (isHumanLabel(doc)) return "";
+    const conf = getDocConfidence(doc);
+    if (conf === null) return "";
+    const pct = Math.max(0, Math.min(100, Math.round(conf * 100)));
+    return `<span class="al2-conf" title="${pct}% model confidence" aria-label="${pct}% model confidence">`
+      + `<span class="al2-conf__fill" style="width:${pct}%;background:${getLabelColor(doc)};"></span></span>`;
+  };
+  const isHumanLabel = (doc) => getLabelSource(doc) === "human";
+  const humanMarkerHtml = (doc) => (
+    isHumanLabel(doc)
+      ? '<i class="bi bi-person-fill al2-label-human-marker" aria-hidden="true" title="Human-applied label"></i>'
+      : ""
+  );
+  const getLabelStyle = (doc) => `--al2-topic-color: ${getLabelColor(doc)};`;
+  const getLabelTagClass = (doc) => (
+    isHumanLabel(doc) ? "al2-label-tag is-human" : "al2-label-tag is-model"
+  );
+  const getLabelRowClass = (doc) => (
+    getLabelSource(doc) === "human" ? "is-label-human" : ""
+  );
+  const getDocById = (docId) => {
+    if (!docId) return null;
+    return docsById.get(docId) || docsById.get(String(docId)) || null;
+  };
+  const setDocHumanLabel = (docId, label) => {
+    const trimmed = String(label || "").trim();
+    if (!docId || !trimmed) return null;
+    const doc = getDocById(docId);
+    if (!doc) return null;
+    doc.appliedLabel = trimmed;
+    doc.label = trimmed;
+    doc.reviewed = true;
+    return doc;
+  };
+  const labelTitle = (doc) => {
+    const effectiveLabel = getEffectiveLabel(doc);
+    if (isHumanLabel(doc)) return `Human label: ${effectiveLabel}`;
+    const conf = getDocConfidence(doc);
+    const confText = conf === null ? "" : ` (${Math.round(conf * 100)}% confidence)`;
+    return `Model label${confText}: ${effectiveLabel}`;
+  };
+  const renderLabelCellHtml = (doc) => {
+    const effectiveLabel = getEffectiveLabel(doc);
+    const labelTagClass = getLabelTagClass(doc);
+    return `<span class="${labelTagClass}" style="${getLabelStyle(doc)}" title="${escapeHtml(labelTitle(doc))}">${escapeHtml(effectiveLabel)}</span>${renderConfidenceBar(doc)}`;
+  };
+  // Leading-cell marker (before the checkbox) flagging a human-applied label.
+  const rowHumanMarkerHtml = (doc) => (
+    isHumanLabel(doc)
+      ? `<i class="bi bi-person-fill al2-row-human-marker" style="color:${getLabelColor(doc)}" title="Human-applied label" aria-hidden="true"></i>`
+      : ""
+  );
+  const updateLabeledDocRow = (docId) => {
+    const doc = getDocById(docId);
+    const panel = document.getElementById("al2ContextPanel");
+    if (!doc || !panel) return;
+    panel.querySelectorAll("tr[data-doc-id]").forEach((row) => {
+      if (row.dataset.docId !== docId) return;
+      row.classList.toggle("is-label-human", getLabelSource(doc) === "human");
+      const labelCell = row.querySelector(".al2-col-label");
+      if (labelCell) labelCell.innerHTML = renderLabelCellHtml(doc);
+      const checkbox = row.querySelector(".al2-row-select");
+      if (checkbox) {
+        checkbox.disabled = true;
+        checkbox.checked = false;
+      }
+    });
+  };
+  const normalizeSuggestion = (item, index) => {
+    if (typeof item === "string") {
+      return { label: item, description: "", rank: index + 1 };
+    }
+    return {
+      label: String(item?.label || "").trim(),
+      description: String(item?.description || "").trim(),
+      rank: item?.rank ?? index + 1,
+    };
+  };
+  const getSuggestionLabel = (item) => {
+    if (typeof item === "string") return item;
+    return String(item?.label || "").trim();
+  };
   const ensureDocSummary = (doc) => {
     if (!doc) return emptySummary;
-    if (!doc.summary) doc.summary = buildSummary(doc.text);
+    const displayText = getDisplayText(doc);
+    if (!doc.summary) doc.summary = buildSummary(displayText);
     return doc.summary;
   };
   const setReviewLoading = (loading) => {
@@ -1307,8 +1694,10 @@
 
   const getSuggestionSet = (doc) => {
     const stored = (doc?.suggestions || []).filter(Boolean);
-    if (stored.length) return stored.slice(0, 3);
-    return defaultSuggestions.slice(0, 3);
+    if (stored.length) {
+      return stored.slice(0, 3).map((item, index) => normalizeSuggestion(item, index));
+    }
+    return defaultSuggestions.slice(0, 3).map((item, index) => normalizeSuggestion(item, index));
   };
 
   const getLabelDatalistOptions = () => {
@@ -1352,6 +1741,10 @@
     if (!applyBtn) return;
     const labelInputVal = (input?.value || "").trim();
     applyBtn.disabled = !(labelInputVal || selectedSuggestion);
+    const count = getBulkTargetIds().length;
+    applyBtn.textContent = count >= 1
+      ? `Save Label to ${count} selected & Continue`
+      : "Save Label & Continue";
   };
 
   const syncLabelControlsForDoc = (doc) => {
@@ -1386,21 +1779,19 @@
 
   const syncLabels = (labelMap) => {
     Object.entries(labelMap || {}).forEach(([docId, humanLabel]) => {
-      const existing = docsById.get(docId);
-      if (existing) {
-        existing.appliedLabel = humanLabel;
-        existing.reviewed = true;
-      } else {
-        upsertDoc({
-          id: docId,
-          text: "",
-          summary: emptySummary,
-          label: "—",
-          suggestions: defaultSuggestions,
-          appliedLabel: humanLabel,
-          reviewed: true,
-        });
-      }
+      const trimmed = String(humanLabel || "").trim();
+      if (!trimmed) return;
+      if (setDocHumanLabel(docId, trimmed)) return;
+      upsertDoc({
+        id: String(docId),
+        text: "",
+        rawText: "",
+        summary: emptySummary,
+        label: trimmed,
+        suggestions: [...defaultSuggestions],
+        appliedLabel: trimmed,
+        reviewed: true,
+      });
     });
     refreshHumanLabelDatalist();
   };
@@ -1507,21 +1898,38 @@
       body: JSON.stringify({ model_id: modelId }),
     });
     resetDocStore();
+    topicColorById = data.topic_colors || {};
+    topicColorByLabel = {};
+    Object.entries(data.topic_labels || {}).forEach(([tid, lab]) => {
+      const labelText = String(lab || "").trim();
+      const color = topicColorById[String(tid)];
+      if (labelText && color) topicColorByLabel[labelText] = color;
+    });
+    customLabelColorByText = {};
+    customLabelColorCursor = 0;
     const ml = data.model_label_by_id || {};
     const hl = data.human_labels || {};
+    const til = data.topic_id_by_id || {};
+    const conf = data.topic_confidence_by_id || {};
     for (const row of data.documents || []) {
       const id = row.id;
       if (!id) continue;
       docOrder.push(id);
       const text = row.text || "";
+      const rawText = row.raw_text || text;
+      const humanLabel = String(hl[id] || "").trim() || null;
+      const modelLabel = ml[id] || "—";
       docsById.set(id, {
         id,
         text,
+        rawText,
         summary: "",
-        label: ml[id] || "—",
+        label: humanLabel || modelLabel,
+        topicId: til[id] ?? null,
+        confidence: typeof conf[id] === "number" ? conf[id] : null,
         suggestions: [...defaultSuggestions],
-        appliedLabel: hl[id] ?? null,
-        reviewed: Boolean(hl[id]),
+        appliedLabel: humanLabel,
+        reviewed: Boolean(humanLabel),
         viewPreference: "text",
       });
     }
@@ -1544,15 +1952,17 @@
     const prev = docsById.get(rec.doc_id);
     const text = rec.text || prev?.text || "";
     const existing = prev || {};
+    const humanLabel = String((rec.current_labels || {})[rec.doc_id] || existing.appliedLabel || "").trim() || null;
     docsById.set(rec.doc_id, {
       ...existing,
       id: rec.doc_id,
       text: text || existing.text || "",
+      rawText: existing.rawText || text || existing.text || "",
       summary: existing.summary || "",
-      label: existing.label ?? "—",
+      label: humanLabel || existing.label || "—",
       suggestions: existing.suggestions || [...defaultSuggestions],
-      appliedLabel: (rec.current_labels || {})[rec.doc_id] ?? existing.appliedLabel ?? null,
-      reviewed: Boolean((rec.current_labels || {})[rec.doc_id]),
+      appliedLabel: humanLabel,
+      reviewed: Boolean(humanLabel),
       viewPreference: existing.viewPreference || "text",
     });
     if (!docOrder.includes(rec.doc_id)) docOrder.push(rec.doc_id);
@@ -1574,12 +1984,13 @@
     if (!doc) return;
     if (suggestionsDeferTimer) clearTimeout(suggestionsDeferTimer);
     renderLabelChips(doc);
-    if (!doc.text?.trim()) return;
+    if (!getDisplayText(doc)?.trim()) return;
     suggestionsDeferTimer = setTimeout(() => fetchDocSuggestions(doc), 80);
   };
 
   const fetchDocSuggestions = async (doc) => {
-    if (!doc?.text?.trim()) return;
+    const suggestionText = getDisplayText(doc);
+    if (!suggestionText?.trim()) return;
     if (suggestionsAbort) suggestionsAbort.abort();
     suggestionsAbort = new AbortController();
     const docId = doc.id;
@@ -1588,14 +1999,16 @@
       const data = await jsonFetch(`{% url_for 'suggest_doc_topics' %}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: doc.text.slice(0, 4000) }),
+        body: JSON.stringify({ text: suggestionText.slice(0, 4000) }),
         signal: suggestionsAbort.signal,
       });
       if (getCurrentDoc()?.id !== docId) return;
       const llm = (data.suggestions || [])
-        .map((s) => (typeof s === "string" ? s : s?.label))
-        .map((label) => String(label || "").trim())
-        .filter(Boolean);
+        .map((s, index) => normalizeSuggestion(
+          typeof s === "string" ? s : { label: s?.label, description: s?.description },
+          index,
+        ))
+        .filter((s) => s.label);
       doc.suggestions = llm.length ? llm.slice(0, 3) : [...defaultSuggestions];
       renderLabelChips(doc);
     } catch (err) {
@@ -1624,30 +2037,22 @@
     goToDocId(target);
   };
 
-  const skipToNextRecommended = () => {
+  // Skip = move to the next unlabeled document in queue order (wrapping),
+  // recording history so Previous works. It does NOT overwrite the model's
+  // recommendation, so the recommended doc stays reachable.
+  const skipCurrentDoc = () => {
     const current = getCurrentDoc();
     const unlabeled = sortDocsForContext(getDocs().filter((d) => !d.reviewed));
-    if (
-      recommendedDocId
-      && current?.id !== recommendedDocId
-      && unlabeled.some((d) => d.id === recommendedDocId)
-    ) {
-      goToRecommended(recommendedDocId);
-      return;
-    }
-    const next = unlabeled.find((d) => d.id !== current?.id);
-    if (next) goToRecommended(next.id);
+    if (!unlabeled.length) return;
+    const curIdx = current ? unlabeled.findIndex((d) => d.id === current.id) : -1;
+    const nextIdx = curIdx < 0 ? 0 : (curIdx + 1) % unlabeled.length;
+    const next = unlabeled[nextIdx];
+    if (next && next.id !== current?.id) goToDocId(next.id, { pushHistory: true });
   };
 
   const canSkipToNext = () => {
     const current = getCurrentDoc();
-    const unlabeled = sortDocsForContext(getDocs().filter((d) => !d.reviewed));
-    if (
-      recommendedDocId
-      && current?.id !== recommendedDocId
-      && unlabeled.some((d) => d.id === recommendedDocId)
-    ) return true;
-    return unlabeled.some((d) => d.id !== current?.id);
+    return getDocs().some((d) => !d.reviewed && d.id !== current?.id);
   };
 
   const goTo = (newIndex) => {
@@ -1685,24 +2090,20 @@
   const docMatchesSearch = (doc) => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return true;
+    const displayText = getDisplayText(doc);
     return (
       doc.id.toLowerCase().includes(term) ||
-      doc.text.toLowerCase().includes(term) ||
-      String(doc.label || "").toLowerCase().includes(term) ||
-      (doc.appliedLabel || "").toLowerCase().includes(term)
+      displayText.toLowerCase().includes(term) ||
+      getEffectiveLabel(doc).toLowerCase().includes(term)
     );
   };
 
   const docMatchesFilters = (doc) => {
     if (reviewStatusFilter === "unlabeled" && doc.reviewed) return false;
     if (reviewStatusFilter === "labeled" && !doc.reviewed) return false;
-    if (selectedModelLabelFilter) {
-      const ml = doc.label || "—";
-      if (ml !== selectedModelLabelFilter) return false;
-    }
-    if (selectedHumanLabelFilter) {
-      const hl = doc.appliedLabel || "Unlabeled";
-      if (hl !== selectedHumanLabelFilter) return false;
+    if (selectedLabelFilter) {
+      const effective = getEffectiveLabel(doc);
+      if (effective !== selectedLabelFilter) return false;
     }
     return true;
   };
@@ -1725,15 +2126,13 @@
 
   const hasActiveFilters = () => (
     reviewStatusFilter !== "unlabeled"
-    || Boolean(selectedModelLabelFilter)
-    || Boolean(selectedHumanLabelFilter)
+    || Boolean(selectedLabelFilter)
     || Boolean(searchTerm.trim())
   );
 
   const clearAllFilters = ({ showAll = false } = {}) => {
     reviewStatusFilter = showAll ? "all" : "unlabeled";
-    selectedModelLabelFilter = "";
-    selectedHumanLabelFilter = "";
+    selectedLabelFilter = "";
     searchTerm = "";
     const searchInput = document.getElementById("al2SearchInput");
     if (searchInput) searchInput.value = "";
@@ -1743,47 +2142,23 @@
 
   const renderFilterControls = () => {
     const statusSelect = document.getElementById("al2ReviewStatusFilter");
-    const modelSelect = document.getElementById("al2ModelLabelFilter");
-    const humanSelect = document.getElementById("al2HumanLabelFilter");
+    const labelSelect = document.getElementById("al2LabelFilter");
     const clearBtn = document.getElementById("al2ClearFiltersBtn");
 
     if (statusSelect) statusSelect.value = reviewStatusFilter;
 
-    if (modelSelect) {
-      const modelLabels = new Set();
-      getDocs().forEach((d) => modelLabels.add(d.label || "—"));
-      const sortedModel = [...modelLabels].sort((a, b) => a.localeCompare(b));
-      const prev = selectedModelLabelFilter;
-      modelSelect.innerHTML = `<option value="">All model labels</option>${sortedModel.map((label) =>
+    if (labelSelect) {
+      const labels = new Set();
+      getDocs().forEach((d) => labels.add(getEffectiveLabel(d)));
+      const sortedLabels = [...labels].sort((a, b) => a.localeCompare(b));
+      const prev = selectedLabelFilter;
+      labelSelect.innerHTML = `<option value="">All labels</option>${sortedLabels.map((label) =>
         `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("")}`;
-      if (prev && sortedModel.includes(prev)) {
-        modelSelect.value = prev;
+      if (prev && sortedLabels.includes(prev)) {
+        labelSelect.value = prev;
       } else {
-        selectedModelLabelFilter = "";
-        modelSelect.value = "";
-      }
-    }
-
-    if (humanSelect) {
-      const humanLabels = new Set();
-      Object.keys(statusState.class_distribution || {}).forEach((label) => {
-        const trimmed = String(label || "").trim();
-        if (trimmed) humanLabels.add(trimmed);
-      });
-      getDocs().forEach((d) => {
-        if (d.appliedLabel) humanLabels.add(d.appliedLabel);
-      });
-      if (getDocs().some((d) => !d.reviewed)) humanLabels.add("Unlabeled");
-
-      const sortedHuman = [...humanLabels].sort((a, b) => a.localeCompare(b));
-      const prev = selectedHumanLabelFilter;
-      humanSelect.innerHTML = `<option value="">All human labels</option>${sortedHuman.map((label) =>
-        `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("")}`;
-      if (prev && sortedHuman.includes(prev)) {
-        humanSelect.value = prev;
-      } else {
-        selectedHumanLabelFilter = "";
-        humanSelect.value = "";
+        selectedLabelFilter = "";
+        labelSelect.value = "";
       }
     }
 
@@ -1797,29 +2172,27 @@
     if (active) active.scrollIntoView({ block: "nearest" });
   };
 
+  // A checkbox reflects only intentional selection — never the current doc.
+  // Selections persist across navigation and are not auto-populated.
   const syncCurrentDocSelection = () => {
-    const doc = getCurrentDoc();
-    selectedDocIds.clear();
-    if (!doc?.id || doc.reviewed) {
-      return;
-    }
-    selectedDocIds.add(doc.id);
+    pruneSelectedDocIds();
+  };
+
+  const isRowChecked = (docId) => {
+    const doc = getDocById(docId);
+    if (!doc || doc.reviewed) return false;
+    return selectedDocIds.has(docId);
   };
 
   const syncContextRowSelectionState = () => {
     const panel = document.getElementById("al2ContextPanel");
-    const currentId = getCurrentDoc()?.id;
-    if (!panel || !currentId) return;
+    if (!panel) return;
     panel.querySelectorAll("tr[data-doc-id]").forEach((row) => {
-      const isCurrent = row.dataset.docId === currentId;
       const cb = row.querySelector(".al2-row-select");
       if (!cb || cb.disabled) return;
-      if (isCurrent) {
-        cb.checked = true;
-        selectedDocIds.add(currentId);
-      } else {
-        cb.checked = selectedDocIds.has(row.dataset.docId);
-      }
+      const id = row.dataset.docId;
+      cb.checked = isRowChecked(id);
+      row.classList.toggle("is-selected", cb.checked && !row.classList.contains("is-active"));
     });
   };
 
@@ -1840,6 +2213,14 @@
       contextPanelTimer = null;
       renderContextPanel();
     }, 50);
+  };
+
+  const refreshContextPanelNow = () => {
+    if (contextPanelTimer) {
+      clearTimeout(contextPanelTimer);
+      contextPanelTimer = null;
+    }
+    renderContextPanel();
   };
 
   const capDocList = (docs, cap) => {
@@ -1878,12 +2259,14 @@
     if (!row?.doc_id) return null;
     const existing = docsById.get(row.doc_id);
     const textVal = row.text || existing?.text || "";
+    const rawTextVal = row.raw_text || existing?.rawText || textVal;
     const modelLabel = row.model_label || existing?.label || "—";
     if (!existing) {
       upsertDoc({
         id: row.doc_id,
         text: textVal,
-        summary: textVal ? buildSummary(textVal) : emptySummary,
+        rawText: rawTextVal,
+        summary: rawTextVal ? buildSummary(rawTextVal) : emptySummary,
         label: modelLabel,
         suggestions: [...defaultSuggestions],
         appliedLabel: null,
@@ -1892,6 +2275,7 @@
       });
     } else {
       if (textVal && !existing.text) existing.text = textVal;
+      if (rawTextVal && !existing.rawText) existing.rawText = rawTextVal;
       if (modelLabel && modelLabel !== "—" && (!existing.label || existing.label === "—")) {
         existing.label = modelLabel;
       }
@@ -1912,6 +2296,35 @@
       const doc = docsById.get(id);
       if (!doc || doc.reviewed) selectedDocIds.delete(id);
     }
+  };
+
+  const getSelectedUnlabeledIds = () => {
+    pruneSelectedDocIds();
+    return [...selectedDocIds].filter((id) => {
+      const doc = getDocById(id);
+      return doc && !doc.reviewed;
+    });
+  };
+
+  // Docs a "Save Label" action targets. Only the intentionally-checked docs
+  // count as a bulk selection; when none are checked, the action falls back
+  // to the current document alone (see applyAndContinue).
+  const getBulkTargetIds = () => getSelectedUnlabeledIds();
+
+  const updateBulkBar = () => {
+    const bar = document.getElementById("al2BulkBar");
+    const countEl = document.getElementById("al2BulkCount");
+    const count = getBulkTargetIds().length;
+    if (bar) bar.classList.toggle("is-hidden", count < 1);
+    if (countEl) countEl.textContent = String(count);
+    // The shared apply button reflects how many docs it will label.
+    updateApplyButton();
+  };
+
+  const clearBulkSelection = () => {
+    selectedDocIds.clear();
+    refreshContextPanelNow();
+    updateBulkBar();
   };
 
   const loadContextSimilar = async ({ force = false } = {}) => {
@@ -1940,13 +2353,13 @@
   const renderContextTableHead = ({ showSimilarity = false, showRank = false, showPeek = false } = {}) => `
     <thead>
       <tr>
+        <th scope="col" class="al2-col-marker"><span class="visually-hidden">Human label</span></th>
         ${showRank ? '<th scope="col" class="al2-col-rank">#</th>' : ""}
         <th scope="col" class="al2-col-select">
           <input type="checkbox" class="form-check-input al2-select-all" title="Select all unlabeled" aria-label="Select all">
         </th>
         <th scope="col" class="al2-col-preview">Preview</th>
-        <th scope="col" class="al2-col-model">Model label</th>
-        <th scope="col" class="al2-col-human">Human label</th>
+        <th scope="col" class="al2-col-label">Label</th>
         ${showSimilarity ? '<th scope="col" class="al2-col-similarity">Match</th>' : ""}
         ${showPeek ? '<th scope="col" class="al2-col-peek"><span class="visually-hidden">Preview</span></th>' : ""}
       </tr>
@@ -1954,16 +2367,15 @@
 
   const renderContextTableRow = (doc, { similarity = null, rank = null, isAnchor = false } = {}) => {
     const isCurrent = getCurrentDoc()?.id === doc.id;
-    if (isCurrent && !doc.reviewed) selectedDocIds.add(doc.id);
+    const checked = isRowChecked(doc.id);
     const trClass = [
+      getLabelRowClass(doc),
       isCurrent ? "is-active" : "",
+      (checked && !isCurrent) ? "is-selected" : "",
       isAnchor ? "is-anchor-row" : "",
     ].filter(Boolean).join(" ");
-    const modelLabel = doc.label || "—";
-    const humanLabel = doc.appliedLabel || "Unlabeled";
-    const humanTagClass = doc.appliedLabel ? "al2-label-tag is-applied" : "al2-label-tag is-unlabeled";
+    const displayText = getDisplayText(doc);
     const canSelect = !doc.reviewed;
-    const checked = selectedDocIds.has(doc.id);
     const showSimilarity = similarity != null;
     const showRank = rank != null;
     const showPeek = showRank;
@@ -1984,15 +2396,15 @@
     return `
       <tr class="${trClass}" data-doc-id="${escapeHtml(doc.id)}" role="button" tabindex="0"
         ${isCurrent ? 'aria-current="true"' : ""}>
+        <td class="al2-col-marker">${rowHumanMarkerHtml(doc)}</td>
         ${rankCell}
         <td class="al2-col-select">
           <input type="checkbox" class="form-check-input al2-row-select" data-doc-id="${escapeHtml(doc.id)}"
             ${canSelect ? "" : "disabled"} ${checked ? "checked" : ""}
             aria-label="Select document">
         </td>
-        <td class="al2-text-cell al2-col-preview" title="${escapeHtml(doc.text)}">${escapeHtml(doc.text)}</td>
-        <td class="al2-truncate-cell al2-col-model"><span class="al2-label-tag" title="${escapeHtml(modelLabel)}">${escapeHtml(modelLabel)}</span></td>
-        <td class="al2-truncate-cell al2-col-human"><span class="${humanTagClass}" title="${escapeHtml(humanLabel)}">${escapeHtml(humanLabel)}</span></td>
+        <td class="al2-text-cell al2-col-preview" title="${escapeHtml(displayText)}">${escapeHtml(displayText)}</td>
+        <td class="al2-truncate-cell al2-col-label">${renderLabelCellHtml(doc)}</td>
         ${simCell}
         ${peekCell}
       </tr>`;
@@ -2026,13 +2438,13 @@
     const title = document.getElementById("al2SimilarPreviewModalLabel");
     if (title) title.textContent = `Preview · ${displayId(doc.id)}`;
     if (body) {
-      const human = doc.appliedLabel || "Unlabeled";
+      const effectiveLabel = getEffectiveLabel(doc);
+      const sourceLabel = getLabelSource(doc) === "human" ? "Human label" : "Model label";
       body.innerHTML = `
-        <div class="d-flex flex-wrap gap-3 mb-2 small text-muted">
-          <span>Model label: <strong class="text-body">${escapeHtml(doc.label || "—")}</strong></span>
-          <span>Human label: <strong class="text-body">${escapeHtml(human)}</strong></span>
+        <div class="mb-2 small text-muted">
+          <span>${sourceLabel}: <strong class="text-body">${escapeHtml(effectiveLabel)}</strong></span>
         </div>
-        <div class="al2-similar-preview-text">${escapeHtml(doc.text)}</div>`;
+        <div class="al2-similar-preview-text">${escapeHtml(getDisplayText(doc))}</div>`;
     }
     const modalEl = document.getElementById("al2SimilarPreviewModal");
     if (modalEl && window.bootstrap?.Modal) {
@@ -2103,12 +2515,18 @@
         panel.innerHTML = `${hiddenNotice}<div class="al2-empty-state">No labeled documents match.</div>`;
       }
     } else if (reviewStatusFilter === "all") {
-      const combined = [...unlabeled, ...labeled];
-      const combinedCap = capDocList(combined, CONTEXT_PANEL_CAP);
-      if (combinedCap.shown.length) {
-        let html = wrapContextTable(combinedCap.shown.map((d) => renderContextTableRow(d)).join(""), tableOpts);
-        if (combinedCap.truncated) {
-          html = `<div class="al2-context-cap-note">Showing first ${CONTEXT_PANEL_CAP} of ${combinedCap.total} — use search or filters to narrow.</div>${html}`;
+      // Cap unlabeled and labeled independently so labeled docs are never
+      // truncated away by the (much larger) unlabeled list.
+      const unlabeledCap = capDocList(unlabeled, CONTEXT_PANEL_CAP);
+      const labeledCap = capDocList(sortDocsForContext(labeled), CONTEXT_LABELED_CAP);
+      const rows = [...unlabeledCap.shown, ...labeledCap.shown];
+      if (rows.length) {
+        let html = wrapContextTable(rows.map((d) => renderContextTableRow(d)).join(""), tableOpts);
+        const notes = [];
+        if (unlabeledCap.truncated) notes.push(`first ${CONTEXT_PANEL_CAP} of ${unlabeledCap.total} unlabeled`);
+        if (labeledCap.truncated) notes.push(`first ${CONTEXT_LABELED_CAP} of ${labeledCap.total} labeled`);
+        if (notes.length) {
+          html = `<div class="al2-context-cap-note">Showing ${notes.join(" · ")} — use search or filters to narrow.</div>${html}`;
         }
         panel.innerHTML = `${hiddenNotice}${html}`;
       } else {
@@ -2143,18 +2561,30 @@
     syncSelectAllCheckbox(panel);
     syncContextRowSelectionState();
     scrollActiveRowIntoView();
+    updateBulkBar();
   };
 
-  const showSaveFeedback = (message) => {
+  const showSaveFeedback = (message, { withUndo = false } = {}) => {
     const feedback = document.getElementById("al2SaveFeedback");
     if (!feedback) return;
-    feedback.textContent = message;
+    feedback.textContent = "";
+    const span = document.createElement("span");
+    span.textContent = message;
+    feedback.appendChild(span);
+    if (withUndo && lastLabelAction) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "al2-undo-btn";
+      btn.textContent = "Undo";
+      btn.addEventListener("click", undoLastLabel);
+      feedback.appendChild(btn);
+    }
     feedback.classList.add("is-visible");
     if (saveFeedbackTimeout) clearTimeout(saveFeedbackTimeout);
     saveFeedbackTimeout = setTimeout(() => {
       feedback.classList.remove("is-visible");
       feedback.textContent = "";
-    }, 1800);
+    }, withUndo ? 6000 : 1800);
   };
 
   const ensureCurrentInRange = () => {
@@ -2203,31 +2633,41 @@
 
   const renderDocMeta = (doc) => {
     const idEl = document.getElementById("al2DocId");
-    const modelEl = document.getElementById("al2MetaModelLabel");
-    const humanEl = document.getElementById("al2MetaHumanLabel");
-    if (!idEl || !modelEl || !humanEl) return;
+    const labelEl = document.getElementById("al2MetaLabel");
+    if (!idEl || !labelEl) return;
+    const confItem = document.getElementById("al2MetaConf");
+    const confFill = document.getElementById("al2MetaConfFill");
+    const confPct = document.getElementById("al2MetaConfPct");
     if (!doc) {
       idEl.textContent = "—";
-      modelEl.textContent = "—";
-      humanEl.textContent = "Unlabeled";
-      humanEl.classList.add("is-unlabeled");
-      humanEl.classList.remove("is-applied");
+      labelEl.innerHTML = "—";
+      labelEl.classList.remove("is-human", "is-model");
+      labelEl.classList.add("is-model");
+      labelEl.title = "";
+      labelEl.style.removeProperty("--al2-topic-color");
+      if (confItem) confItem.hidden = true;
       return;
     }
     idEl.textContent = doc.id || "—";
-    const modelLabel = doc.label != null ? String(doc.label).trim() : "";
-    modelEl.textContent = modelLabel || "—";
-    modelEl.title = modelLabel || "";
-    if (doc.appliedLabel) {
-      humanEl.textContent = doc.appliedLabel;
-      humanEl.classList.remove("is-unlabeled");
-      humanEl.classList.add("is-applied");
-      humanEl.title = doc.appliedLabel;
-    } else {
-      humanEl.textContent = "Unlabeled";
-      humanEl.classList.add("is-unlabeled");
-      humanEl.classList.remove("is-applied");
-      humanEl.title = "";
+    const effectiveLabel = getEffectiveLabel(doc);
+    const source = getLabelSource(doc);
+    labelEl.classList.remove("is-human", "is-model", "is-unlabeled");
+    labelEl.classList.add(source === "human" ? "is-human" : "is-model");
+    labelEl.style.setProperty("--al2-topic-color", getLabelColor(doc));
+    labelEl.title = labelTitle(doc);
+    labelEl.innerHTML = `${humanMarkerHtml(doc)}<span class="al2-meta-label-text">${escapeHtml(effectiveLabel)}</span>`;
+
+    const conf = getDocConfidence(doc);
+    if (confItem && confFill && confPct) {
+      if (source === "human" || conf === null) {
+        confItem.hidden = true;
+      } else {
+        const pct = Math.max(0, Math.min(100, Math.round(conf * 100)));
+        confItem.hidden = false;
+        confFill.style.width = `${pct}%`;
+        confFill.style.background = getLabelColor(doc);
+        confPct.textContent = `${pct}%`;
+      }
     }
   };
 
@@ -2249,7 +2689,7 @@
       area.innerHTML = `<p class="mb-0">${escapeHtml(ensureDocSummary(doc))}</p>`;
     } else {
       area.classList.remove("is-summary");
-      area.innerHTML = `<p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(doc.text)}</p>`;
+      area.innerHTML = `<p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(getDisplayText(doc))}</p>`;
     }
     area.scrollTop = 0;
   };
@@ -2283,13 +2723,25 @@
       labelsEl.appendChild(hint);
       return;
     }
-    getSuggestionSet(doc).forEach((label, index) => {
+    getSuggestionSet(doc).forEach((suggestion, index) => {
+      const label = getSuggestionLabel(suggestion);
+      const rank = suggestion.rank ?? index + 1;
       const btn = document.createElement("button");
       btn.type = "button";
-      const rank = Math.min(index + 1, 3);
-      btn.className = `al2-label-chip is-rank-${rank}${selectedSuggestion === label ? " is-selected" : ""}`;
+      btn.className = `al2-label-chip${selectedSuggestion === label ? " is-selected" : ""}`;
       btn.dataset.label = label;
-      btn.textContent = label;
+      if (suggestion.description) btn.title = suggestion.description;
+      btn.setAttribute("aria-label", `Suggestion ${rank} of 3 (press ${index + 1}): ${label}`);
+      if (index < 9) {
+        const kbd = document.createElement("kbd");
+        kbd.className = "al2-chip-kbd";
+        kbd.textContent = String(index + 1);
+        btn.appendChild(kbd);
+      }
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "al2-chip-label";
+      labelSpan.textContent = label;
+      btn.appendChild(labelSpan);
       labelsEl.appendChild(btn);
     });
   };
@@ -2321,39 +2773,148 @@
     renderProgress();
   };
 
+  // Select the Nth suggested-label chip (0-based) and load it into the input,
+  // ready for Enter to save. Used by the number-key shortcuts.
+  const selectSuggestionByIndex = (idx) => {
+    const chips = document.querySelectorAll("#al2LabelSuggestions .al2-label-chip");
+    const chip = chips[idx];
+    if (!chip) return;
+    selectedSuggestion = chip.dataset.label || "";
+    setLabelInputValue(selectedSuggestion, { force: true });
+    const doc = getCurrentDoc();
+    if (doc) renderLabelChips(doc);
+    updateApplyButton();
+  };
+
+  const postLabel = (docId, label) => jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_id: modelId, doc_id: docId, label }),
+  });
+
+  const deleteLabel = (docId) => jsonFetch(`{% url_for 'active_learning_two_unlabel' %}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_id: modelId, doc_id: docId }),
+  });
+
+  const snapshotDoc = (docId) => {
+    const d = getDocById(docId);
+    return {
+      docId,
+      prevAppliedLabel: d?.appliedLabel || null,
+      prevLabel: d?.label ?? "—",
+      prevReviewed: Boolean(d?.reviewed),
+    };
+  };
+
+  // Save & continue — same input + shortcuts for single and bulk. Targets the
+  // current document plus any explicitly selected docs (getBulkTargetIds).
   const applyAndContinue = async () => {
     const input = document.getElementById("al2CustomLabelInput");
     const labelToApply = (input?.value || selectedSuggestion || "").trim();
-    if (!labelToApply) return;
-    const doc = getCurrentDoc();
-    if (!doc?.id || !modelId) return;
-    const submittedDocId = doc.id;
+    if (!labelToApply || !modelId) return;
+
+    // Bulk = the intentionally-checked docs. With nothing checked, label just
+    // the current document being reviewed.
+    const selected = getBulkTargetIds();
+    const bulk = selected.length >= 1;
+    const current = getCurrentDoc();
+    const targetIds = bulk
+      ? selected
+      : (current?.id && !current.reviewed ? [current.id] : []);
+    if (!targetIds.length) return;
+
     lastUsedLabel = labelToApply;
     refreshHumanLabelDatalist();
-    try {
-      const rec = await jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId, doc_id: doc.id, label: labelToApply }),
-      });
-      syncLabels(rec.current_labels || {});
-      doc.appliedLabel = labelToApply;
-      doc.reviewed = true;
-      selectedDocIds.delete(submittedDocId);
-      navHistory.push(submittedDocId);
-      await refreshStatusAndRankings();
-      scheduleContextPanelRender();
-      if (rec.doc_id) {
-        goToRecommended(rec.doc_id);
-        showSaveFeedback(`Saved ${displayId(submittedDocId)}. Next: ${displayId(rec.doc_id)}.`);
-      } else {
-        showSaveFeedback(`Saved ${displayId(submittedDocId)}. All documents labeled.`);
-        renderActiveLearningTwo();
-        scheduleContextPanelRender();
+    const applyBtn = document.getElementById("al2ApplyBtn");
+    if (applyBtn) applyBtn.disabled = true;
+
+    const undoEntries = [];
+    let ok = 0;
+    let lastRec = null;
+    let lastError = null;
+    for (const id of targetIds) {
+      const snapshot = snapshotDoc(id);
+      try {
+        const rec = await postLabel(id, labelToApply);
+        syncLabels(rec.current_labels || {});
+        setDocHumanLabel(id, labelToApply);
+        updateLabeledDocRow(id);
+        selectedDocIds.delete(id);
+        navHistory.push(id);
+        undoEntries.push(snapshot);
+        lastRec = rec;
+        ok += 1;
+      } catch (err) {
+        lastError = err;
       }
-    } catch (err) {
-      alert(err.message || "Failed to save label.");
     }
+
+    if (!ok) {
+      if (applyBtn) applyBtn.disabled = false;
+      alert(lastError?.message || "Failed to save label.");
+      return;
+    }
+
+    lastLabelAction = { label: labelToApply, entries: undoEntries };
+
+    await refreshStatusAndRankings();
+    refreshContextPanelNow();
+
+    const nextId = lastRec?.doc_id;
+    if (nextId && docOrder.includes(nextId)) {
+      goToRecommended(nextId);
+    } else {
+      renderActiveLearningTwo();
+      refreshContextPanelNow();
+    }
+
+    if (bulk) {
+      showSaveFeedback(`Labeled ${ok} document${ok === 1 ? "" : "s"} as “${labelToApply}”.`, { withUndo: true });
+    } else if (nextId) {
+      showSaveFeedback(`Saved ${displayId(targetIds[0])}. Next: ${displayId(nextId)}.`, { withUndo: true });
+    } else {
+      showSaveFeedback(`Saved ${displayId(targetIds[0])}. All documents labeled.`, { withUndo: true });
+    }
+
+    if (lastError && ok < targetIds.length) {
+      alert(`${targetIds.length - ok} of ${targetIds.length} could not be labeled: ${lastError.message || "error"}`);
+    }
+  };
+
+  // Revert the most recent label action (single or bulk): for each doc restore
+  // its prior state — remove the label if it was new, or re-apply the old one.
+  const undoLastLabel = async () => {
+    const action = lastLabelAction;
+    if (!action?.entries?.length || !modelId) return;
+    lastLabelAction = null;
+    if (saveFeedbackTimeout) clearTimeout(saveFeedbackTimeout);
+    const applyBtn = document.getElementById("al2ApplyBtn");
+    if (applyBtn) applyBtn.disabled = true;
+    let ok = 0;
+    for (const entry of action.entries) {
+      try {
+        if (entry.prevAppliedLabel) {
+          await postLabel(entry.docId, entry.prevAppliedLabel);
+        } else {
+          await deleteLabel(entry.docId);
+        }
+        const d = getDocById(entry.docId);
+        if (d) {
+          d.appliedLabel = entry.prevAppliedLabel;
+          d.label = entry.prevLabel;
+          d.reviewed = entry.prevReviewed;
+        }
+        ok += 1;
+      } catch (err) {
+        // best-effort; keep going
+      }
+    }
+    await refreshStatusAndRankings();
+    renderActiveLearningTwo();
+    refreshContextPanelNow();
+    showSaveFeedback(`Undid ${ok} label${ok === 1 ? "" : "s"}.`);
   };
 
   const focusInitialDocument = () => {
@@ -2405,8 +2966,11 @@
     const contextFilters = document.getElementById("al2ContextFilters");
 
     if (prevBtn) prevBtn.addEventListener("click", goBack);
-    if (nextBtn) nextBtn.addEventListener("click", skipToNextRecommended);
+    if (nextBtn) nextBtn.addEventListener("click", skipCurrentDoc);
     if (applyBtn) applyBtn.addEventListener("click", applyAndContinue);
+
+    const bulkClearBtn = document.getElementById("al2BulkClearBtn");
+    if (bulkClearBtn) bulkClearBtn.addEventListener("click", clearBulkSelection);
 
     if (customLabelInput) {
       customLabelInput.addEventListener("input", (e) => {
@@ -2476,20 +3040,20 @@
           panel?.querySelectorAll(".al2-row-select:not(:disabled)").forEach((cb) => {
             setDocSelected(cb.dataset.docId, selectAll.checked);
             cb.checked = selectAll.checked;
+            const row = cb.closest("tr[data-doc-id]");
+            if (row) row.classList.toggle("is-selected", cb.checked && !row.classList.contains("is-active"));
           });
           syncSelectAllCheckbox(panel);
+          updateBulkBar();
           return;
         }
         const rowCb = e.target.closest(".al2-row-select");
         if (!rowCb) return;
-        const docId = rowCb.dataset.docId;
-        const currentId = getCurrentDoc()?.id;
-        if (docId === currentId && !rowCb.checked) {
-          rowCb.checked = true;
-          return;
-        }
-        setDocSelected(docId, rowCb.checked);
+        setDocSelected(rowCb.dataset.docId, rowCb.checked);
+        const row = rowCb.closest("tr[data-doc-id]");
+        if (row) row.classList.toggle("is-selected", rowCb.checked && !row.classList.contains("is-active"));
         syncSelectAllCheckbox(document.getElementById("al2ContextPanel"));
+        updateBulkBar();
       });
     }
 
@@ -2511,8 +3075,7 @@
 
     if (contextFilters) {
       const statusFilterSelect = document.getElementById("al2ReviewStatusFilter");
-      const modelFilterSelect = document.getElementById("al2ModelLabelFilter");
-      const humanFilterSelect = document.getElementById("al2HumanLabelFilter");
+      const labelFilterSelect = document.getElementById("al2LabelFilter");
       const clearFiltersBtn = document.getElementById("al2ClearFiltersBtn");
 
       if (statusFilterSelect) {
@@ -2522,16 +3085,9 @@
           scheduleContextPanelRender();
         });
       }
-      if (modelFilterSelect) {
-        modelFilterSelect.addEventListener("change", (e) => {
-          selectedModelLabelFilter = e.target.value || "";
-          renderFilterControls();
-          scheduleContextPanelRender();
-        });
-      }
-      if (humanFilterSelect) {
-        humanFilterSelect.addEventListener("change", (e) => {
-          selectedHumanLabelFilter = e.target.value || "";
+      if (labelFilterSelect) {
+        labelFilterSelect.addEventListener("change", (e) => {
+          selectedLabelFilter = e.target.value || "";
           renderFilterControls();
           scheduleContextPanelRender();
         });
@@ -2569,18 +3125,37 @@
       });
     }
 
+    // Inputs that are NOT text entry — focus on these must not suppress the
+    // labeling shortcuts (e.g. a queue row's selection checkbox).
+    const NON_TEXT_INPUT_TYPES = new Set([
+      "checkbox", "radio", "button", "submit", "reset", "range", "file", "color",
+    ]);
     document.addEventListener("keydown", (e) => {
-      const tag = e.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target;
+      const tag = el.tagName;
+      const inTextField = tag === "TEXTAREA"
+        || el.isContentEditable
+        || (tag === "INPUT" && !NON_TEXT_INPUT_TYPES.has((el.type || "").toLowerCase()));
+      // "/" focuses the queue search from anywhere except while typing.
+      if (e.key === "/" && !inTextField) {
+        e.preventDefault();
+        document.getElementById("al2SearchInput")?.focus();
+        return;
+      }
+      if (inTextField) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         goBack();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        skipToNextRecommended();
-      } else if (e.key === "Enter" && selectedSuggestion) {
+        skipCurrentDoc();
+      } else if (e.key === "Enter") {
         e.preventDefault();
         applyAndContinue();
+      } else if (e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        selectSuggestionByIndex(Number(e.key) - 1);
       }
     });
 

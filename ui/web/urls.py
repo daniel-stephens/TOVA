@@ -113,6 +113,11 @@ urlpatterns = [
         name="active_learning_two_label",
     ),
     path(
+        "api/active-learning-2/unlabel",
+        _x(views.active_learning_two_unlabel),
+        name="active_learning_two_unlabel",
+    ),
+    path(
         "api/active-learning-2/labels",
         views.active_learning_two_labels,
         name="active_learning_two_labels",

@@ -2,6 +2,40 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+DASHBOARD_COLOR_CFG: Dict[str, Any] = {
+    "seed": 0,
+    "saturation": [70, 75, 80],
+    "lightness": [55, 60, 65],
+}
+
+
+def compute_theme_color(index: int, color_cfg: Optional[Dict[str, Any]] = None) -> str:
+    """Match dashboard.html computeColor() for consistent topic colors."""
+    cfg = color_cfg or DASHBOARD_COLOR_CFG
+    golden = 137.508
+    hue = (index * golden + (cfg.get("seed") or 0)) % 360
+    sats = cfg.get("saturation") or [75]
+    ligs = cfg.get("lightness") or [60]
+    sat = sats[index % len(sats)]
+    lig = ligs[index % len(ligs)]
+    return f"hsl({hue}, {sat}%, {lig}%)"
+
+
+def ordered_topic_ids_from_topics_info(topics_info: Dict[str, Any]) -> List[str]:
+    """Preserve Topics Info key order (same as to_dashboard_bundle allIds)."""
+    return [str(k) for k in topics_info.keys()]
+
+
+def build_theme_color_map(
+    topics_info: Dict[str, Any],
+    color_cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    topic_ids = ordered_topic_ids_from_topics_info(topics_info)
+    return {
+        tid: compute_theme_color(i, color_cfg)
+        for i, tid in enumerate(topic_ids)
+    }
+
 
 def pydantic_to_dict(model: Any) -> Dict[str, Any]:
     if model is None:
@@ -173,7 +207,7 @@ def to_dashboard_bundle(
     
     return {
         "model": model_id,
-        "color": {"seed": 0, "saturation": [70, 75, 80], "lightness": [55, 60, 65]},
+        "color": dict(DASHBOARD_COLOR_CFG),
         "themes": {"allIds": [int(i) if i.isdigit() else i for i in all_ids], "byId": by_id},
         "diagnostics": {"byThemeId": diags_by_id},
         "similarities": sims_by_id,

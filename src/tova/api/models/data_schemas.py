@@ -11,6 +11,9 @@ class DataRecord(BaseModel):
         None, description="Original identifier for the record, if any", example="orig-5678")
     text: str = Field(..., description="Raw or preprocessed input text",
                           example="climate change is accelerating")
+    raw_text: Optional[str] = Field(
+        None, description="Original document text before preprocessing",
+    )
     sourcefile: Optional[str] = Field(
         None, description="Optional source file name or identifier",
         example="document1.txt",

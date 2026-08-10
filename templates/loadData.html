@@ -1035,6 +1035,19 @@ document.addEventListener("DOMContentLoaded", function () {
     return [];
   }
 
+  function detectRawTextKey(row, textKey) {
+    if (!row || !textKey) return null;
+    const processedKeys = new Set(["tokenized_text", "lemmas", "processed_text", "bow"]);
+    if (!processedKeys.has(String(textKey).toLowerCase())) return null;
+    const candidates = ["raw_text", "text", "original_text", "rawText"];
+    for (const key of candidates) {
+      if (key !== textKey && row[key] != null && String(row[key]).trim() !== "") {
+        return key;
+      }
+    }
+    return null;
+  }
+
   function rowsToDocuments(rows, mapping) {
     const idKey = mapping?.id, textKey = mapping?.text, labelKey = mapping?.label || null;
     if (!idKey || !textKey) return [];
@@ -1043,6 +1056,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = r?.[idKey]; const text = r?.[textKey];
       if (id == null || id === '' || text == null || text === '') continue;
       const one = { id: String(id), text: String(text) };
+      const rawKey = detectRawTextKey(r, textKey);
+      if (rawKey) one.raw_text = String(r[rawKey]);
       if (labelKey) one.label = (r?.[labelKey] ?? null) == null ? null : String(r[labelKey]);
       docs.push(one);
     }
@@ -1058,6 +1073,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const docs = rowsToDocuments(rows, m).map(d => ({
         id: d.id,
         text: d.text,
+        ...(d.raw_text !== undefined ? { raw_text: d.raw_text } : {}),
         ...(d.label !== undefined ? { label: d.label } : {}),
         sourcefile: f.name
       }));

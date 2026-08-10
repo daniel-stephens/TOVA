@@ -33,6 +33,8 @@ from django.urls import reverse
 from ruamel.yaml import YAML
 
 from dashboard_utils import (
+    DASHBOARD_COLOR_CFG,
+    build_theme_color_map,
     dashboard_context_for_llm,
     pydantic_to_dict,
     to_dashboard_bundle,
@@ -2206,15 +2208,55 @@ def active_learning_two_label(request):
         return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
 
 
-def _al2_dominant_topic_label(theta_dist: dict, topics_info: dict) -> str:
-    """Topic-model label for one document from theta distribution and Topics Info."""
+@login_required
+def active_learning_two_unlabel(request):
+    """Remove a human label from a document (undo). Proxies the upstream DELETE."""
+    payload = _get_json(request) or {}
+    model_id = str(payload.get("model_id") or "").strip()
+    doc_id = str(payload.get("doc_id") or "").strip()
+    user_id = _request_user_id(request)
+
+    if not model_id:
+        return JsonResponse({"error": "model_id is required"}, status=400)
+    if not doc_id:
+        return JsonResponse({"error": "doc_id is required"}, status=400)
+    if not user_id:
+        return JsonResponse({"error": "Not authenticated"}, status=401)
+    if not R._verify_model_ownership(model_id, user_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+
+    try:
+        up = requests.delete(
+            f"{R.API}/active-learning/{model_id}/label/{doc_id}",
+            timeout=(3.05, 30),
+        )
+        return HttpResponse(
+            up.content,
+            status=up.status_code,
+            content_type=up.headers.get("Content-Type", "application/json"),
+        )
+    except requests.Timeout:
+        return JsonResponse({"error": "Upstream timeout"}, status=504)
+    except requests.RequestException as e:
+        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+
+
+def _al2_dominant_topic_id(theta_dist: dict) -> Optional[str]:
+    """Dominant topic id for one document from theta distribution."""
     if not theta_dist:
-        return "—"
+        return None
     try:
         top_tid, _ = max(theta_dist.items(), key=lambda kv: float(kv[1] or 0))
     except (TypeError, ValueError):
+        return None
+    return str(top_tid)
+
+
+def _al2_dominant_topic_label(theta_dist: dict, topics_info: dict) -> str:
+    """Topic-model label for one document from theta distribution and Topics Info."""
+    tid_str = _al2_dominant_topic_id(theta_dist)
+    if not tid_str:
         return "—"
-    tid_str = str(top_tid)
     meta = topics_info.get(tid_str)
     if meta is None:
         for k, v in topics_info.items():
@@ -2500,6 +2542,26 @@ def active_learning_two_bootstrap(request):
     docs_list = [
         d if isinstance(d, dict) else pydantic_to_dict(d) for d in docs_list_raw
     ]
+
+    raw_text_by_id: dict[str, str] = {}
+    corpus_data_path = R.DRAFTS_SAVE / corpus_id / "data.json"
+    if corpus_data_path.exists():
+        try:
+            raw_payload = json.loads(corpus_data_path.read_text(encoding="utf-8"))
+            raw_items = raw_payload if isinstance(raw_payload, list) else raw_payload.get("documents", raw_payload)
+            if isinstance(raw_items, list):
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    doc_id = str(item.get("id", ""))
+                    if not doc_id:
+                        continue
+                    raw_val = item.get("raw_text")
+                    if raw_val is not None and str(raw_val).strip():
+                        raw_text_by_id[doc_id] = str(raw_val)
+        except Exception as e:
+            logger.warning("al2-bootstrap could not read raw_text from data.json: %s", e)
+
     doc_ids = [str(d.get("id")) for d in docs_list if d.get("id") is not None]
 
     sorted_key = tuple(sorted(doc_ids))
@@ -2551,17 +2613,45 @@ def active_learning_two_bootstrap(request):
                 status=502,
             )
 
+    topic_colors = build_theme_color_map(topics_info, DASHBOARD_COLOR_CFG)
+    topic_labels = {}
+    for tid, meta in topics_info.items():
+        tid_str = str(tid)
+        if isinstance(meta, dict):
+            lab = meta.get("Label")
+            if lab is not None and str(lab).strip():
+                topic_labels[tid_str] = str(lab).strip()
+                continue
+        topic_labels[tid_str] = f"Topic {tid_str}"
+
     documents = []
     model_label_by_id = {}
+    topic_id_by_id = {}
+    topic_confidence_by_id = {}
     for d in docs_list:
         did = str(d.get("id", ""))
         if not did:
             continue
         text = d.get("text", "")
-        documents.append({"id": did, "text": str(text) if text is not None else ""})
+        text_str = str(text) if text is not None else ""
+        raw_text = d.get("raw_text") or raw_text_by_id.get(did) or text_str
+        documents.append({
+            "id": did,
+            "text": text_str,
+            "raw_text": str(raw_text) if raw_text is not None else text_str,
+        })
         theta_row = doc_thetas.get(did)
         if theta_row is None:
             theta_row = doc_thetas.get(str(did)) or {}
+        top_tid = _al2_dominant_topic_id(theta_row)
+        if top_tid:
+            topic_id_by_id[did] = top_tid
+            # Confidence = weight of the dominant topic (theta) in [0, 1].
+            try:
+                conf = float(theta_row.get(top_tid, theta_row.get(str(top_tid), 0)) or 0)
+            except (TypeError, ValueError):
+                conf = 0.0
+            topic_confidence_by_id[did] = max(0.0, min(1.0, conf))
         model_label_by_id[did] = _al2_dominant_topic_label(theta_row, topics_info)
 
     human_labels = {}
@@ -2582,6 +2672,10 @@ def active_learning_two_bootstrap(request):
         {
             "documents": documents,
             "model_label_by_id": model_label_by_id,
+            "topic_id_by_id": topic_id_by_id,
+            "topic_confidence_by_id": topic_confidence_by_id,
+            "topic_colors": topic_colors,
+            "topic_labels": topic_labels,
             "human_labels": human_labels,
         },
         status=200,

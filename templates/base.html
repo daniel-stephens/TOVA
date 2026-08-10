@@ -583,6 +583,22 @@
             {% if model_name %}{{ model_name }}{% else %}{{ model_id }}{% endif %}
           </span>
         </div>
+        {% if request.resolver_match and request.resolver_match.url_name == 'active_learning_two' %}
+        <div class="al2-subnav-progress al2-queue-progress" id="al2ContextProgress"
+          role="group" aria-label="Labeling progress">
+          <div class="al2-progress-stats">
+            <span><strong id="al2LabeledCount">0</strong> labeled</span>
+            <span aria-hidden="true">·</span>
+            <span><strong id="al2RemainingCount">0</strong> remaining</span>
+            <span class="al2-progress-pct" id="al2ProgressPct">0%</span>
+          </div>
+          <div class="al2-progress al2-progress--compact" id="al2ProgressTrack"
+            role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+            aria-labelledby="al2ProgressPct">
+            <div class="al2-progress-bar" id="al2ProgressBar" style="width: 0%;"></div>
+          </div>
+        </div>
+        {% endif %}
         <nav class="dash-subnav__tabs" aria-label="Model views">
           <div class="dropdown dash-subnav__dropdown">
             <button type="button"
