@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import os
 import sys
 from copy import deepcopy
@@ -20,6 +21,7 @@ except ImportError:
         return None
 
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate
 from django.contrib.auth import login as auth_login
@@ -46,9 +48,20 @@ from tova.core import models as models_module
 from web import oauth_okta
 from web.admin_emails import admin_emails_from_env, promote_env_listed_user_to_staff
 from web.authz import get_tova_user_session_dict
-from web.decorators import require_tova_app_admin
-from web.models import AuditLog, ChatMessage, User, UserConfig
+from web.decorators import block_study_participants, require_study_feature, require_tova_app_admin
+from web.models import (
+    AuditLog,
+    ChatMessage,
+    InteractionEvent,
+    ParticipantSession,
+    StudyResponse,
+    TopicRename,
+    User,
+    UserConfig,
+)
+from web.study_features import FEATURE_ACTIVE_LEARNING, get_study_model_id, is_study_participant, post_login_redirect_url, study_participant_may_access_model, user_has_feature
 from web.services import runtime as R
+from web import study_flow
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +167,30 @@ def _reset_user_config(user_id: str):
 # ------------------------------------------------------------------------------
 # Auth routes (local username/password + optional Okta)
 # ------------------------------------------------------------------------------
+def _default_post_auth_redirect(user, *next_candidates):
+    """Resolve redirect after login/signup, honoring safe ``next`` when provided."""
+    dest = _safe_redirect_target(*next_candidates)
+    if dest:
+        return dest
+    return post_login_redirect_url(user)
+
+
+def _study_model_access_denied(request, model_id: str, *, json_response: bool = False):
+    if study_participant_may_access_model(request.user, model_id):
+        return None
+    if json_response:
+        return JsonResponse({"error": "Access denied: model is not assigned to your study group."}, status=403)
+    messages.error(request, "You can only access your assigned study model.")
+    return redirect(post_login_redirect_url(request.user))
+
+
 def signup(request):
+    if not getattr(settings, "TOVA_ALLOW_SIGNUP", True):
+        messages.error(request, "Account registration is closed.")
+        return redirect(reverse("web:login"))
+
     if request.user.is_authenticated:
-        return redirect(reverse("web:home"))
+        return redirect(_default_post_auth_redirect(request.user))
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         email = request.POST.get("email", "").strip().lower()
@@ -189,15 +223,30 @@ def signup(request):
         promote_env_listed_user_to_staff(user)
 
         messages.success(request, "Account created! Welcome to TOVA.")
-        return redirect(reverse("web:home"))
+        return redirect(_default_post_auth_redirect(user))
 
     return render(request, "signup.html")
 
 
 def login(request):
+    return _login(request, template="login.html", url_name="web:login")
+
+
+def study_login(request):
+    """Sign-in for study participants.
+
+    Deliberately the same page for every condition -- a separate door per arm
+    would signal to participants which one they are in before they start.
+    It differs from the main login only in dropping signup and SSO, neither of
+    which applies to an account the research team created.
+    """
+    return _login(request, template="study/login.html", url_name="web:study_login")
+
+
+def _login(request, *, template: str, url_name: str):
     if request.user.is_authenticated:
         dest = _safe_redirect_target(request.GET.get("next"))
-        return redirect(dest or reverse("web:home"))
+        return redirect(dest or post_login_redirect_url(request.user))
     if request.method == "POST":
         email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password", "")
@@ -210,23 +259,27 @@ def login(request):
                 request.GET.get("next"),
             )
             if next_param:
-                return redirect(f"{reverse('web:login')}?{urlencode({'next': next_param})}")
-            return redirect(reverse("web:login"))
+                return redirect(f"{reverse(url_name)}?{urlencode({'next': next_param})}")
+            return redirect(reverse(url_name))
 
         auth_login(request, user)
         _session_permanent(request)
         promote_env_listed_user_to_staff(user)
         _log_audit(request, "login", target_type="user", target_id=str(user.pk), details=user.email)
 
-        messages.success(request, "Signed in successfully.")
+        if not is_study_participant(user):
+            # Participants have no message block on their screens; queueing here
+            # would just leave it unread until sign-out.
+            messages.success(request, "Signed in successfully.")
 
-        dest = _safe_redirect_target(
+        dest = _default_post_auth_redirect(
+            user,
             request.POST.get("next"),
             request.GET.get("next"),
         )
-        return redirect(dest or reverse("web:home"))
+        return redirect(dest)
 
-    return render(request, "login.html")
+    return render(request, template)
 
 
 def login_okta(request):
@@ -292,13 +345,23 @@ def auth_okta_callback(request):
     messages.success(request, "Signed in with Okta.")
 
     next_url = request.session.pop("next_url", None)
-    return redirect(next_url or reverse("web:home"))
+    return redirect(next_url or post_login_redirect_url(user))
 
 
 def logout(request):
+    # Send participants back to the study door, not the main app's login, so a
+    # shared machine is ready for the next person in the session.
+    was_participant = is_study_participant(request.user)
     auth_logout(request)
+
+    # Discard anything queued but never displayed. The study screens do not
+    # render the message block, so without this a stale "Signed in
+    # successfully." resurfaces at sign-out. Session flush is not enough:
+    # Django's FallbackStorage writes messages to a cookie first.
+    messages.get_messages(request).used = True
+
     messages.info(request, "You have been signed out.")
-    return redirect(reverse("web:login"))
+    return redirect(reverse("web:study_login" if was_participant else "web:login"))
 
 
 # ------------------------------------------------------------------------------
@@ -607,7 +670,9 @@ def admin_audit(request):
 # Basic pages & health
 # ------------------------------------------------------------------------------
 def home(request):
-    """Public landing page; signed-in users see the same template with full nav and workflow links."""
+    """Public landing page; study participants are sent to their preset dashboard."""
+    if request.user.is_authenticated and is_study_participant(request.user):
+        return redirect(post_login_redirect_url(request.user))
     return render(request, "homepage.html")
 
 
@@ -804,6 +869,7 @@ def api_reset_user_config(request):
 # Data / Corpus-related routes
 # ------------------------------------------------------------------------------
 @login_required
+@block_study_participants()
 def load_data_page(request):
     """Page for uploading/creating a dataset."""
     cid = _request_user_id(request) or ""
@@ -815,11 +881,13 @@ def load_data_page(request):
 
 
 @login_required
+@block_study_participants()
 def load_corpus_page(request):
     return render(request, "manageCorpora.html")
 
 
 @login_required
+@block_study_participants(json_response=True)
 def create_corpus(request):
     payload = _get_json(request)
     if not payload:
@@ -896,6 +964,7 @@ def create_corpus(request):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def add_model_to_corpus(request):
     payload = _get_json(request) or {}
     model_id = payload.get("model_id")
@@ -927,6 +996,7 @@ def add_model_to_corpus(request):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def delete_corpus(request):
     """
     Delete a corpus by name.
@@ -1046,6 +1116,7 @@ def delete_corpus(request):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def create_dataset(request):
     try:
         payload = _get_json(request) or {}
@@ -1160,6 +1231,7 @@ def get_tfidf_data(request, corpus_id):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def train_corpus_tfidf_route(request, corpus_id):
     if request.method == "GET":
         return proxy_corpus_tfidf(request, corpus_id)
@@ -1224,6 +1296,7 @@ def train_tfidf_corpus(request, corpus_id):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def training_start(request):
 
     payload = _get_json(request) or {}
@@ -1509,6 +1582,7 @@ def get_status(request, job_id=None):
 # Model-related routes
 # ------------------------------------------------------------------------------
 @login_required
+@block_study_participants()
 def loadModel(request):
     return render(request, "loadModel.html")
 
@@ -1700,6 +1774,7 @@ def get_corpus(request, corpus_id):
 
 
 @login_required
+@block_study_participants(json_response=True)
 def get_model_registry(request):
     with open("static/config/modelRegistry.json") as f:
         return JsonResponse(json.load(f))
@@ -1708,6 +1783,90 @@ def get_model_registry(request):
 @login_required
 def trained_models(request):
     return render(request, "trained_models.html")
+
+
+def _model_dict_from_id(model_id: str) -> dict | None:
+    """Load a model dict for the trained-models UI, without owner filtering."""
+    if not model_id:
+        return None
+    try:
+        response = requests.get(f"{R.API}/data/models/{model_id}", timeout=10)
+        if response.status_code == 200:
+            model = response.json()
+            meta = model.get("metadata") or {}
+            tr = meta.get("tr_params") or {}
+            return {
+                "id": model.get("id") or model_id,
+                "name": tr.get("model_name") or model.get("name") or model_id,
+                "owner_id": model.get("owner_id") or meta.get("owner_id"),
+                "corpus_id": model.get("corpus_id") or meta.get("corpus_id"),
+                "created_at": model.get("created_at") or meta.get("created_at"),
+                "location": model.get("location") or "temporal",
+                "metadata": meta,
+            }
+    except Exception:
+        logger.exception("Failed to fetch study model %s from API", model_id)
+
+    try:
+        draft = drafts.get_draft(model_id, DraftType.model)
+        if not draft:
+            return None
+        model = drafts.draft_to_model(draft)
+        if not model:
+            return None
+        model_path = R.DRAFTS_SAVE / model_id
+        metadata_path = model_path / "metadata.json"
+        metadata_dict = {}
+        if metadata_path.exists():
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata_dict = json.load(f)
+        else:
+            metadata_dict = pydantic_to_dict(model.metadata) if model.metadata else {}
+        return {
+            "id": model.id,
+            "name": model.name or metadata_dict.get("tr_params", {}).get("model_name") or model_id,
+            "owner_id": model.owner_id,
+            "corpus_id": model.corpus_id or metadata_dict.get("corpus_id"),
+            "created_at": model.created_at or metadata_dict.get("created_at"),
+            "location": model.location.value if hasattr(model.location, "value") else str(model.location),
+            "metadata": metadata_dict,
+        }
+    except Exception:
+        logger.exception("Failed to load study model %s from drafts", model_id)
+    return None
+
+
+def _study_model_already_listed(corpora: list, model_id: str) -> bool:
+    for corpus in corpora or []:
+        for model in corpus.get("models") or []:
+            if str(model.get("id")) == str(model_id):
+                return True
+    return False
+
+
+def _inject_study_preset_model(corpora: list, request) -> list:
+    """Ensure a study participant sees their group's preset model in trained-models."""
+    if not is_study_participant(request.user):
+        return corpora
+    model_id = get_study_model_id(request.user)
+    if not model_id or _study_model_already_listed(corpora, model_id):
+        return corpora
+
+    model_dict = _model_dict_from_id(model_id)
+    if not model_dict:
+        logger.warning("Study preset model %s could not be loaded for user %s", model_id, _request_user_id(request))
+        return corpora
+
+    study_corpus = {
+        "id": f"study_{model_id}",
+        "name": "Study model",
+        "owner_id": _request_user_id(request),
+        "models": [model_dict],
+        "created_at": model_dict.get("created_at"),
+        "metadata": {"name": "Study model"},
+        "location": model_dict.get("location") or "temporal",
+    }
+    return [study_corpus] + list(corpora or [])
 
 
 def _fetch_trained_models_corpora(request):
@@ -1898,7 +2057,7 @@ def _fetch_trained_models_corpora(request):
             corpora.append(unassociated_corpus)
             logger.info("Added %d unassociated models to virtual corpus", len(final_unassociated))
 
-        return corpora
+        return _inject_study_preset_model(corpora, request)
 
     except requests.Timeout:
         logger.error("Timeout fetching corpora")
@@ -2111,8 +2270,12 @@ def _model_nav_context(model_id: str) -> dict:
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING)
 def active_learning_two(request):
     model_id = (request.GET.get("model_id") or "").strip()
+    denied = _study_model_access_denied(request, model_id)
+    if denied:
+        return denied
     return render(
         request,
         "active_learning_two.html",
@@ -2121,6 +2284,7 @@ def active_learning_two(request):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_recommend(request):
     model_id = (request.GET.get("model_id") or "").strip()
     user_id = _request_user_id(request)
@@ -2147,6 +2311,7 @@ def active_learning_two_recommend(request):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_status(request):
     model_id = (request.GET.get("model_id") or "").strip()
     user_id = _request_user_id(request)
@@ -2173,6 +2338,7 @@ def active_learning_two_status(request):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_label(request):
     payload = _get_json(request) or {}
     model_id = str(payload.get("model_id") or "").strip()
@@ -2209,6 +2375,7 @@ def active_learning_two_label(request):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_unlabel(request):
     """Remove a human label from a document (undo). Proxies the upstream DELETE."""
     payload = _get_json(request) or {}
@@ -2389,6 +2556,7 @@ def _al2_fetch_model_metadata(model_id: str):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_labels(request):
     model_id = (request.GET.get("model_id") or "").strip()
     user_id = _request_user_id(request)
@@ -2415,6 +2583,7 @@ def active_learning_two_labels(request):
 
 
 @login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_bootstrap(request):
     """Full corpus documents, dominant topic label per doc, and AL human labels."""
     t0 = time()
@@ -2685,6 +2854,9 @@ def active_learning_two_bootstrap(request):
 @login_required
 def dashboard(request):
     model_id = request.POST.get("model_id") or request.GET.get("model_id", "")
+    denied = _study_model_access_denied(request, model_id)
+    if denied:
+        return denied
     try:
         return render(
             request,
@@ -2715,6 +2887,10 @@ def proxy_dashboard_data(request):
     if not model_id:
         logger.warning("get-dashboard missing model_id")
         return JsonResponse({"error": "model_id is required"}, status=400)
+
+    denied = _study_model_access_denied(request, model_id, json_response=True)
+    if denied:
+        return denied
 
     # model metadata
     model_metadata = None
@@ -3074,7 +3250,15 @@ def text_info(request):
         logger.debug("TEXT-INFO corpus owner %s != user %s; allowing read-only access", corpus_owner, user_id)
 
     docs = corpus.get("documents", [])
-    doc_text = next((d.get("text", "") for d in docs if str(d.get("id")) == doc_id), "")
+    # Prefer the original document; ``text`` is the preprocessed form.
+    doc_text = next(
+        (
+            (d.get("raw_text") or d.get("text") or "")
+            for d in docs
+            if str(d.get("id")) == doc_id
+        ),
+        "",
+    )
     if not doc_text:
         doc_text = f"(Text not found for document {doc_id})"
 
@@ -3600,101 +3784,55 @@ def chat(request):
 
 
 @login_required
+@login_required
 def rename_topic(request, model_id: str, topic_id: int):
-    """
-    Rename a topic in a model. Proxies the request to the backend R.API.
-    If backend is unavailable, returns None.
+    """Store a per-user label for one topic of one model.
+
+    Renames are private to the user. They used to be proxied upstream, but that
+    endpoint does not exist on the API and the failure was swallowed, so no
+    rename ever persisted.
     """
     payload = _get_json(request) or {}
-    new_label = payload.get("new_label", "").strip()
+    new_label = str(payload.get("new_label") or "").strip()
     owner_id = _request_user_id(request)
-    
+
     if not new_label:
         return JsonResponse({"error": "new_label is required"}, status=400)
-    
     if not model_id:
         return JsonResponse({"error": "model_id is required"}, status=400)
-    
     if not owner_id:
         return JsonResponse({"error": "User not authenticated"}, status=401)
-    
-    # Forward request to backend R.API
-    try:
-        upstream_url = f"{R.API}/data/models/{model_id}/topics/{topic_id}/rename"
-        upstream_response = requests.post(
-            upstream_url,
-            json={"new_label": new_label},
-            params={"owner_id": owner_id},
-            timeout=(3.05, 30),
-        )
-        
-        if upstream_response.status_code == 200:
-            return JsonResponse(upstream_response.json(), status=200)
-        else:
-            return HttpResponse(
-                upstream_response.content,
-                status=upstream_response.status_code,
-                content_type=upstream_response.headers.get("Content-Type", "application/json"),
-            )
-    except requests.exceptions.ConnectionError:
-        # Backend is not available - return None
-        logger.warning(
-            f"Backend unavailable for topic rename: model_id={model_id}, topic_id={topic_id}"
-        )
-        return JsonResponse({}, status=200)
-    except requests.Timeout:
-        logger.exception("rename topic timeout")
-        return JsonResponse({"error": "Upstream timeout"}, status=504)
-    except requests.RequestException as e:
-        logger.exception("rename topic error: %s", e)
-        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+    if not R._verify_model_ownership(model_id, owner_id):
+        return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
+
+    TopicRename.objects.update_or_create(
+        user=request.user,
+        model_id=model_id,
+        topic_id=str(topic_id),
+        defaults={"label": new_label[:255]},
+    )
+    return JsonResponse(
+        {"model_id": model_id, "topic_id": str(topic_id), "new_label": new_label},
+        status=200,
+    )
 
 
 @login_required
 def get_topic_renames(request, model_id: str):
-    """
-    Get all topic renames for a model from the backend R.API.
-    If backend is unavailable, returns None.
-    """
+    """Return this user's topic renames for *model_id* as ``{topic_id: label}``."""
     owner_id = _request_user_id(request)
-    
+
     if not model_id:
         return JsonResponse({"error": "model_id is required"}, status=400)
-    
     if not owner_id:
         return JsonResponse({"error": "User not authenticated"}, status=401)
-    
-    try:
-        upstream_url = f"{R.API}/data/models/{model_id}/topics/renames"
-        upstream_response = requests.get(
-            upstream_url,
-            params={"owner_id": owner_id},
-            timeout=(3.05, 30),
+
+    labels = dict(
+        TopicRename.objects.filter(user=request.user, model_id=model_id).values_list(
+            "topic_id", "label"
         )
-        
-        if upstream_response.status_code == 200:
-            return JsonResponse(upstream_response.json(), status=200)
-        elif upstream_response.status_code == 404:
-            # No renames found, return empty object
-            return JsonResponse({"topic_labels": {}}, status=200)
-        else:
-            return HttpResponse(
-                upstream_response.content,
-                status=upstream_response.status_code,
-                content_type=upstream_response.headers.get("Content-Type", "application/json"),
-            )
-    except requests.exceptions.ConnectionError:
-        # Backend is not available - return None
-        logger.warning(
-            f"Backend unavailable for getting topic renames: model_id={model_id}"
-        )
-        return JsonResponse({}, status=200)
-    except requests.Timeout:
-        logger.exception("get topic renames timeout")
-        return JsonResponse({"error": "Upstream timeout"}, status=504)
-    except requests.RequestException as e:
-        logger.exception("get topic renames error: %s", e)
-        return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
+    )
+    return JsonResponse({"topic_labels": labels}, status=200)
 
 
 # Note: Encoded routes are handled by the custom url_for which generates encoded paths.
@@ -3703,3 +3841,525 @@ def get_topic_renames(request, model_id: str):
 # using the register_encoded_route() helper function above.
 
 
+
+
+# ------------------------------------------------------------------------------
+# Study flow (participant screens: instructions -> task -> post-study -> done)
+# ------------------------------------------------------------------------------
+_EMAIL_HEADER_RE = re.compile(r"^\s*(subject|date|sent)\s*:\s*(.+)$", re.IGNORECASE)
+
+
+def _study_email_meta(doc: dict) -> tuple[str, str]:
+    """Best-effort ``(subject, date)`` for one corpus document.
+
+    Corpus records carry neither field today, so fall back to parsing RFC-822
+    style headers out of ``raw_text`` and finally to the first line of text.
+    """
+    subject = str(doc.get("subject") or "").strip()
+    date = str(doc.get("date") or "").strip()
+    if subject and date:
+        return subject, date
+
+    body = str(doc.get("raw_text") or doc.get("text") or "")
+    for line in body.splitlines()[:12]:
+        m = _EMAIL_HEADER_RE.match(line)
+        if not m:
+            continue
+        field, value = m.group(1).lower(), m.group(2).strip()
+        if field == "subject" and not subject:
+            subject = value
+        elif field in ("date", "sent") and not date:
+            date = value
+
+    if not subject:
+        first = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+        subject = (first[:97] + "...") if len(first) > 100 else first
+    return subject, date
+
+
+def _study_session(request):
+    return study_flow.get_or_create_session(request.user)
+
+
+@login_required
+def study_instructions(request):
+    session = _study_session(request)
+    corpus_size = None
+    try:
+        corpus_size = _study_corpus_size(session.model_id)
+    except Exception:
+        logger.warning("study: could not determine corpus size", exc_info=True)
+    return render(
+        request,
+        "instructions.html",
+        {
+            "task_minutes": study_flow.task_minutes(),
+            "corpus_size": corpus_size,
+            "session": session,
+        },
+    )
+
+
+@login_required
+def study_begin(request):
+    """Start the exploration timer. Idempotent: re-POSTing never extends it."""
+    if request.method != "POST":
+        return redirect(reverse("web:study_instructions"))
+    session = _study_session(request)
+    study_flow.begin_task(session, request.user)
+    _log_audit(request, "study_begin", "study", str(request.user.pk), session.model_id)
+    return redirect(reverse("web:study_task"))
+
+
+@login_required
+def study_task(request):
+    """Canonical URL for the task stage; forwards to the participant's dashboard."""
+    session = _study_session(request)
+    model_id = session.model_id or get_study_model_id(request.user) or ""
+    url = reverse("web:dashboard")
+    if model_id:
+        url += "?" + urlencode({"model_id": model_id})
+    return redirect(url)
+
+
+@login_required
+def study_timer(request):
+    session = _study_session(request)
+    if session.stage == ParticipantSession.STAGE_TASK and session.expired:
+        study_flow.finish_task(session, early=False)
+    expired = session.stage != ParticipantSession.STAGE_TASK
+    return JsonResponse(
+        {
+            "remaining": 0 if expired else session.seconds_remaining,
+            "expired": expired,
+            "stage": session.stage,
+            "redirect": study_flow.stage_redirect_url(session),
+        }
+    )
+
+
+@login_required
+def study_finish(request):
+    """Finish the exploration task early and move to the questions."""
+    if request.method != "POST":
+        return redirect(reverse("web:study_task"))
+    session = _study_session(request)
+    was_running = session.stage == ParticipantSession.STAGE_TASK
+    study_flow.finish_task(session, early=was_running and not session.expired)
+    _log_audit(request, "study_finish_task", "study", str(request.user.pk), session.stage)
+    target = study_flow.stage_redirect_url(session)
+    if _wants_json_request(request):
+        return JsonResponse({"redirect": target, "stage": session.stage})
+    return redirect(target)
+
+
+def _wants_json_request(request) -> bool:
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in (request.headers.get("Accept") or "")
+    )
+
+
+@login_required
+def study_done(request):
+    session = _study_session(request)
+    response = StudyResponse.objects.filter(pk=request.user.pk).first()
+    return render(request, "study/done.html", {"session": session, "response": response})
+
+
+def _study_corpus_size(model_id: str) -> int | None:
+    """Document count for the corpus behind *model_id*, or None if unavailable."""
+    if not model_id:
+        return None
+    cached, _state = R._cache_get(R._CACHE_MODEL_INFO, f"corpus_size:{model_id}")
+    if cached:
+        return cached.get("n")
+
+    model_metadata, err = _al2_fetch_model_metadata(model_id)
+    if err is not None:
+        return None
+    corpus_id = _study_corpus_id_from_metadata(model_metadata)
+    if not corpus_id:
+        return None
+    data_path = R.DRAFTS_SAVE / corpus_id / "data.json"
+    if not data_path.exists():
+        return None
+    try:
+        raw = json.loads(data_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    items = raw if isinstance(raw, list) else raw.get("documents", [])
+    n = len(items) if isinstance(items, list) else None
+    if n is not None:
+        R._cache_set(R._CACHE_MODEL_INFO, f"corpus_size:{model_id}", {"n": n})
+    return n
+
+
+def _study_corpus_id_from_metadata(model_metadata: dict) -> str:
+    md = model_metadata.get("metadata", {}) or {}
+    return (
+        model_metadata.get("corpus_id")
+        or md.get("corpus_id")
+        or (md.get("tr_params", {}) or {}).get("corpus_id")
+        or ""
+    )
+
+
+def _study_base_documents(model_id: str):
+    """Corpus documents plus the model's dominant-topic label for each.
+
+    Identical for everyone in a study group, so it is cached per model. The
+    per-participant overlay (renames, active-learning labels) is applied on top
+    by :func:`study_docs`.
+
+    Returns ``(docs, topic_label_by_doc, topic_id_by_doc, error_response)``.
+    """
+    cache_key = f"study_docs:{model_id}"
+    cached, _state = R._cache_get(R._CACHE_MODEL_INFO, cache_key)
+    if cached:
+        return cached["docs"], cached["topic_label"], cached["topic_id"], None
+
+    model_metadata, err = _al2_fetch_model_metadata(model_id)
+    if err is not None:
+        return None, None, None, err
+
+    corpus_id = _study_corpus_id_from_metadata(model_metadata)
+    if not corpus_id:
+        return None, None, None, JsonResponse(
+            {"error": "Model is missing corpus_id."}, status=400
+        )
+
+    try:
+        up = requests.get(f"{R.API}/data/corpora/{corpus_id}", timeout=(3.05, 60))
+        up.raise_for_status()
+        corpus = up.json()
+    except requests.RequestException as e:
+        logger.exception("study-docs corpus fetch failed: %s", e)
+        return None, None, None, JsonResponse(
+            {"error": "Unable to reach the corpus service."}, status=502
+        )
+
+    docs_raw = corpus.get("documents", []) or []
+    docs_list = [d if isinstance(d, dict) else pydantic_to_dict(d) for d in docs_raw]
+
+    # raw_text is not returned by the corpus endpoint; read it off disk so
+    # subject/date parsing has real email text to work with.
+    raw_text_by_id: dict[str, str] = {}
+    data_path = R.DRAFTS_SAVE / corpus_id / "data.json"
+    if data_path.exists():
+        try:
+            raw_payload = json.loads(data_path.read_text(encoding="utf-8"))
+            raw_items = (
+                raw_payload if isinstance(raw_payload, list)
+                else raw_payload.get("documents", [])
+            )
+            for item in raw_items or []:
+                if isinstance(item, dict) and item.get("id"):
+                    val = item.get("raw_text")
+                    if val:
+                        raw_text_by_id[str(item["id"])] = str(val)
+        except Exception as e:
+            logger.warning("study-docs could not read raw_text: %s", e)
+
+    doc_ids = [str(d.get("id")) for d in docs_list if d.get("id") is not None]
+
+    # Dominant topic per document.
+    bulk_key = (model_id, tuple(sorted(doc_ids)))
+    cached_bulk, _bulk_state = R._cache_get(R._CACHE_THETAS_BULK, bulk_key)
+    if cached_bulk:
+        doc_thetas = cached_bulk
+    else:
+        try:
+            r = requests.post(
+                f"{R.API}/queries/thetas-by-docs-ids",
+                json={"docs_ids": ",".join(doc_ids), "model_id": model_id},
+                timeout=60,
+            )
+            r.raise_for_status()
+            doc_thetas = r.json()
+            R._cache_set(R._CACHE_THETAS_BULK, bulk_key, doc_thetas)
+        except Exception as e:
+            logger.warning("study-docs thetas unavailable, falling back: %s", e)
+            doc_thetas = {}
+
+    info_cached, _s = R._cache_get(R._CACHE_MODEL_INFO, model_id)
+    topics_info = (info_cached or {}).get("Topics Info", {}) or {}
+    if not topics_info:
+        try:
+            r = requests.post(
+                f"{R.API}/queries/model-info",
+                json={"model_id": model_id, "config": R.RAW_CONFIG},
+                timeout=60,
+            )
+            r.raise_for_status()
+            info = r.json()
+            R._cache_set(R._CACHE_MODEL_INFO, model_id, info)
+            topics_info = info.get("Topics Info", {}) or {}
+        except Exception as e:
+            logger.warning("study-docs model-info unavailable: %s", e)
+
+    docs = []
+    topic_label_by_doc: dict[str, str] = {}
+    topic_id_by_doc: dict[str, str] = {}
+    for d in docs_list:
+        did = str(d.get("id", ""))
+        if not did:
+            continue
+        enriched = dict(d)
+        if did in raw_text_by_id:
+            enriched.setdefault("raw_text", raw_text_by_id[did])
+        subject, date = _study_email_meta(enriched)
+        docs.append(
+            {
+                "id": did,
+                "display_id": str(d.get("original_id") or did),
+                "subject": subject,
+                "date": date,
+            }
+        )
+        theta_row = doc_thetas.get(did) or {}
+        tid = _al2_dominant_topic_id(theta_row)
+        if tid:
+            topic_id_by_doc[did] = str(tid)
+        label = _al2_dominant_topic_label(theta_row, topics_info)
+        if label:
+            topic_label_by_doc[did] = str(label)
+
+    R._cache_set(
+        R._CACHE_MODEL_INFO,
+        cache_key,
+        {"docs": docs, "topic_label": topic_label_by_doc, "topic_id": topic_id_by_doc},
+    )
+    return docs, topic_label_by_doc, topic_id_by_doc, None
+
+
+@login_required
+def study_docs(request):
+    """Themes and documents for the post-study citation picker.
+
+    Themes are per participant. Precedence for a document's theme, highest first:
+    their own active-learning label, their rename of the document's dominant
+    topic, then the model's default topic label.
+    """
+    session = _study_session(request)
+    model_id = session.model_id or get_study_model_id(request.user) or ""
+    if not model_id:
+        return JsonResponse({"themes": [], "emails": []})
+
+    docs, topic_label_by_doc, topic_id_by_doc, err = _study_base_documents(model_id)
+    if err is not None:
+        return err
+
+    renames = dict(
+        TopicRename.objects.filter(user=request.user, model_id=model_id).values_list(
+            "topic_id", "label"
+        )
+    )
+
+    human_labels: dict = {}
+    if user_has_feature(request.user, FEATURE_ACTIVE_LEARNING):
+        try:
+            lr = requests.get(
+                f"{R.API}/active-learning/{model_id}/labels",
+                params={"user_id": str(request.user.pk)},
+                timeout=(3.05, 20),
+            )
+            lr.raise_for_status()
+            body = lr.json() if lr.content else {}
+            if isinstance(body, dict):
+                human_labels = body.get("labels") or {}
+        except requests.RequestException as e:
+            logger.warning("study-docs could not fetch human labels: %s", e)
+
+    emails = []
+    seen_themes = []
+    for doc in docs:
+        did = doc["id"]
+        theme = human_labels.get(did)
+        if not theme:
+            tid = topic_id_by_doc.get(did)
+            if tid and tid in renames:
+                theme = renames[tid]
+        if not theme:
+            theme = topic_label_by_doc.get(did)
+        theme = str(theme).strip() if theme else study_flow.UNCLASSIFIED_THEME
+
+        if theme not in seen_themes:
+            seen_themes.append(theme)
+        emails.append({**doc, "theme": theme})
+
+    # Keep Unclassified last so it never leads the picker.
+    themes = [t for t in seen_themes if t != study_flow.UNCLASSIFIED_THEME]
+    themes.sort(key=str.lower)
+    if study_flow.UNCLASSIFIED_THEME in seen_themes:
+        themes.append(study_flow.UNCLASSIFIED_THEME)
+
+    return JsonResponse({"themes": themes, "emails": emails})
+
+
+def _study_parse_citations(raw: str) -> list:
+    """Parse the hidden citation field (comma-separated document ids)."""
+    if not raw:
+        return []
+    out, seen = [], set()
+    for part in str(raw).split(","):
+        val = part.strip()
+        if val and val not in seen:
+            seen.add(val)
+            out.append(val)
+    return out[:50]
+
+
+@login_required
+def study_post(request):
+    """Render and accept the post-study questionnaire."""
+    session = _study_session(request)
+
+    if study_flow.has_submitted(request.user):
+        return redirect(reverse("web:study_done"))
+
+    if request.method != "POST":
+        return render(
+            request,
+            "post_study.html",
+            {"session": session, "errors": {}, "submitted": {}},
+        )
+
+    post = request.POST
+    errors: dict[str, str] = {}
+
+    tf_answers = {}
+    for key in study_flow.TF_KEY:
+        val = (post.get(key) or "").strip().lower()
+        if not val:
+            errors[key] = "Please choose an answer."
+        elif val not in study_flow.TF_VALID_VALUES:
+            errors[key] = "Invalid answer."
+        else:
+            tf_answers[key] = val
+
+    open_answers = {}
+    for key in study_flow.OPEN_QUESTIONS:
+        text = (post.get(key) or "").strip()
+        if not text:
+            errors[key] = "Please answer this question."
+        open_answers[key] = {
+            "text": text,
+            "citations": _study_parse_citations(post.get(f"{key}_citations", "")),
+        }
+
+    if errors:
+        # Re-render with what they typed rather than losing eight answers.
+        return render(
+            request,
+            "post_study.html",
+            {
+                "session": session,
+                "errors": errors,
+                "submitted": post.dict(),
+                "submitted_citations": {
+                    k: post.get(f"{k}_citations", "") for k in study_flow.OPEN_QUESTIONS
+                },
+            },
+            status=400,
+        )
+
+    try:
+        form_duration_ms = int(post.get("form_duration_ms") or 0) or None
+    except (TypeError, ValueError):
+        form_duration_ms = None
+
+    StudyResponse.objects.update_or_create(
+        user=request.user,
+        defaults={
+            "study_group": session.study_group,
+            "model_id": session.model_id,
+            "tf_answers": tf_answers,
+            "tf_score": study_flow.score_tf(tf_answers),
+            "open_answers": open_answers,
+            "payload": post.dict(),
+            "task_duration_s": session.task_duration_s,
+            "form_duration_ms": form_duration_ms,
+        },
+    )
+    study_flow.complete_study(session)
+    _log_audit(request, "study_submit", "study", str(request.user.pk), session.model_id)
+    return redirect(reverse("web:study_done"))
+
+
+# ------------------------------------------------------------------------------
+# Interaction telemetry
+# ------------------------------------------------------------------------------
+_EVENT_BATCH_LIMIT = 200
+_EVENT_ACTIONS = {
+    "click", "dblclick", "contextmenu",
+    "key", "shortcut", "search",
+    "change", "submit",
+    "copy", "paste", "select",
+    "modal_open", "modal_close",
+    "scroll", "resize", "focus", "blur", "page",
+}
+
+
+@login_required
+def study_events(request):
+    """Accept a batch of interaction events from a participant's browser.
+
+    Batched and fire-and-forget: the client keeps a queue and flushes on a timer
+    or at page unload, so a slow or failed write never blocks the task.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    user = request.user
+    if not is_study_participant(user):
+        # Nothing to measure for staff; accept and discard so the client's
+        # beacon never sees an error.
+        return JsonResponse({"stored": 0})
+
+    payload = _get_json(request) or {}
+    raw_events = payload.get("events")
+    if not isinstance(raw_events, list):
+        return JsonResponse({"error": "events must be a list"}, status=400)
+
+    session = study_flow.get_or_create_session(user)
+    rows = []
+    for item in raw_events[:_EVENT_BATCH_LIMIT]:
+        if not isinstance(item, dict):
+            continue
+        action = str(item.get("action") or "").strip()[:32]
+        if action not in _EVENT_ACTIONS:
+            continue
+        modality = str(item.get("modality") or "").strip()
+        if modality not in {
+            InteractionEvent.MOUSE,
+            InteractionEvent.KEYBOARD,
+            InteractionEvent.OTHER,
+        }:
+            modality = InteractionEvent.OTHER
+        detail = item.get("detail")
+        if not isinstance(detail, dict):
+            detail = {}
+        try:
+            client_ms = max(0, int(item.get("t") or 0))
+        except (TypeError, ValueError):
+            client_ms = 0
+
+        rows.append(
+            InteractionEvent(
+                user=user,
+                study_group=session.study_group,
+                model_id=session.model_id,
+                stage=session.stage,
+                page=str(item.get("page") or "")[:64],
+                action=action,
+                modality=modality,
+                target=str(item.get("target") or "")[:255],
+                detail=detail,
+                client_ms=client_ms,
+            )
+        )
+
+    if rows:
+        InteractionEvent.objects.bulk_create(rows, batch_size=200)
+    return JsonResponse({"stored": len(rows)})

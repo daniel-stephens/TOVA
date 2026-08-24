@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — Thank you</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --panel: #f7f8fa;
+    --green: #1a8f5f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #ffffff;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  .brand .page { color: #9aa0aa; font-size: 14px; }
+  header .status { color: #9aa0aa; font-size: 13px; }
+
+  header .hdr-right { display: flex; align-items: center; gap: 16px; }
+  header .hdr-signout {
+    color: #9aa0aa;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 6px 14px;
+    border: 1px solid #2c2e33;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  header .hdr-signout:hover {
+    color: #fff;
+    border-color: #4a4d55;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  main { max-width: 720px; margin: 0 auto; padding: 64px 24px 80px; }
+
+  .check {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--green); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 12px; }
+  .sub { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 32px; }
+
+  .facts {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    padding: 16px 20px; background: var(--panel); border-radius: 10px;
+    margin-bottom: 28px;
+  }
+  .facts div { font-size: 13px; }
+  .facts .num { font-size: 16px; font-weight: 600; display: block; }
+  .facts .lbl { color: var(--muted); }
+
+  .closing { color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<header data-no-log>
+  <div class="brand">
+    <span class="logo">TOVA</span>
+    <span class="page">Complete</span>
+  </div>
+  <div class="hdr-right">
+    <span class="status">Session finished</span>
+    <a class="hdr-signout" data-log="sign_out" href="{% url 'web:logout' %}">Sign out</a>
+  </div>
+</header>
+
+<main>
+  <div class="check">&#10003;</div>
+  <h1>Thank you &mdash; you're all done</h1>
+  <p class="sub">Your responses have been recorded. There's nothing further to do, and you can close this window.</p>
+
+  {% if response %}
+  <div class="facts">
+    {% if response.task_duration_s %}
+    <div>
+      <span class="num">{{ response.task_duration_s|floatformat:0 }}s</span>
+      <span class="lbl">spent exploring</span>
+    </div>
+    {% endif %}
+    <div>
+      <span class="num">{{ response.open_answers|length }}</span>
+      <span class="lbl">written answers</span>
+    </div>
+    <div>
+      <span class="num">{{ response.submitted_at|date:"H:i" }}</span>
+      <span class="lbl">submitted</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <p class="closing">
+    If you have questions about this study or would like your data withdrawn, contact the
+    research team who invited you. Please don't discuss the specific contents of the documents
+    with anyone who hasn't yet taken part.
+  </p>
+</main>
+
+</body>
+</html>

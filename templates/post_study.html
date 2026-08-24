@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — Post-study questions</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --panel: #f7f8fa;
+    --blue: #2f6fed;
+    --blue-bg: #eaf0fe;
+    --green: #1a8f5f;
+    --red: #c0392b;
+    --amber: #b7791f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #ffffff;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  .brand .page { color: #9aa0aa; font-size: 14px; }
+  header .status { color: #9aa0aa; font-size: 13px; }
+
+  header .hdr-right { display: flex; align-items: center; gap: 16px; }
+  header .hdr-signout {
+    color: #9aa0aa;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 6px 14px;
+    border: 1px solid #2c2e33;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  header .hdr-signout:hover {
+    color: #fff;
+    border-color: #4a4d55;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  h1 { font-size: 21px; font-weight: 600; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+
+  section { margin-bottom: 36px; }
+  section h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  section .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill-static {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+
+  .statement {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .statement p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
+  .choices { display: flex; gap: 8px; }
+  .choice {
+    flex: 1;
+    text-align: center;
+    padding: 8px 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .choice:hover { border-color: #c7cbd1; }
+
+  /* Radio-backed choices: same look, but submits without JavaScript. */
+  .choice-opt { flex: 1; margin: 0; }
+  .choice-opt input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .choice-opt input:focus-visible + .choice { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .choice-opt input[value="true"]:checked + .choice { background: #eaf6ef; border-color: var(--green); color: var(--green); font-weight: 600; }
+  .choice-opt input[value="false"]:checked + .choice { background: #fbeceb; border-color: var(--red); color: var(--red); font-weight: 600; }
+  .choice-opt input[value="unsure"]:checked + .choice { background: #fbf3e6; border-color: var(--amber); color: var(--amber); font-weight: 600; }
+
+  .statement.has-error { border-color: var(--red); }
+  .qblock.has-error textarea { border-color: var(--red); }
+  .err { color: var(--red); font-size: 12.5px; margin: 8px 0 0; }
+  .form-errors {
+    background: #fbeceb;
+    color: var(--red);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-bottom: 28px;
+  }
+  .doc-loading { padding: 10px 8px; font-size: 13px; color: var(--muted); }
+
+  .qblock { margin-bottom: 26px; }
+  .qblock p.q { font-size: 14px; font-weight: 500; margin: 0 0 8px; line-height: 1.5; }
+  textarea, input[type=text] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--ink);
+  }
+  textarea { min-height: 64px; resize: vertical; margin-bottom: 8px; }
+  textarea:focus, input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+  input::placeholder, textarea::placeholder { color: #a7acb4; }
+
+  .field-label { font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+
+  .cat-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--blue);
+    background: var(--blue-bg);
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+
+  .doc-select { position: relative; }
+  .doc-trigger {
+    width: 100%;
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #a7acb4;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .doc-trigger.has-value { color: var(--ink); }
+  .doc-trigger .chev { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+  .doc-trigger .chip-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .doc-trigger .chip-theme-label {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    margin-right: -2px;
+  }
+  .doc-trigger .chip-theme-label:not(:first-child) { margin-left: 6px; }
+  .doc-trigger .chip {
+    background: var(--blue-bg);
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .doc-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(20,20,25,0.10);
+    z-index: 10;
+    padding: 8px;
+  }
+  .doc-panel.open { display: block; }
+  .doc-search { margin-bottom: 6px; }
+  .doc-list { max-height: 280px; overflow-y: auto; }
+
+  .theme-group { margin-bottom: 2px; }
+  .theme-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .theme-head:hover { background: var(--panel); }
+  .theme-chev { color: var(--muted); font-size: 11px; width: 12px; flex-shrink: 0; }
+  .theme-name { flex: 1; }
+  .theme-count { color: var(--muted); font-size: 12px; font-weight: 400; flex-shrink: 0; }
+  .theme-body { padding-left: 20px; }
+
+  .doc-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .doc-row:hover { background: var(--panel); }
+  .doc-row input { margin-top: 3px; flex-shrink: 0; }
+  .doc-row .doc-id { font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .doc-row .doc-subj { color: var(--muted); }
+  .doc-empty { padding: 10px 8px; font-size: 13px; color: var(--muted); }
+
+  .inline-browser {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .inline-browser .doc-search { margin-bottom: 8px; }
+  .inline-browser .doc-list { max-height: 260px; }
+
+  .footer-bar {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  button.submit {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 22px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button.submit:hover { background: #157a51; }
+</style>
+</head>
+<body>
+
+<header data-no-log>
+  <div class="brand">
+    <span class="logo">TOVA</span>
+    <span class="page">Post-study questions</span>
+  </div>
+  <div class="hdr-right">
+    <span class="status">Labeling session complete</span>
+    <a class="hdr-signout" data-log="sign_out" href="{% url 'web:logout' %}" onclick="return confirm('Sign out now? Any answers you have typed on this page will be lost.');">Sign out</a>
+  </div>
+</header>
+
+<form method="post" id="postStudyForm">
+{% csrf_token %}
+<input type="hidden" name="form_duration_ms" id="formDurationMs" value="">
+
+<main>
+  <h1>Post-study questions</h1>
+
+  {% if errors %}
+  <p class="form-errors">Some answers are missing. Nothing you typed has been lost &mdash; please fill in the highlighted questions below and submit again.</p>
+  {% endif %}
+
+  <!-- <section>
+    <h2>Themes you worked with this session</h2>
+    <p class="hint">Logged automatically from your session.</p>
+    <div class="pill-row">
+      <span class="pill-static">Off-target gene edits in the trial data</span>
+      <span class="pill-static">Gene Integrity Detail investigation</span>
+      <span class="pill-static">Executive-level approval oversight</span>
+      <span class="pill-static">Reassignments after the settlement</span>
+      <span class="pill-static">Unofficial data sharing with an outside contact</span>
+      <span class="pill-static">Compliance and safety training reminders</span>
+      <span class="pill-static">Office social events</span>
+    </div>
+  </section> -->
+
+  <section>
+    <h2>Browse the documents</h2>
+    <p class="hint">Look anything up while you answer the questions below. Click a theme to see its documents, or search across all of them.</p>
+    <div class="inline-browser">
+      <input type="text" class="doc-search" id="browse-search" placeholder="Search documents by ID or subject">
+      <div class="doc-list" id="browse-list"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>True or false</h2>
+    <p class="hint">Based on what you read, not what the labels said.</p>
+
+    <div class="statement{% if errors.tf1 %} has-error{% endif %}">
+      <p>The investigation team found that approvals for high-risk edits were being pushed through outside the normal review process by someone at the executive level.</p>
+      <div class="choices">
+          <label class="choice-opt">
+            <input type="radio" name="tf1" value="true"{% if submitted.tf1 == "true" %} checked{% endif %}>
+            <span class="choice">True</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf1" value="false"{% if submitted.tf1 == "false" %} checked{% endif %}>
+            <span class="choice">False</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf1" value="unsure"{% if submitted.tf1 == "unsure" %} checked{% endif %}>
+            <span class="choice">Not sure</span>
+          </label>
+      </div>
+      {% if errors.tf1 %}<p class="err">{{ errors.tf1 }}</p>{% endif %}
+    </div>
+
+    <div class="statement{% if errors.tf2 %} has-error{% endif %}">
+      <p>The off-target edits were eventually traced back to a faulty reagent batch.</p>
+      <div class="choices">
+          <label class="choice-opt">
+            <input type="radio" name="tf2" value="true"{% if submitted.tf2 == "true" %} checked{% endif %}>
+            <span class="choice">True</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf2" value="false"{% if submitted.tf2 == "false" %} checked{% endif %}>
+            <span class="choice">False</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf2" value="unsure"{% if submitted.tf2 == "unsure" %} checked{% endif %}>
+            <span class="choice">Not sure</span>
+          </label>
+      </div>
+      {% if errors.tf2 %}<p class="err">{{ errors.tf2 }}</p>{% endif %}
+    </div>
+
+    <div class="statement{% if errors.tf3 %} has-error{% endif %}">
+      <p>The investigation was wound down after a legal settlement, and one email suggests a personal financial connection may have played a role.</p>
+      <div class="choices">
+          <label class="choice-opt">
+            <input type="radio" name="tf3" value="true"{% if submitted.tf3 == "true" %} checked{% endif %}>
+            <span class="choice">True</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf3" value="false"{% if submitted.tf3 == "false" %} checked{% endif %}>
+            <span class="choice">False</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf3" value="unsure"{% if submitted.tf3 == "unsure" %} checked{% endif %}>
+            <span class="choice">Not sure</span>
+          </label>
+      </div>
+      {% if errors.tf3 %}<p class="err">{{ errors.tf3 }}</p>{% endif %}
+    </div>
+
+    <div class="statement{% if errors.tf4 %} has-error{% endif %}">
+      <p>The outside contact who received the leaked data was an official auditor sent by a regulator to inspect the trial.</p>
+      <div class="choices">
+          <label class="choice-opt">
+            <input type="radio" name="tf4" value="true"{% if submitted.tf4 == "true" %} checked{% endif %}>
+            <span class="choice">True</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf4" value="false"{% if submitted.tf4 == "false" %} checked{% endif %}>
+            <span class="choice">False</span>
+          </label>
+          <label class="choice-opt">
+            <input type="radio" name="tf4" value="unsure"{% if submitted.tf4 == "unsure" %} checked{% endif %}>
+            <span class="choice">Not sure</span>
+          </label>
+      </div>
+      {% if errors.tf4 %}<p class="err">{{ errors.tf4 }}</p>{% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2>In your own words</h2>
+    <p class="hint">Pick the specific emails you'd point a colleague to, if you remember which ones.</p>
+
+    <div class="qblock{% if errors.motive %} has-error{% endif %}">
+      <span class="cat-tag">Motive</span>
+      <p class="q">Why was the investigation shut down, and who benefited from that?</p>
+      <textarea name="motive" placeholder="Your answer">{{ submitted.motive|default:"" }}</textarea>
+      {% if errors.motive %}<p class="err">{{ errors.motive }}</p>{% endif %}
+      <p class="field-label">Which emails support this? (optional)</p>
+      <div class="doc-select" data-field="motive"></div>
+      <input type="hidden" name="motive_citations" id="motive_citations"
+             value="{{ submitted_citations.motive|default:"" }}">
+    </div>
+
+    <div class="qblock{% if errors.connections %} has-error{% endif %}">
+      <span class="cat-tag">Connections</span>
+      <p class="q">Marcos and Priya each noticed something different about how approvals were happening. What did each one find, and how do the two findings connect?</p>
+      <textarea name="connections" placeholder="Your answer">{{ submitted.connections|default:"" }}</textarea>
+      {% if errors.connections %}<p class="err">{{ errors.connections }}</p>{% endif %}
+      <p class="field-label">Which emails support this? (optional)</p>
+      <div class="doc-select" data-field="connections"></div>
+      <input type="hidden" name="connections_citations" id="connections_citations"
+             value="{{ submitted_citations.connections|default:"" }}">
+    </div>
+
+    <div class="qblock{% if errors.timeline %} has-error{% endif %}">
+      <span class="cat-tag">Timeline</span>
+      <p class="q">Someone privately suspected the anomalies were intentional well before the company opened a formal investigation. Roughly how big is that gap, and what does it suggest?</p>
+      <textarea name="timeline" placeholder="Your answer">{{ submitted.timeline|default:"" }}</textarea>
+      {% if errors.timeline %}<p class="err">{{ errors.timeline }}</p>{% endif %}
+      <p class="field-label">Which emails support this? (optional)</p>
+      <div class="doc-select" data-field="timeline"></div>
+      <input type="hidden" name="timeline_citations" id="timeline_citations"
+             value="{{ submitted_citations.timeline|default:"" }}">
+    </div>
+
+    <div class="qblock{% if errors.threads %} has-error{% endif %}">
+      <span class="cat-tag">Distinguishing threads</span>
+      <p class="q">Is the "unsanctioned sample audit" part of the same story as the Gene Integrity Detail investigation, or a separate issue? What makes you say so?</p>
+      <textarea name="threads" placeholder="Your answer">{{ submitted.threads|default:"" }}</textarea>
+      {% if errors.threads %}<p class="err">{{ errors.threads }}</p>{% endif %}
+      <p class="field-label">Which emails support this? (optional)</p>
+      <div class="doc-select" data-field="threads"></div>
+      <input type="hidden" name="threads_citations" id="threads_citations"
+             value="{{ submitted_citations.threads|default:"" }}">
+    </div>
+  </section>
+</main>
+
+<div class="footer-bar">
+  <button type="submit" class="submit">Submit</button>
+</div>
+
+</form>
+
+<script>
+  // Themes and documents are per participant: their own labels and topic
+  // renames, resolved server-side. Loaded from {% url 'web:study_docs' %}.
+  var THEMES = [];
+  var EMAILS = [];
+  function buildDocSelect(root) {
+    var selected = new Set();
+    var expanded = new Set();
+    var field = root.dataset.field;
+    var hidden = field ? document.getElementById(field + '_citations') : null;
+
+    // Restore prior selections after a failed submit.
+    if (hidden && hidden.value) {
+      hidden.value.split(',').forEach(function (id) {
+        var v = id.trim();
+        if (v) { selected.add(v); }
+      });
+    }
+
+    function syncField() {
+      if (hidden) { hidden.value = Array.from(selected).join(','); }
+    }
+
+    var trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'doc-trigger';
+    trigger.innerHTML = '<span class="chip-row"><span class="placeholder">Browse themes\u2026</span></span><span class="chev">\u25be</span>';
+
+    var panel = document.createElement('div');
+    panel.className = 'doc-panel';
+
+    var search = document.createElement('input');
+    search.type = 'text';
+    search.className = 'doc-search';
+    search.placeholder = 'Search documents by ID or subject';
+
+    var list = document.createElement('div');
+    list.className = 'doc-list';
+
+    function docRow(e) {
+      var row = document.createElement('label');
+      row.className = 'doc-row';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selected.has(e.id);
+      cb.addEventListener('change', function () {
+        if (cb.checked) { selected.add(e.id); } else { selected.delete(e.id); }
+        updateTrigger();
+        syncField();
+      });
+      var idSpan = document.createElement('span');
+      idSpan.className = 'doc-id';
+      idSpan.textContent = (e.display_id || e.id) + (e.date ? ' \u00b7 ' + e.date : '');
+      var subjSpan = document.createElement('span');
+      subjSpan.className = 'doc-subj';
+      subjSpan.textContent = ' \u2014 ' + e.subject;
+      row.appendChild(cb);
+      var textWrap = document.createElement('span');
+      textWrap.appendChild(idSpan);
+      textWrap.appendChild(subjSpan);
+      row.appendChild(textWrap);
+      return row;
+    }
+
+    function render(filter) {
+      list.innerHTML = '';
+      var f = (filter || '').trim().toLowerCase();
+      var any = false;
+
+      THEMES.forEach(function (theme) {
+        var docs = EMAILS.filter(function (e) { return e.theme === theme; });
+        var matches = f
+          ? docs.filter(function (e) { return String(e.id).indexOf(f) !== -1 || e.subject.toLowerCase().indexOf(f) !== -1; })
+          : docs;
+
+        if (f && matches.length === 0) { return; }
+        any = true;
+
+        var group = document.createElement('div');
+        group.className = 'theme-group';
+
+        var head = document.createElement('div');
+        head.className = 'theme-head';
+        var isOpen = f ? true : expanded.has(theme);
+        head.innerHTML = '<span class="theme-chev">' + (isOpen ? '\u25be' : '\u25b8') + '</span>'
+          + '<span class="theme-name">' + theme + '</span>'
+          + '<span class="theme-count">' + matches.length + (f ? (' of ' + docs.length) : '') + '</span>';
+        head.addEventListener('click', function () {
+          if (expanded.has(theme)) { expanded.delete(theme); } else { expanded.add(theme); }
+          render(search.value);
+        });
+        group.appendChild(head);
+
+        if (isOpen) {
+          var body = document.createElement('div');
+          body.className = 'theme-body';
+          var shown = matches.slice(0, MAX_ROWS_PER_THEME);
+          shown.forEach(function (e) { body.appendChild(docRow(e)); });
+          if (matches.length > shown.length) {
+            var more = document.createElement('div');
+            more.className = 'doc-empty';
+            more.textContent = (matches.length - shown.length)
+              + ' more \u2014 search to narrow this list';
+            body.appendChild(more);
+          }
+          group.appendChild(body);
+        }
+
+        list.appendChild(group);
+      });
+
+      if (!any) {
+        var empty = document.createElement('div');
+        empty.className = 'doc-empty';
+        empty.textContent = 'No matching documents';
+        list.appendChild(empty);
+      }
+    }
+
+    function updateTrigger() {
+      var chipRow = trigger.querySelector('.chip-row');
+      chipRow.innerHTML = '';
+      if (selected.size === 0) {
+        trigger.classList.remove('has-value');
+        var ph = document.createElement('span');
+        ph.className = 'placeholder';
+        ph.textContent = 'Browse themes\u2026';
+        chipRow.appendChild(ph);
+        return;
+      }
+      trigger.classList.add('has-value');
+
+      var byTheme = {};
+      THEMES.forEach(function (t) { byTheme[t] = []; });
+      Array.from(selected).forEach(function (id) {
+        var e = EMAILS.find(function (x) { return x.id === id; });
+        var theme = (e && e.theme) || 'Other';
+        if (!byTheme[theme]) { byTheme[theme] = []; }
+        byTheme[theme].push(id);
+      });
+
+      THEMES.forEach(function (theme) {
+        var ids = byTheme[theme];
+        if (!ids || ids.length === 0) { return; }
+        var label = document.createElement('span');
+        label.className = 'chip-theme-label';
+        label.textContent = theme + ':';
+        chipRow.appendChild(label);
+        ids.forEach(function (id) {
+          var chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = displayIdFor(id);
+          chipRow.appendChild(chip);
+        });
+      });
+    }
+
+    search.addEventListener('input', function () { render(search.value); });
+    trigger.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var willOpen = !panel.classList.contains('open');
+      document.querySelectorAll('.doc-panel.open').forEach(function (p) { p.classList.remove('open'); });
+      if (willOpen) { panel.classList.add('open'); search.focus(); }
+    });
+    document.addEventListener('click', function (ev) {
+      if (!root.contains(ev.target)) { panel.classList.remove('open'); }
+    });
+
+    panel.appendChild(search);
+    panel.appendChild(list);
+    root.appendChild(trigger);
+    root.appendChild(panel);
+    render('');
+    updateTrigger();
+  }
+
+
+  function buildInlineBrowser() {
+    var search = document.getElementById('browse-search');
+    var list = document.getElementById('browse-list');
+    if (!search || !list) { return; }
+    var expanded = new Set();
+
+    function render(filter) {
+      list.innerHTML = '';
+      var f = (filter || '').trim().toLowerCase();
+      var any = false;
+
+      THEMES.forEach(function (theme) {
+        var docs = EMAILS.filter(function (e) { return e.theme === theme; });
+        var matches = f
+          ? docs.filter(function (e) { return String(e.id).indexOf(f) !== -1 || e.subject.toLowerCase().indexOf(f) !== -1; })
+          : docs;
+
+        if (f && matches.length === 0) { return; }
+        any = true;
+
+        var group = document.createElement('div');
+        group.className = 'theme-group';
+
+        var head = document.createElement('div');
+        head.className = 'theme-head';
+        var isOpen = f ? true : expanded.has(theme);
+        head.innerHTML = '<span class="theme-chev">' + (isOpen ? '\u25be' : '\u25b8') + '</span>'
+          + '<span class="theme-name">' + theme + '</span>'
+          + '<span class="theme-count">' + matches.length + (f ? (' of ' + docs.length) : '') + '</span>';
+        head.addEventListener('click', function () {
+          if (expanded.has(theme)) { expanded.delete(theme); } else { expanded.add(theme); }
+          render(search.value);
+        });
+        group.appendChild(head);
+
+        if (isOpen) {
+          var body = document.createElement('div');
+          body.className = 'theme-body';
+          var shown = matches.slice(0, MAX_ROWS_PER_THEME);
+          if (matches.length > shown.length) {
+            var more = document.createElement('div');
+            more.className = 'doc-empty';
+            more.textContent = (matches.length - shown.length)
+              + ' more \u2014 search to narrow this list';
+            group.appendChild(more);
+          }
+          shown.forEach(function (e) {
+            var row = document.createElement('div');
+            row.className = 'doc-row';
+            row.style.cursor = 'default';
+            var idSpan = document.createElement('span');
+            idSpan.className = 'doc-id';
+            idSpan.textContent = (e.display_id || e.id) + (e.date ? ' \u00b7 ' + e.date : '');
+            var subjSpan = document.createElement('span');
+            subjSpan.className = 'doc-subj';
+            subjSpan.textContent = ' \u2014 ' + e.subject;
+            var textWrap = document.createElement('span');
+            textWrap.appendChild(idSpan);
+            textWrap.appendChild(subjSpan);
+            row.appendChild(textWrap);
+            body.appendChild(row);
+          });
+          group.appendChild(body);
+        }
+
+        list.appendChild(group);
+      });
+
+      if (!any) {
+        var empty = document.createElement('div');
+        empty.className = 'doc-empty';
+        empty.textContent = 'No matching documents';
+        list.appendChild(empty);
+      }
+    }
+
+    search.addEventListener('input', function () { render(search.value); });
+    render('');
+  }
+
+  function displayIdFor(id) {
+    var e = EMAILS.find(function (x) { return x.id === id; });
+    return (e && e.display_id) || id;
+  }
+
+  // Search does the work at full-corpus size, so keep each open theme bounded.
+  var MAX_ROWS_PER_THEME = 50;
+
+  var browseList = document.getElementById('browse-list');
+  if (browseList) {
+    browseList.innerHTML = '<div class="doc-loading">Loading documents\u2026</div>';
+  }
+
+  fetch('{% url "web:study_docs" %}', {
+    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin'
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      THEMES = data.themes || [];
+      EMAILS = data.emails || [];
+    })
+    .catch(function () {
+      THEMES = [];
+      EMAILS = [];
+    })
+    .then(function () {
+      document.querySelectorAll('.doc-select').forEach(buildDocSelect);
+      buildInlineBrowser();
+    });
+
+  // Time on the questionnaire, for analysis.
+  var formStart = (window.performance && performance.now) ? performance.now() : Date.now();
+  var formEl = document.getElementById('postStudyForm');
+  if (formEl) {
+    formEl.addEventListener('submit', function () {
+      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      var el = document.getElementById('formDurationMs');
+      if (el) { el.value = Math.round(now - formStart); }
+    });
+  }
+</script>
+
+{% include "study/_telemetry.html" %}
+
+</body>
+</html>

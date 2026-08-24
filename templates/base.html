@@ -450,7 +450,7 @@
   <header class="dash-header">
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm dash-header__main py-1">
       <div class="container-fluid px-3 px-lg-4">
-        <a class="navbar-brand fw-bold me-lg-3{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
+        <a data-no-log class="navbar-brand fw-bold me-lg-3{% if request.resolver_match and request.resolver_match.url_name == 'home' %} navbar-brand--active{% endif %}"
            href="{% url_for 'home' %}">TOVA</a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
@@ -459,7 +459,8 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarContent">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <ul class="navbar-nav {% if is_study_participant and study_stage == 'task' %}me-3{% else %}me-auto{% endif %} mb-2 mb-lg-0">
+            {% if not is_study_participant %}
             <li class="nav-item">
               <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'load_data_page' %}active{% endif %}"
                  href="{% url_for 'load_data_page' %}">
@@ -478,12 +479,15 @@
                 Initiate Training
               </a>
             </li>
+            {% endif %}
+            {% if not is_study_participant %}
             <li class="nav-item">
               <a class="nav-link {% if request.resolver_match and request.resolver_match.url_name == 'trained_models' %}active{% endif %}"
                  href="{% url_for 'trained_models' %}">
                 Trained topic models
               </a>
             </li>
+            {% endif %}
             {% if user.is_staff or request.tova_user.is_admin %}
             <li class="nav-item">
               <a class="nav-link {% if request.resolver_match and request.resolver_match.namespace == 'admin' %}active{% endif %}"
@@ -494,7 +498,10 @@
             {% endif %}
           </ul>
 
+          {% include "study/_timer.html" %}
+
           <div class="d-flex align-items-center">
+            {% if not is_study_participant %}
             <div class="dropdown tova-account-dropdown">
               <button class="btn tova-profile-trigger dropdown-toggle" type="button" id="profileMenu"
                       data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
@@ -569,6 +576,7 @@
               </li>
             </ul>
           </div>
+            {% endif %}
         </div>
       </div>
     </div>
@@ -635,7 +643,7 @@
              href="{% url_for 'dashboard' %}?model_id={{ model_id|urlencode }}">
             Dashboard
           </a>
-          {% else %}
+          {% elif study_features.active_learning %}
           <a class="dash-subnav__tab dash-subnav__action"
              id="dashActiveLearningLink"
              href="{% url_for 'active_learning_two' %}?model_id={{ model_id|urlencode }}">
@@ -1989,5 +1997,7 @@
 {% endif %}
 
   {% block extra_scripts %}{% endblock %}
+{% include "study/_telemetry.html" %}
+
 </body>
 </html>

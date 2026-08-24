@@ -31,6 +31,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
 def _database_from_env():
     raw = (os.getenv("DATABASE_URL") or "").strip()
     if not raw:
@@ -79,6 +86,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "web.middleware.TovaUserMiddleware",
+    "web.middleware.StudyFlowMiddleware",
 ]
 
 ROOT_URLCONF = "tova_site.urls"
@@ -119,6 +127,14 @@ LOGIN_REDIRECT_URL = reverse_lazy("web:home")
 LOGOUT_REDIRECT_URL = reverse_lazy("web:login")
 
 APPEND_SLASH = False
+
+# Minutes a study participant gets for the exploration task before it auto-closes.
+STUDY_TASK_MINUTES = _int_env("STUDY_TASK_MINUTES", 30)
+
+# Self-registration. A self-registered user has no dashboard, so the study flow
+# middleware never gates them -- set this false for a study deployment so the
+# only way in is an account the research team created.
+TOVA_ALLOW_SIGNUP = _bool_env("TOVA_ALLOW_SIGNUP", True)
 
 # The upload page posts parsed dataset JSON (not multipart files), which can exceed
 # Django's default request-body limit for medium/large JSONL inputs.

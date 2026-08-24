@@ -1,0 +1,223 @@
+{% if is_study_participant and study_stage == 'task' %}
+<style>
+  .study-timer {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 12px;
+    padding: 6px 8px 6px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    background: #f7f8fa;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+
+  .study-timer__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #1a8f5f;
+    flex-shrink: 0;
+    transition: background 0.4s ease;
+  }
+
+  .study-timer__clock {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    color: #16181d;
+    min-width: 62px;
+    text-align: right;
+  }
+
+  .study-timer__label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+
+  /* Depleting meter: reads as "how much is left" at a glance. */
+  .study-timer__meter {
+    flex: 1 1 auto;
+    min-width: 60px;
+    height: 8px;
+    border-radius: 999px;
+    background: #e5e7eb;
+    overflow: hidden;
+  }
+  .study-timer__fill {
+    display: block;
+    height: 100%;
+    width: 100%;
+    border-radius: 999px;
+    background: #1a8f5f;
+    transition: width 1s linear, background 0.4s ease;
+  }
+
+  .study-timer__finish {
+    background: #16181d;
+    color: #fff;
+    border: 1px solid #16181d;
+    border-radius: 999px;
+    padding: 9px 20px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .study-timer__finish:hover { background: #000; border-color: #000; }
+  .study-timer.is-critical .study-timer__finish {
+    background: #c0392b;
+    border-color: #c0392b;
+  }
+  .study-timer.is-critical .study-timer__finish:hover { background: #a5322480; }
+  .study-timer__finish[disabled] { opacity: 0.5; cursor: default; }
+
+  /* Deliberately quieter than Finish -- it is the exit, not the task. */
+  .study-timer__logout {
+    flex-shrink: 0;
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .study-timer__logout:hover { color: #16181d; background: rgba(0, 0, 0, 0.05); }
+
+  /* Under 5 minutes, then under 1. */
+  .study-timer.is-low { background: #fbf3e6; border-color: #e8d5ae; }
+  .study-timer.is-low .study-timer__dot,
+  .study-timer.is-low .study-timer__fill { background: #b7791f; }
+  .study-timer.is-low .study-timer__clock { color: #b7791f; }
+
+  .study-timer.is-critical { background: #fbeceb; border-color: #f0c4c0; }
+  .study-timer.is-critical .study-timer__dot,
+  .study-timer.is-critical .study-timer__fill { background: #c0392b; }
+  .study-timer.is-critical .study-timer__clock { color: #c0392b; }
+  .study-timer.is-critical .study-timer__dot { animation: study-timer-pulse 1s ease-in-out infinite; }
+
+  @keyframes study-timer-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  /* The navbar collapses on small screens; keep the essentials only. */
+  @media (max-width: 991.98px) {
+    .study-timer { margin: 8px 0; width: 100%; }
+  }
+  @media (max-width: 400px) {
+    .study-timer__label { display: none; }
+  }
+</style>
+
+<div class="study-timer" id="studyTimer"
+     role="timer" aria-live="off"
+     data-remaining="{{ study_seconds_remaining }}"
+     data-total="{{ study_task_seconds }}"
+     data-timer-url="{% url 'web:study_timer' %}"
+     data-finish-url="{% url 'web:study_finish' %}">
+  <span class="study-timer__dot" aria-hidden="true"></span>
+  <span class="study-timer__clock" id="studyTimerClock">--:--</span>
+  <span class="study-timer__label">left</span>
+  <span class="study-timer__meter" aria-hidden="true">
+    <span class="study-timer__fill" id="studyTimerFill"></span>
+  </span>
+  <button type="button" class="study-timer__finish" data-log="finish_early" id="studyTimerFinish">Finish early</button>
+  <a class="study-timer__logout" data-log="sign_out" href="{% url 'web:logout' %}" title="Sign out">Sign out</a>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('studyTimer');
+  if (!root || root.dataset.wired) { return; }
+  root.dataset.wired = '1';
+
+  var clockEl = document.getElementById('studyTimerClock');
+  var fillEl = document.getElementById('studyTimerFill');
+  var finishBtn = document.getElementById('studyTimerFinish');
+
+  var remaining = parseInt(root.dataset.remaining, 10);
+  var total = parseInt(root.dataset.total, 10);
+  if (isNaN(remaining)) { remaining = 0; }
+  if (isNaN(total) || total <= 0) { total = Math.max(remaining, 1); }
+  var finishing = false;
+
+  function csrf() {
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '{{ csrf_token }}';
+  }
+
+  function paint() {
+    var s = Math.max(0, remaining);
+    var mm = Math.floor(s / 60);
+    var ss = s % 60;
+    clockEl.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss;
+    fillEl.style.width = Math.max(0, Math.min(100, (s / total) * 100)) + '%';
+    root.classList.toggle('is-low', s <= 300 && s > 60);
+    root.classList.toggle('is-critical', s <= 60);
+    root.setAttribute('aria-label', mm + ' minutes ' + ss + ' seconds left to explore');
+  }
+
+  function go(url) { window.location.href = url || '{% url "web:study_post" %}'; }
+
+  function finish() {
+    if (finishing) { return; }
+    finishing = true;
+    finishBtn.disabled = true;
+    fetch(root.dataset.finishUrl, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      credentials: 'same-origin'
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (data) { go(data.redirect); })
+      .catch(function () { go(); });
+  }
+
+  // Tick locally for smoothness; the server owns the real deadline.
+  setInterval(function () {
+    if (finishing) { return; }
+    remaining -= 1;
+    paint();
+    if (remaining <= 0) { finish(); }
+  }, 1000);
+
+  // Reconcile periodically so sleep/suspend and clock skew cannot drift the display.
+  setInterval(function () {
+    if (finishing) { return; }
+    fetch(root.dataset.timerUrl, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.expired) { finishing = true; go(data.redirect); return; }
+        if (typeof data.remaining === 'number') { remaining = data.remaining; paint(); }
+      })
+      .catch(function () { /* keep ticking locally */ });
+  }, 30000);
+
+  finishBtn.addEventListener('click', function () {
+    var msg = 'Finish exploring now?\n\n'
+      + 'You will move on to the questions and cannot return to the exploration tool.';
+    if (window.confirm(msg)) { finish(); }
+  });
+
+  paint();
+})();
+</script>
+{% endif %}

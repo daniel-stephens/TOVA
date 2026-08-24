@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — Sign in</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --panel: #f7f8fa;
+    --blue: #2f6fed;
+    --blue-bg: #eaf0fe;
+    --green: #1a8f5f;
+    --red: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #ffffff;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  .brand .page { color: #9aa0aa; font-size: 14px; }
+  header .status { color: #9aa0aa; font-size: 13px; }
+
+  main {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 64px 24px 80px;
+  }
+
+  h1 { font-size: 21px; font-weight: 600; margin: 0 0 8px; }
+  .sub { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 28px; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  input[type=email], input[type=password] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--ink);
+    margin-bottom: 18px;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--blue-bg);
+  }
+
+  button.signin {
+    width: 100%;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 22px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button.signin:hover { background: #157a51; }
+
+  .messages { margin: 0 0 22px; padding: 0; list-style: none; }
+  .messages li {
+    background: #fbeceb;
+    color: var(--red);
+    border-radius: 8px;
+    padding: 11px 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .messages li.success { background: #eaf6ef; color: var(--green); }
+
+  .note {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="logo">TOVA</span>
+    <span class="page">Sign in</span>
+  </div>
+  <span class="status">Research study</span>
+</header>
+
+<main>
+  <h1>Sign in to begin</h1>
+  <p class="sub">Use the username and password the research team gave you.</p>
+
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+      <li{% if message.tags == 'success' %} class="success"{% endif %}>{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if request.GET.next %}
+      <input type="hidden" name="next" value="{{ request.GET.next }}">
+    {% endif %}
+
+    <label for="email">Username</label>
+    <input type="email" id="email" name="email" autocomplete="username"
+           autocapitalize="none" spellcheck="false" required autofocus>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password"
+           autocomplete="current-password" required>
+
+    <button type="submit" class="signin">Sign in</button>
+  </form>
+
+  <p class="note">
+    Trouble signing in? Contact the person running your session &mdash; accounts for
+    this study are created for you, so there is nothing to register.
+  </p>
+</main>
+
+</body>
+</html>

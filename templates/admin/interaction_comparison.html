@@ -1,0 +1,114 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Keyboard vs mouse' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .kvm table { border-collapse: collapse; margin-bottom: 2.5em; }
+  .kvm th, .kvm td { padding: 6px 14px 6px 0; text-align: left; vertical-align: middle; }
+  .kvm th { border-bottom: 1px solid var(--hairline-color, #e5e7eb); font-weight: 600; }
+  .kvm td.num, .kvm th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .kvm .bar {
+    display: inline-block; width: 180px; height: 10px; border-radius: 999px;
+    background: #e5e7eb; overflow: hidden; vertical-align: middle; margin-right: 8px;
+  }
+  .kvm .bar span { display: block; height: 100%; background: #2f6fed; }
+  .kvm .muted { color: var(--body-quiet-color, #666); }
+  .kvm h2 { margin: 0 0 4px; font-size: 15px; }
+  .kvm p.hint { color: var(--body-quiet-color, #666); margin: 0 0 14px; font-size: 13px; }
+</style>
+
+<div id="content-main" class="kvm">
+
+  {% if not total %}
+    <p>No interaction events recorded yet. They appear once a participant works through the task.</p>
+  {% else %}
+
+  <p>
+    {{ total }} event{{ total|pluralize }} recorded.
+    <a href="{% url 'admin:web_interactionevent_comparison_csv' %}">Download CSV</a>
+  </p>
+
+  <h2>{% translate "By dashboard (condition)" %}</h2>
+  <p class="hint">The bar shows the share of decided actions made with the keyboard.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Dashboard</th>
+        <th class="num">Mouse</th>
+        <th class="num">Keyboard</th>
+        <th class="num">Other</th>
+        <th class="num">Total</th>
+        <th>Keyboard share</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in by_dashboard %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td class="num">{{ row.mouse }}</td>
+        <td class="num">{{ row.keyboard }}</td>
+        <td class="num muted">{{ row.other }}</td>
+        <td class="num">{{ row.total }}</td>
+        <td>
+          {% if row.keyboard_share is not None %}
+            <span class="bar"><span style="width: {{ row.keyboard_share }}%"></span></span>{{ row.keyboard_share }}%
+          {% else %}<span class="muted">&mdash;</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>{% translate "By participant" %}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Participant</th>
+        <th class="num">Mouse</th>
+        <th class="num">Keyboard</th>
+        <th class="num">Total</th>
+        <th>Keyboard share</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in by_user %}
+      <tr>
+        <td>{{ row.key }}</td>
+        <td class="num">{{ row.mouse }}</td>
+        <td class="num">{{ row.keyboard }}</td>
+        <td class="num">{{ row.total }}</td>
+        <td>
+          {% if row.keyboard_share is not None %}
+            <span class="bar"><span style="width: {{ row.keyboard_share }}%"></span></span>{{ row.keyboard_share }}%
+          {% else %}<span class="muted">&mdash;</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if shortcuts %}
+  <h2>{% translate "Shortcuts used" %}</h2>
+  <p class="hint">Named keys and modifier chords. Ordinary typing is counted but never recorded.</p>
+  <table>
+    <thead><tr><th>Key</th><th class="num">Times</th></tr></thead>
+    <tbody>
+      {% for key, n in shortcuts %}
+      <tr><td><code>{{ key }}</code></td><td class="num">{{ n }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

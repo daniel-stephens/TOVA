@@ -177,7 +177,9 @@ def to_dashboard_bundle(
         did = str(d.get("id"))
         if not did:
             continue
-        text_snippet = (d.get("text", "") or "").strip()[:150]
+        # Show the original text, never the preprocessed form.
+        display_text = (d.get("raw_text") or d.get("text") or "").strip()
+        text_snippet = display_text[:150]
         theta_dist = inferences.get(did, {})
         if theta_dist:
             # find dominant topic

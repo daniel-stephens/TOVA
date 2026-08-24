@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Participants created' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  <p>
+    <strong>Created {{ created }}</strong>, updated {{ updated }}, skipped {{ skipped }}.
+  </p>
+
+  {% if per_dashboard %}
+  <ul>
+    {% for label, n in per_dashboard %}
+      <li>{{ label }}: {{ n }} participant{{ n|pluralize }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <p class="errornote" style="max-width: 52em;">
+    These passwords are shown once and cannot be recovered &mdash; they are stored
+    hashed. Download or copy them before leaving this page.
+  </p>
+
+  <p>
+    <button type="button" class="button default" id="downloadCsv">
+      {% translate "Download CSV" %}
+    </button>
+  </p>
+
+  <table id="credsTable">
+    <thead>
+      <tr>
+        <th>{% translate "Email" %}</th>
+        <th>{% translate "Password" %}</th>
+        <th>{% translate "Dashboard" %}</th>
+        <th>{% translate "Status" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.email }}</td>
+        <td><code>{{ row.password|default:"&mdash;" }}</code></td>
+        <td>{{ row.dashboard_label|default:"&mdash;" }}</td>
+        <td>{{ row.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="submit-row">
+    <a href="{% url opts|admin_urlname:'changelist' %}" class="button default">
+      {% translate "Back to users" %}
+    </a>
+    <a href="{% url 'admin:web_user_create_participants' %}" class="button">
+      {% translate "Create more" %}
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('downloadCsv');
+  if (!btn) { return; }
+  btn.addEventListener('click', function () {
+    var rows = [['email', 'password', 'dashboard', 'status']];
+    document.querySelectorAll('#credsTable tbody tr').forEach(function (tr) {
+      var cells = Array.prototype.map.call(tr.querySelectorAll('td'), function (td) {
+        return td.textContent.trim().replace(/^—$/, '');
+      });
+      rows.push(cells);
+    });
+    var csv = rows.map(function (r) {
+      return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'tova-participants.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+})();
+</script>
+{% endblock %}

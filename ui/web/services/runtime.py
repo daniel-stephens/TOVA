@@ -82,11 +82,60 @@ def _deep_merge(base: dict, overrides: dict | None) -> dict:
     return result
 
 
+def _study_corpus_access(corpus_id: str, user_id: str):
+    """True/False for a participant, None if they are not one.
+
+    Grants exactly the corpus sitting behind their assigned dashboard.
+    """
+    import requests
+
+    try:
+        from web.models import User
+        from web.study_features import get_study_model_id, is_study_participant
+
+        user = User.objects.select_related("study_group").filter(pk=user_id).first()
+        if not user or not is_study_participant(user):
+            return None
+
+        model_id = get_study_model_id(user)
+        if not model_id:
+            return False
+
+        cache_key = f"study_corpus_of:{model_id}"
+        cached, _state = _cache_get(_CACHE_MODEL_INFO, cache_key)
+        if cached:
+            theirs = cached.get("corpus_id") or ""
+        else:
+            response = requests.get(f"{API}/data/models/{model_id}", timeout=5)
+            if response.status_code != 200:
+                return False
+            model = response.json() or {}
+            meta = model.get("metadata") or {}
+            theirs = (
+                model.get("corpus_id")
+                or meta.get("corpus_id")
+                or (meta.get("tr_params") or {}).get("corpus_id")
+                or ""
+            )
+            _cache_set(_CACHE_MODEL_INFO, cache_key, {"corpus_id": theirs})
+
+        return bool(theirs) and str(corpus_id) == str(theirs)
+    except Exception:
+        return None
+
+
 def _verify_corpus_ownership(corpus_id: str, user_id: str) -> bool:
     import requests
 
     if not user_id:
         return False
+
+    # Same reasoning as models: a participant owns no corpus, but must be able
+    # to read the one behind the dashboard they were assigned.
+    study = _study_corpus_access(corpus_id, user_id)
+    if study is not None:
+        return study
+
     try:
         response = requests.get(f"{API}/data/corpora/{corpus_id}", timeout=5)
         if response.status_code == 200:
@@ -100,12 +149,40 @@ def _verify_corpus_ownership(corpus_id: str, user_id: str) -> bool:
     return False
 
 
+def _study_model_access(model_id: str, user_id: str):
+    """Access decision for a study participant, or None if they are not one.
+
+    Participants never own anything -- their models are provisioned centrally --
+    so ownership is the wrong question for them. Access is decided purely by the
+    dashboard they were assigned.
+    """
+    try:
+        from web.models import User
+        from web.study_features import is_study_participant, user_can_access_model
+
+        user = User.objects.select_related("study_group").filter(pk=user_id).first()
+        if not user or not is_study_participant(user):
+            return None
+        return bool(user_can_access_model(user, model_id))
+    except Exception:
+        return None
+
+
 def _verify_model_ownership(model_id: str, user_id: str) -> bool:
     import requests
 
     if not user_id:
         return False
     uid = str(user_id)
+
+    # Checked first and returned directly. Previously this ran only after the
+    # ownership branch, which returns _verify_corpus_ownership() outright when
+    # the model has a corpus -- so participants, who own neither, were refused
+    # their own assigned dashboard and never reached this check at all.
+    study = _study_model_access(model_id, uid)
+    if study is not None:
+        return study
+
     try:
         response = requests.get(f"{API}/data/models/{model_id}", timeout=5)
         if response.status_code == 200:

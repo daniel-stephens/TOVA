@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Assign dashboard' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    {% blocktranslate count counter=users|length %}
+      Assign a dashboard to <strong>{{ counter }}</strong> selected user:
+    {% plural %}
+      Assign a dashboard to <strong>{{ counter }}</strong> selected users:
+    {% endblocktranslate %}
+  </p>
+
+  <ul style="margin: 0 0 1.5em 1.5em;">
+    {% for user in users %}
+      <li>
+        {{ user.email }}
+        {% if user.study_model_id %}
+          <span style="color: var(--body-quiet-color, #666);">
+            &mdash; currently {{ user.study_model_id }}
+          </span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form method="post">
+    {% csrf_token %}
+    {% for user in users %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ user.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="assign_dashboard">
+
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+              <div class="help">{{ field.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <p class="help" style="margin-top: 1em;">
+      Users who share a dashboard form one study condition. Participants who have
+      not yet started keep the new assignment; anyone already mid-run stays on the
+      dashboard and active-learning setting they began with, so their data is not
+      mixed across conditions.
+    </p>
+
+    <div class="submit-row">
+      <input type="submit" name="apply" value="{% translate 'Assign dashboard' %}" class="default">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">
+        {% translate 'Cancel' %}
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

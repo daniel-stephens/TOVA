@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:web_interactionevent_comparison' %}" class="viewlink">
+      {% translate "Keyboard vs mouse" %}
+    </a>
+  </li>
+  <li>
+    <a href="{% url 'admin:web_interactionevent_events_csv' %}">
+      {% translate "Download all events (CSV)" %}
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

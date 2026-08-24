@@ -120,6 +120,11 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
             documents_data.append(DataRecord(
                 id=get_unique_id(prefix="doc_"),
                 text=doc.text,
+                # Carry the original document through. ``text`` is preprocessed
+                # (lemmatised, stopped, bigram-joined) and is what the models
+                # train on; ``raw_text`` is what a human has to read. Dropping it
+                # here left readers with nothing legible to display.
+                raw_text=doc.raw_text or doc.text,
                 sourcefile=doc.sourcefile or "api_upload",
                 label=doc.label,
                 original_id=doc.id

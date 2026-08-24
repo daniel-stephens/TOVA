@@ -1292,7 +1292,9 @@
           <strong>Active learning</strong> to start reviewing.
         </p>
         <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+          {% if not is_study_participant %}
           <a class="btn btn-primary btn-sm" href="{% url_for 'trained_models' %}">Trained models</a>
+          {% endif %}
           <a class="btn btn-outline-secondary btn-sm" href="{% url_for 'dashboard' %}">Dashboard</a>
         </div>
       </div>

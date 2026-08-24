@@ -1,0 +1,268 @@
+{% if is_study_participant %}
+<script>
+/*
+ * Participant interaction logging.
+ *
+ * Records how each action was made -- mouse or keyboard -- so the two can be
+ * compared per participant and per condition.
+ *
+ * This is NOT a keylogger. Printable characters are recorded as the single
+ * token "char": that typing happened, never what was typed. Named keys and
+ * modifier chords (Enter, ArrowRight, Ctrl+F) are kept verbatim, because those
+ * are the shortcuts worth measuring.
+ *
+ * Captured: clicks, double-clicks, right-clicks, key presses, shortcuts,
+ * form changes, searches, copy/paste, text selection, modal open/close,
+ * scrolling, resizing, tab focus, submits and page loads.
+ *
+ * Any element (or ancestor) marked data-no-log is skipped entirely, unless a
+ * data-log element sits inside it -- that overrides the exclusion.
+ *
+ * Events are queued and flushed on a timer, on a full buffer, and at page
+ * unload via sendBeacon, so logging never blocks the task.
+ */
+(function () {
+  if (window.__tovaTelemetry) { return; }
+  window.__tovaTelemetry = true;
+
+  var URL_EVENTS = '{% url "web:study_events" %}';
+  var PAGE = '{{ request.resolver_match.url_name|default:"" }}';
+  var T0 = (window.performance && performance.now) ? performance.now() : Date.now();
+
+  var FLUSH_MS = 5000;
+  var MAX_BUFFER = 40;
+  var queue = [];
+
+  function now() {
+    var t = (window.performance && performance.now) ? performance.now() : Date.now();
+    return Math.round(t - T0);
+  }
+
+  function csrf() {
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '{{ csrf_token }}';
+  }
+
+  /* data-no-log mutes an element and its subtree. A data-log nested inside a
+     muted region wins, so a decorative header can be silenced without also
+     silencing the controls that sit in it. */
+  function suppressed(el) {
+    if (!el || !el.closest) { return false; }
+    var off = el.closest('[data-no-log]');
+    if (!off) { return false; }
+    var on = el.closest('[data-log]');
+    return !(on && on !== off && off.contains(on));
+  }
+
+  /* A short, stable description of what was acted on. Prefers explicit hooks,
+     then identifiers, then a trimmed label -- never free-typed input values. */
+  function describe(el) {
+    if (!el || !el.closest) { return ''; }
+    var node = el.closest('[data-log], button, a, input, select, textarea, [role="button"], th, li');
+    if (!node) { node = el; }
+
+    if (node.dataset && node.dataset.log) { return String(node.dataset.log).slice(0, 120); }
+    if (node.id) { return '#' + node.id; }
+
+    var name = node.getAttribute && (node.getAttribute('name') || node.getAttribute('aria-label'));
+    if (name) { return String(name).slice(0, 120); }
+
+    var tag = (node.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+      return tag + '[' + (node.type || 'text') + ']';
+    }
+    var text = (node.textContent || '').trim().replace(/\s+/g, ' ');
+    if (text) { return tag + ':' + text.slice(0, 60); }
+    return tag || '';
+  }
+
+  function push(action, modality, target, detail) {
+    queue.push({
+      action: action,
+      modality: modality,
+      target: target || '',
+      detail: detail || {},
+      page: PAGE,
+      t: now()
+    });
+    if (queue.length >= MAX_BUFFER) { flush(false); }
+  }
+
+  function flush(useBeacon) {
+    if (!queue.length) { return; }
+    var body = JSON.stringify({ events: queue.splice(0, queue.length) });
+
+    if (useBeacon && navigator.sendBeacon) {
+      // Survives navigation; the endpoint is CSRF-exempt for this reason.
+      navigator.sendBeacon(URL_EVENTS, new Blob([body], { type: 'application/json' }));
+      return;
+    }
+    fetch(URL_EVENTS, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: body,
+      keepalive: true
+    }).catch(function () { /* telemetry must never disrupt the task */ });
+  }
+
+  // ---- mouse -------------------------------------------------------------
+  document.addEventListener('click', function (ev) {
+    if (suppressed(ev.target)) { return; }
+    // detail === 0 means the click was synthesised by the keyboard
+    // (Enter/Space on a focused control), which is keyboard use, not mouse.
+    var viaKeyboard = ev.detail === 0;
+    push('click', viaKeyboard ? 'keyboard' : 'mouse', describe(ev.target), {
+      synthetic: viaKeyboard
+    });
+  }, true);
+
+  // ---- keyboard ----------------------------------------------------------
+  var NAMED = /^(Enter|Escape|Tab|Backspace|Delete|Arrow(Up|Down|Left|Right)|Home|End|Page(Up|Down)|F\d{1,2})$/;
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.repeat || suppressed(ev.target)) { return; }
+    var key = ev.key || '';
+    var chord = (ev.ctrlKey ? 'Ctrl+' : '') + (ev.metaKey ? 'Meta+' : '')
+              + (ev.altKey ? 'Alt+' : '');
+
+    var label;
+    var action = 'key';
+    if (chord) {
+      label = chord + (key.length === 1 ? key.toLowerCase() : key);
+      action = 'shortcut';
+    } else if (NAMED.test(key)) {
+      label = key;
+      action = 'shortcut';
+    } else if (key.length === 1) {
+      // Content is never recorded -- only that a character was typed.
+      label = 'char';
+    } else {
+      label = key ? 'key' : '';
+    }
+    if (!label) { return; }
+
+    push(action, 'keyboard', describe(ev.target), { key: label });
+  }, true);
+
+  // ---- coarse signals ----------------------------------------------------
+  var scrollTimer = null;
+  window.addEventListener('scroll', function () {
+    if (scrollTimer) { return; }
+    scrollTimer = setTimeout(function () {
+      scrollTimer = null;
+      push('scroll', 'other', '', { y: Math.round(window.scrollY || 0) });
+    }, 1000);
+  }, true);
+
+  document.addEventListener('dblclick', function (ev) {
+    if (suppressed(ev.target)) { return; }
+    push('dblclick', 'mouse', describe(ev.target), {});
+  }, true);
+
+  document.addEventListener('contextmenu', function (ev) {
+    if (suppressed(ev.target)) { return; }
+    push('contextmenu', 'mouse', describe(ev.target), {});
+  }, true);
+
+  /* Fixed-vocabulary controls: the chosen value is recorded, because it is a
+     setting rather than something the participant composed. */
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (!el || suppressed(el)) { return; }
+    var tag = (el.tagName || '').toLowerCase();
+    var detail = {};
+    if (tag === 'select') {
+      detail.value = String(el.value || '').slice(0, 80);
+    } else if (el.type === 'checkbox' || el.type === 'radio') {
+      detail.value = String(el.value || '').slice(0, 80);
+      detail.checked = !!el.checked;
+    }
+    push('change', 'other', describe(el), detail);
+  }, true);
+
+  /* Search boxes, debounced to the settled query rather than every keystroke.
+     What someone searched for is a finding in its own right. */
+  var searchTimers = new WeakMap();
+  document.addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (!el || suppressed(el)) { return; }
+    var isSearch = el.type === 'search'
+      || /search|filter|query/i.test((el.id || '') + ' ' + (el.className || '')
+                                     + ' ' + (el.placeholder || ''));
+    if (!isSearch) { return; }
+    clearTimeout(searchTimers.get(el));
+    searchTimers.set(el, setTimeout(function () {
+      push('search', 'keyboard', describe(el), {
+        query: String(el.value || '').slice(0, 120)
+      });
+    }, 900));
+  }, true);
+
+  document.addEventListener('copy', function (ev) {
+    push('copy', 'other', describe(ev.target), {
+      length: (window.getSelection ? String(window.getSelection()) : '').length
+    });
+  }, true);
+
+  document.addEventListener('paste', function (ev) {
+    push('paste', 'other', describe(ev.target), {});
+  }, true);
+
+  /* Highlighting text is a sensemaking signal; the length is what matters,
+     not the passage itself. */
+  var selTimer = null;
+  document.addEventListener('mouseup', function (ev) {
+    if (suppressed(ev.target)) { return; }
+    clearTimeout(selTimer);
+    selTimer = setTimeout(function () {
+      var sel = window.getSelection ? String(window.getSelection()) : '';
+      if (sel.trim().length < 3) { return; }
+      push('select', 'mouse', describe(ev.target), { length: sel.length });
+    }, 250);
+  }, true);
+
+  /* Bootstrap modals: which document or theme was opened, and for how long. */
+  var modalOpenedAt = {};
+  document.addEventListener('shown.bs.modal', function (ev) {
+    var id = (ev.target && ev.target.id) || 'modal';
+    modalOpenedAt[id] = now();
+    push('modal_open', 'other', '#' + id, {});
+  }, true);
+  document.addEventListener('hidden.bs.modal', function (ev) {
+    var id = (ev.target && ev.target.id) || 'modal';
+    var opened = modalOpenedAt[id];
+    push('modal_close', 'other', '#' + id,
+         opened ? { open_ms: now() - opened } : {});
+    delete modalOpenedAt[id];
+  }, true);
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      push('resize', 'other', '', { w: window.innerWidth, h: window.innerHeight });
+    }, 600);
+  });
+
+  document.addEventListener('submit', function (ev) {
+    push('submit', 'other', describe(ev.target), {});
+    flush(false);
+  }, true);
+
+  document.addEventListener('visibilitychange', function () {
+    push(document.hidden ? 'blur' : 'focus', 'other', '', {});
+    if (document.hidden) { flush(true); }
+  });
+
+  push('page', 'other', PAGE, { w: window.innerWidth, h: window.innerHeight });
+
+  setInterval(function () { flush(false); }, FLUSH_MS);
+  window.addEventListener('pagehide', function () { flush(true); });
+})();
+</script>
+{% endif %}

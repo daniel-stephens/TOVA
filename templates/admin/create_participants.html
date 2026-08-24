@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Create participants' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  {% if not dashboards_available %}
+    <p class="errornote">
+      No dashboards are available. Train a model first &mdash; models without a
+      corpus are excluded, because their dashboard cannot render.
+    </p>
+  {% else %}
+
+  <p style="max-width: 46em;">
+    Accounts are spread evenly across the dashboards you tick. Everyone sharing a
+    dashboard forms one study condition, so this is how you build your groups.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <p class="errornote">{{ form.non_field_errors }}</p>
+    {% endif %}
+
+    <fieldset class="module aligned">
+      <h2>{% translate "Who" %}</h2>
+      {% for field in form %}
+        {% if field.name in "count,emails,prefix,domain,start" %}
+          <div class="form-row{% if field.errors %} errors{% endif %}">
+            {{ field.errors }}
+            <div>
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </fieldset>
+
+    <fieldset class="module aligned">
+      <h2>{% translate "What they get" %}</h2>
+      {% for field in form %}
+        {% if field.name in "dashboards,active_learning,skip_existing" %}
+          <div class="form-row{% if field.errors %} errors{% endif %}">
+            {{ field.errors }}
+            <div>
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </fieldset>
+
+    <p class="help" style="max-width: 46em;">
+      Passwords are generated and shown once on the next screen. They are stored
+      hashed, so there is no way to recover them afterwards &mdash; save the list
+      before you navigate away.
+    </p>
+
+    <div class="submit-row">
+      <input type="submit" value="{% translate 'Create participants' %}" class="default">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">
+        {% translate 'Cancel' %}
+      </a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -147,5 +147,16 @@ urlpatterns = [
         views.get_topic_renames,
         name="get_topic_renames",
     ),
+    # Study flow: instructions -> task -> post-study -> done
+    path("study/login", _x(views.study_login), name="study_login"),
+    path("study/instructions", views.study_instructions, name="study_instructions"),
+    path("study/begin", _x(views.study_begin), name="study_begin"),
+    path("study/task", views.study_task, name="study_task"),
+    path("study/timer", views.study_timer, name="study_timer"),
+    path("study/finish", _x(views.study_finish), name="study_finish"),
+    path("study/post", _x(views.study_post), name="study_post"),
+    path("study/docs", views.study_docs, name="study_docs"),
+    path("study/events", _x(views.study_events), name="study_events"),
+    path("study/done", views.study_done, name="study_done"),
     path("__django_health__/", views.django_health, name="django_health"),
 ]
