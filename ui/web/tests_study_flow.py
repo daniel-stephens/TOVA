@@ -2996,3 +2996,66 @@ class CorpusConsistencyTests(TestCase):
         resp = self.render({"m_alpha": "c_one", "m_beta": "c_one"})
         rows = {r["model_id"]: r for r in resp.context["rows"]}
         self.assertEqual(rows["m_alpha"]["corpus_id"], "c_one")
+
+
+class OneDashboardPerParticipantTests(TestCase):
+    """The multi-select divides a cohort; it never gives anyone two dashboards.
+
+    The form lets an admin tick several dashboards, which reads as "each of
+    these people gets all of these". It does not: participants are dealt out
+    round-robin, one each. study_model_id is a single field, so the data model
+    could not express two even if the form tried.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.url = reverse("admin:web_user_create_participants")
+        self.dashboards = [("m_a", "A (m_a)"), ("m_b", "B (m_b)"), ("m_c", "C (m_c)")]
+
+    def create(self, count, picked):
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            return self.client.post(self.url, {
+                "count": count, "emails": "", "prefix": "p",
+                "domain": "study.local", "start": 1,
+                "dashboards": picked, "active_learning": "default",
+            })
+
+    def participants(self):
+        return User.objects.filter(is_staff=False).order_by("email")
+
+    def test_each_participant_holds_exactly_one_dashboard(self):
+        self.create(9, ["m_a", "m_b", "m_c"])
+        for u in self.participants():
+            with self.subTest(user=u.email):
+                self.assertIn(u.study_model_id, {"m_a", "m_b", "m_c"})
+                # A single CharField -- there is no second slot to fill.
+                self.assertNotIn(",", u.study_model_id)
+
+    def test_a_cohort_is_divided_evenly_not_duplicated(self):
+        self.create(9, ["m_a", "m_b", "m_c"])
+        counts = {}
+        for u in self.participants():
+            counts[u.study_model_id] = counts.get(u.study_model_id, 0) + 1
+        self.assertEqual(counts, {"m_a": 3, "m_b": 3, "m_c": 3})
+        self.assertEqual(self.participants().count(), 9, "9 people, not 27")
+
+    def test_an_uneven_split_deals_the_remainder_round_robin(self):
+        self.create(7, ["m_a", "m_b"])
+        counts = {}
+        for u in self.participants():
+            counts[u.study_model_id] = counts.get(u.study_model_id, 0) + 1
+        self.assertEqual(sorted(counts.values()), [3, 4])
+
+    def test_ticking_one_dashboard_puts_everyone_in_one_condition(self):
+        self.create(5, ["m_b"])
+        self.assertEqual(
+            set(self.participants().values_list("study_model_id", flat=True)), {"m_b"}
+        )
+
+    def test_the_form_says_so_in_words(self):
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            body = self.client.get(self.url).content.decode()
+        self.assertIn("exactly ONE dashboard", body)
+        self.assertIn("Split them across", body)
+        self.assertNotIn("What they get", body)

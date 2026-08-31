@@ -53,7 +53,7 @@
     </fieldset>
 
     <fieldset class="module aligned">
-      <h2>{% translate "What they get" %}</h2>
+      <h2>{% translate "How they are split" %}</h2>
       {% for field in form %}
         {% if field.name in "dashboards,active_learning,skip_existing" %}
           <div class="form-row{% if field.errors %} errors{% endif %}">
@@ -81,6 +81,49 @@
       </a>
     </div>
   </form>
+
+<script>
+(function () {
+  var count = document.getElementById('id_count');
+  var emails = document.getElementById('id_emails');
+  var boxes = document.querySelectorAll('input[name="dashboards"]');
+  if (!count || !boxes.length) { return; }
+
+  var out = document.createElement('p');
+  out.className = 'help';
+  out.style.marginTop = '8px';
+  out.style.fontWeight = '600';
+  boxes[boxes.length - 1].closest('.form-row').appendChild(out);
+
+  function people() {
+    var n = parseInt(count.value, 10);
+    if (n > 0) { return n; }
+    var text = (emails && emails.value || '').trim();
+    if (!text) { return 0; }
+    return text.split(/[\n,]/).map(function (s) { return s.trim(); })
+               .filter(Boolean).length;
+  }
+
+  function update() {
+    var ticked = 0;
+    boxes.forEach(function (b) { if (b.checked) { ticked += 1; } });
+    var n = people();
+    if (!n || !ticked) { out.textContent = ''; return; }
+    var base = Math.floor(n / ticked);
+    var extra = n % ticked;
+    out.textContent = extra
+      ? n + ' participants across ' + ticked + ' dashboards \u2014 ' + extra +
+        ' will get ' + (base + 1) + ', the rest ' + base + ' each.'
+      : n + ' participants across ' + ticked + ' dashboards \u2014 ' + base +
+        ' on each.';
+  }
+
+  boxes.forEach(function (b) { b.addEventListener('change', update); });
+  count.addEventListener('input', update);
+  if (emails) { emails.addEventListener('input', update); }
+  update();
+})();
+</script>
   {% endif %}
 </div>
 {% endblock %}

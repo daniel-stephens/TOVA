@@ -227,10 +227,12 @@ class CreateParticipantsForm(forms.Form):
     )
     dashboards = forms.MultipleChoiceField(
         widget=forms.CheckboxSelectMultiple,
-        label=_("Dashboards"),
+        label=_("Split them across"),
         help_text=_(
-            "Participants are spread evenly across the dashboards you tick. "
-            "Everyone on the same dashboard forms one condition."
+            "Each participant is assigned exactly ONE dashboard \u2014 nobody gets "
+            "more than one. Tick several here to divide the cohort evenly "
+            "between them, round-robin. Everyone who lands on the same dashboard "
+            "forms one condition, so this is how the study arms are built."
         ),
     )
     active_learning = forms.ChoiceField(
