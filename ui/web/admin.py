@@ -71,6 +71,53 @@ def participant_code_for(email: str) -> str | None:
     return None if taken else local
 
 
+def condition_group(model_id: str, label: str, active_learning: bool) -> "StudyGroup":
+    """Get or create the StudyGroup standing for one (dashboard x AL) condition.
+
+    A condition in this study is a model backbone plus whether active learning
+    was switched on. Both halves used to be implicit -- everyone who happened to
+    share a ``study_model_id``, with AL set per user -- which meant a condition
+    was something you inferred rather than something you could name, filter or
+    count. This makes it an object.
+
+    The group carries the condition, and participants inherit from it: their own
+    ``enable_active_learning`` is left unset so there is exactly one place the
+    answer lives.
+    """
+    from django.utils.text import slugify
+
+    base = (label or model_id).split("  (")[0].strip() or model_id
+    suffix = "AL on" if active_learning else "AL off"
+    name = f"{base} \u00b7 {suffix}"
+    slug = (slugify(f"{base}-{suffix}") or slugify(f"{model_id}-{suffix}"))[:100]
+
+    group = StudyGroup.objects.filter(slug=slug).first()
+    if group is None:
+        # A different condition may already hold this display name (two models
+        # sharing a name, say). Keep names unique without failing the cohort.
+        unique_name, n = name, 2
+        while StudyGroup.objects.filter(name=unique_name).exists():
+            unique_name = f"{name} ({n})"
+            n += 1
+        group = StudyGroup.objects.create(
+            name=unique_name, slug=slug,
+            default_model_id=model_id, enable_active_learning=active_learning,
+        )
+        return group
+
+    # It already exists: keep it truthful about the condition it names.
+    fields = []
+    if group.default_model_id != model_id:
+        group.default_model_id = model_id
+        fields.append("default_model_id")
+    if group.enable_active_learning != active_learning:
+        group.enable_active_learning = active_learning
+        fields.append("enable_active_learning")
+    if fields:
+        group.save(update_fields=fields)
+    return group
+
+
 def _iso(value):
     """ISO-8601 for a datetime, empty string for None. Keeps CSV cells uniform."""
     return value.isoformat() if value else ""
@@ -200,8 +247,9 @@ class CreateParticipantsForm(forms.Form):
     """Bulk-create participants and spread them across dashboards."""
 
     ACTIVE_LEARNING_CHOICES = [
-        ("default", _("On (default)")),
-        ("off", _("Off")),
+        ("on", _("On for every condition")),
+        ("off", _("Off for every condition")),
+        ("split", _("Split each dashboard into two arms \u2014 one with, one without")),
     ]
 
     count = forms.IntegerField(
@@ -236,7 +284,14 @@ class CreateParticipantsForm(forms.Form):
         ),
     )
     active_learning = forms.ChoiceField(
-        choices=ACTIVE_LEARNING_CHOICES, initial="default", label=_("Active learning")
+        choices=ACTIVE_LEARNING_CHOICES,
+        initial="on",
+        label=_("Active learning"),
+        help_text=_(
+            "Active learning is a condition of the study, not a property of the "
+            "model. Splitting doubles the number of arms: two dashboards become "
+            "four conditions, and the cohort is divided evenly between them."
+        ),
     )
     skip_existing = forms.BooleanField(
         required=False,
@@ -556,14 +611,27 @@ class UserAdmin(BaseUserAdmin):
 
         emails = form.cleaned_data["resolved_emails"]
         dashboards = form.cleaned_data["dashboards"]
-        active_learning = None if form.cleaned_data["active_learning"] == "default" else False
+        al_choice = form.cleaned_data["active_learning"]
         skip_existing = form.cleaned_data["skip_existing"]
         labels = dict(available_dashboards())
+
+        # A condition is (dashboard x active learning). "split" doubles the arms
+        # so a dashboard can be compared with and without the feature; otherwise
+        # every arm shares one AL setting.
+        al_variants = [True, False] if al_choice == "split" else [al_choice == "on"]
+        conditions = [
+            (model_id, al) for model_id in dashboards for al in al_variants
+        ]
+        groups = {
+            (model_id, al): condition_group(model_id, labels.get(model_id, ""), al)
+            for model_id, al in conditions
+        }
 
         rows = []
         with transaction.atomic():
             for index, email in enumerate(emails):
-                model_id = dashboards[index % len(dashboards)]
+                model_id, al = conditions[index % len(conditions)]
+                group = groups[(model_id, al)]
                 user = User.objects.filter(email=email).first()
 
                 if user is not None and skip_existing:
@@ -573,6 +641,7 @@ class UserAdmin(BaseUserAdmin):
                             "password": "",
                             "dashboard": user.study_model_id or "",
                             "dashboard_label": labels.get(user.study_model_id, ""),
+                            "condition": user.study_group.name if user.study_group_id else "",
                             "status": "skipped",
                         }
                     )
@@ -584,7 +653,10 @@ class UserAdmin(BaseUserAdmin):
                     user = User(email=email, name=email, auth_source="local")
 
                 user.study_model_id = model_id
-                user.enable_active_learning = active_learning
+                user.study_group = group
+                # Left unset on purpose: the group carries the condition, so
+                # there is exactly one place the answer to "was AL on?" lives.
+                user.enable_active_learning = None
                 user.is_active = True
                 user.participant_code = participant_code_for(email)
                 user.set_password(password)
@@ -602,6 +674,7 @@ class UserAdmin(BaseUserAdmin):
                         "password": password,
                         "dashboard": model_id,
                         "dashboard_label": labels.get(model_id, model_id).split("  (")[0],
+                        "condition": group.name,
                         "status": "created" if created else "updated",
                     }
                 )
@@ -609,7 +682,8 @@ class UserAdmin(BaseUserAdmin):
         counts = {}
         for row in rows:
             if row["status"] != "skipped":
-                counts[row["dashboard_label"]] = counts.get(row["dashboard_label"], 0) + 1
+                key = row["condition"] or row["dashboard_label"]
+                counts[key] = counts.get(key, 0) + 1
 
         context.update(
             {

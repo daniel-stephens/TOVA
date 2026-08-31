@@ -41,6 +41,7 @@
       <tr>
         <th>{% translate "Email" %}</th>
         <th>{% translate "Password" %}</th>
+        <th>{% translate "Condition" %}</th>
         <th>{% translate "Dashboard" %}</th>
         <th>{% translate "Status" %}</th>
       </tr>
@@ -50,6 +51,7 @@
       <tr>
         <td>{{ row.email }}</td>
         <td><code>{{ row.password|default:"&mdash;" }}</code></td>
+        <td>{{ row.condition|default:"&mdash;" }}</td>
         <td>{{ row.dashboard_label|default:"&mdash;" }}</td>
         <td>{{ row.status }}</td>
       </tr>
@@ -72,7 +74,7 @@
   var btn = document.getElementById('downloadCsv');
   if (!btn) { return; }
   btn.addEventListener('click', function () {
-    var rows = [['email', 'password', 'dashboard', 'status']];
+    var rows = [['email', 'password', 'condition', 'dashboard', 'status']];
     document.querySelectorAll('#credsTable tbody tr').forEach(function (tr) {
       var cells = Array.prototype.map.call(tr.querySelectorAll('td'), function (td) {
         return td.textContent.trim().replace(/^—$/, '');

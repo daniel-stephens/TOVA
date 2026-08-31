@@ -75,8 +75,12 @@ def task_minutes(subject=None) -> int:
 #: or reordered. Bump this constant in the same commit as any change to that
 #: wording, so the export always says which version each participant agreed to.
 #:
-#: Source: "TOVA CorpusBio - consent document revised.docx".
-CONSENT_VERSION = "corpusbio-2026-08-30-revised"
+#: Source: "TOVA CorpusBio - consent document revised.docx", with the
+#: investigator's telephone number removed at the research team's request. That is a
+#: departure from the approved document, which lists name, address, email and
+#: phone -- hence the version bump, so anyone who consented to the earlier text
+#: is still identifiable in the export.
+CONSENT_VERSION = "corpusbio-2026-08-31-no-phone"
 
 #: IRB identifiers shown to participants and carried into the export.
 IRB_PACKAGE_NUMBER = "1936243-1"

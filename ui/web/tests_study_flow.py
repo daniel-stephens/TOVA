@@ -23,6 +23,7 @@ from web.models import (
     User,
 )
 from web import study_flow
+from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
 from web.services import runtime as R
 
 
@@ -321,7 +322,10 @@ class ConsentTests(StudyFlowTestCase):
         )
         self.assertIn("Jordan Boyd-Graber", rendered)
         self.assertIn("jbg@umiacs.umd.edu", rendered)
-        self.assertIn("(301) 405-6766", rendered)
+        # The telephone number was removed at the research team's request; the
+        # email remains as the route to the investigator that the approved text
+        # promises.
+        self.assertNotIn("405-6766", rendered)
         self.assertIn(study_flow.IRB_PACKAGE_NUMBER, rendered)
         self.assertIn(study_flow.IRB_CONTACT_EMAIL, rendered)
 
@@ -375,10 +379,16 @@ class ConsentTests(StudyFlowTestCase):
         self.client.post(reverse("web:study_consent_accept"))
         self.client.post(reverse("web:study_begin"))
 
+        stamped = ParticipantSession.objects.get(pk=self.participant.pk).consent_version
+        self.assertEqual(stamped, study_flow.CONSENT_VERSION)
+
         with mock.patch.object(study_flow, "CONSENT_VERSION", "some-later-version"):
             self.client.get(reverse("web:study_task"))
             session = ParticipantSession.objects.get(pk=self.participant.pk)
-            self.assertEqual(session.consent_version, "corpusbio-2026-08-30-revised")
+            self.assertEqual(
+                session.consent_version, stamped,
+                "the version they actually agreed to must not be rewritten",
+            )
             self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
 
     def test_stage_still_never_moves_backwards(self):
@@ -1195,7 +1205,7 @@ class AdminCreateParticipantsTests(TestCase):
             "domain": "study.local",
             "start": "1",
             "dashboards": ["m_alpha", "m_beta"],
-            "active_learning": "default",
+            "active_learning": "on",
         }
         data.update(overrides)
         return data
@@ -3018,7 +3028,7 @@ class OneDashboardPerParticipantTests(TestCase):
             return self.client.post(self.url, {
                 "count": count, "emails": "", "prefix": "p",
                 "domain": "study.local", "start": 1,
-                "dashboards": picked, "active_learning": "default",
+                "dashboards": picked, "active_learning": "on",
             })
 
     def participants(self):
@@ -3059,3 +3069,92 @@ class OneDashboardPerParticipantTests(TestCase):
         self.assertIn("exactly ONE dashboard", body)
         self.assertIn("Split them across", body)
         self.assertNotIn("What they get", body)
+
+
+class ConditionGroupTests(TestCase):
+    """A condition is (dashboard x active learning), and it has a name."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.url = reverse("admin:web_user_create_participants")
+        self.dashboards = [
+            ("m_a", "LDA baseline  (m_a · corpus c_1)"),
+            ("m_b", "CTM  (m_b · corpus c_1)"),
+        ]
+
+    def create(self, count, picked, al):
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            return self.client.post(self.url, {
+                "count": count, "emails": "", "prefix": "p",
+                "domain": "study.local", "start": 1,
+                "dashboards": picked, "active_learning": al,
+            })
+
+    def participants(self):
+        return User.objects.filter(is_staff=False)
+
+    def test_splitting_doubles_the_arms(self):
+        self.create(8, ["m_a", "m_b"], "split")
+        self.assertEqual(StudyGroup.objects.count(), 4)
+        self.assertEqual(
+            set(StudyGroup.objects.values_list("name", flat=True)),
+            {"LDA baseline · AL on", "LDA baseline · AL off",
+             "CTM · AL on", "CTM · AL off"},
+        )
+
+    def test_the_cohort_divides_evenly_between_conditions(self):
+        self.create(8, ["m_a", "m_b"], "split")
+        counts = {}
+        for u in self.participants():
+            counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
+        self.assertEqual(sorted(counts.values()), [2, 2, 2, 2])
+
+    def test_a_group_carries_its_condition(self):
+        self.create(4, ["m_a"], "split")
+        on = StudyGroup.objects.get(name="LDA baseline · AL on")
+        off = StudyGroup.objects.get(name="LDA baseline · AL off")
+        self.assertTrue(on.enable_active_learning)
+        self.assertFalse(off.enable_active_learning)
+        self.assertEqual(on.default_model_id, "m_a")
+        self.assertEqual(off.default_model_id, "m_a")
+
+    def test_participants_inherit_al_from_their_group(self):
+        """One place holds the answer to "was AL on for this person"."""
+        self.create(4, ["m_a"], "split")
+        for u in self.participants():
+            with self.subTest(user=u.email):
+                self.assertIsNone(u.enable_active_learning, "must inherit, not duplicate")
+                expected = u.study_group.enable_active_learning
+                self.assertEqual(
+                    user_has_feature(u, FEATURE_ACTIVE_LEARNING), expected
+                )
+
+    def test_on_for_everyone_makes_one_arm_per_dashboard(self):
+        self.create(4, ["m_a", "m_b"], "on")
+        self.assertEqual(StudyGroup.objects.count(), 2)
+        self.assertTrue(all(g.enable_active_learning for g in StudyGroup.objects.all()))
+
+    def test_off_for_everyone_makes_one_arm_per_dashboard(self):
+        self.create(4, ["m_a", "m_b"], "off")
+        self.assertEqual(StudyGroup.objects.count(), 2)
+        self.assertFalse(any(g.enable_active_learning for g in StudyGroup.objects.all()))
+        for u in self.participants():
+            self.assertFalse(user_has_feature(u, FEATURE_ACTIVE_LEARNING))
+
+    def test_a_second_cohort_reuses_the_same_groups(self):
+        self.create(4, ["m_a"], "split")
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            self.client.post(self.url, {
+                "count": 4, "emails": "", "prefix": "q",
+                "domain": "study.local", "start": 1,
+                "dashboards": ["m_a"], "active_learning": "split",
+            })
+        self.assertEqual(StudyGroup.objects.count(), 2, "no duplicate conditions")
+        self.assertEqual(self.participants().count(), 8)
+
+    def test_each_participant_still_holds_exactly_one_dashboard(self):
+        self.create(8, ["m_a", "m_b"], "split")
+        for u in self.participants():
+            self.assertIn(u.study_model_id, {"m_a", "m_b"})
+            self.assertEqual(u.study_model_id, u.study_group.default_model_id)
