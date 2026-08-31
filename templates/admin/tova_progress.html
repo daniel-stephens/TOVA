@@ -1,0 +1,81 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{% translate "Collection progress" %}</h1>
+
+  <p class="tova-admin-page-intro" style="max-width: 52em;">
+    Where every participant has got to, per condition. The funnel runs left to
+    right: assigned &rarr; consented &rarr; started the task &rarr; reached the
+    questions &rarr; finished.
+  </p>
+
+  <div class="tova-admin-console-card">
+    <p style="margin: 0;">
+      <strong>{{ totals.total }}</strong> {% translate "participants" %} &middot;
+      <strong>{{ totals.consented }}</strong> {% translate "consented" %} &middot;
+      <strong>{{ totals.started }}</strong> {% translate "started" %} &middot;
+      <strong>{{ totals.complete }}</strong> {% translate "complete" %} &middot;
+      <strong>{{ totals.submitted }}</strong> {% translate "responses submitted" %}
+    </p>
+  </div>
+
+  <table style="width: 100%; margin-top: 20px;">
+    <thead>
+      <tr>
+        <th>{% translate "Condition" %}</th>
+        <th style="text-align: right;">{% translate "Assigned" %}</th>
+        <th style="text-align: right;">{% translate "Consented" %}</th>
+        <th style="text-align: right;">{% translate "Started" %}</th>
+        <th style="text-align: right;">{% translate "In questions" %}</th>
+        <th style="text-align: right;">{% translate "Complete" %}</th>
+        <th style="text-align: right;">{% translate "Moderated" %}</th>
+        <th style="text-align: right;">{% translate "Mean score" %}</th>
+        <th style="text-align: right;">{% translate "Mean answered" %}</th>
+        <th style="text-align: right;">{% translate "Mean task (s)" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>
+          {{ row.label }}
+          <br><span style="color: #666; font-size: 11px;">{{ row.model_id }}</span>
+        </td>
+        <td style="text-align: right;">{{ row.total }}</td>
+        <td style="text-align: right;">{{ row.consented }}</td>
+        <td style="text-align: right;">{{ row.started }}</td>
+        <td style="text-align: right;">{{ row.in_questions }}</td>
+        <td style="text-align: right;"><strong>{{ row.complete }}</strong></td>
+        <td style="text-align: right;">{{ row.moderated }}</td>
+        <td style="text-align: right;">
+          {% if row.mean_score is not None %}{{ row.mean_score|floatformat:2 }}{% else %}&mdash;{% endif %}
+        </td>
+        <td style="text-align: right;">
+          {% if row.mean_answered is not None %}{{ row.mean_answered|floatformat:2 }}{% else %}&mdash;{% endif %}
+        </td>
+        <td style="text-align: right;">
+          {% if row.mean_duration is not None %}{{ row.mean_duration|floatformat:0 }}{% else %}&mdash;{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10">{% translate "No participant sessions yet." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="margin-top: 20px; color: #666; font-size: 12px; max-width: 52em;">
+    {% translate "Mean score is out of" %} 4.
+    {% translate "Mean answered counts statements given a substantive answer, so a gap between the two columns means people are skipping rather than guessing." %}
+  </p>
+
+  <div class="tova-admin-console-card" style="margin-top: 16px;">
+    <ul>
+      <li><a href="{% url 'admin:web_studyresponse_responses_csv' %}">{% translate "Download responses (CSV)" %}</a></li>
+      <li><a href="{% url 'admin:web_interactionevent_events_csv' %}">{% translate "Download interaction events (CSV)" %}</a></li>
+      <li><a href="{% url 'tova_admin_preflight' %}">{% translate "Study pre-flight" %}</a></li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

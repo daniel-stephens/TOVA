@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{% translate "Study pre-flight" %}</h1>
+
+  <p class="tova-admin-page-intro" style="max-width: 52em;">
+    Every dashboard a participant could be sent to, and whether it will actually
+    work when they get there. Check this before recruiting &mdash; a dashboard whose
+    corpus cannot be read renders an empty tool, and the first person to find out
+    is otherwise a paid participant.
+  </p>
+
+  {% if any_problems %}
+    <p class="errornote" style="max-width: 52em;">
+      Some dashboards below are not ready. A row is ready when the model is in
+      the store, its corpus can be read, and at least one participant is assigned.
+    </p>
+  {% endif %}
+
+  <table style="width: 100%;">
+    <thead>
+      <tr>
+        <th>{% translate "Status" %}</th>
+        <th>{% translate "Dashboard" %}</th>
+        <th style="text-align: right;">{% translate "Participants" %}</th>
+        <th style="text-align: right;">{% translate "Documents" %}</th>
+        <th>{% translate "Active learning" %}</th>
+        <th>{% translate "Problem" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>
+          {% if row.ready %}
+            <span style="color: #1a8f5f; font-weight: 600;">&#10003; {% translate "Ready" %}</span>
+          {% else %}
+            <span style="color: #b7791f; font-weight: 600;">&#9888; {% translate "Check" %}</span>
+          {% endif %}
+        </td>
+        <td>
+          {{ row.label }}
+          <br><span style="color: #666; font-size: 11px;">{{ row.model_id }}</span>
+        </td>
+        <td style="text-align: right;">
+          {% if row.participants %}
+            <a href="{% url 'admin:web_user_changelist' %}?study_model_id={{ row.model_id }}">
+              {{ row.participants }}
+            </a>
+          {% else %}
+            <span style="color: #b7791f;">0</span>
+          {% endif %}
+        </td>
+        <td style="text-align: right;">{{ row.corpus_size|default:"&mdash;" }}</td>
+        <td>{{ row.active_learning }}</td>
+        <td style="color: #b7791f;">{{ row.error|default:"" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6">{% translate "No dashboards found." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="tova-admin-console-card" style="margin-top: 24px;">
+    <ul>
+      <li>{% translate "Participants with no dashboard and no group:" %} <strong>{{ unassigned }}</strong>
+        {% if unassigned %}
+          &mdash; {% translate "these people cannot start; assign them a dashboard." %}
+        {% endif %}
+      </li>
+      <li>{% translate "Sessions already started:" %} <strong>{{ started }}</strong>
+        {% if started %}
+          &mdash; {% translate "reassigning a dashboard will not move these." %}
+        {% endif %}
+      </li>
+      <li><a href="{% url 'tova_admin_progress' %}">{% translate "Collection progress" %}</a></li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

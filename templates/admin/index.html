@@ -12,7 +12,9 @@
     <div class="tova-admin-console-card">
       <h2>{% translate "TOVA console" %}</h2>
       <ul>
-        <li><a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a></li>
+          <li><a href="{% url 'tova_admin_preflight' %}">{% translate "Study pre-flight" %}</a></li>
+        <li><a href="{% url 'tova_admin_progress' %}">{% translate "Collection progress" %}</a></li>
+      <li><a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a></li>
         <li><a href="{% url 'tova_admin_dashboards' %}">{% translate "Dashboards (models)" %}</a></li>
       </ul>
     </div>

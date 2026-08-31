@@ -2151,6 +2151,108 @@ class InstrumentVersionTests(StudyFlowTestCase):
             )
 
 
+class PreflightAndProgressTests(TestCase):
+    """Both pages must render when the backend is down -- that is the point."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.group = StudyGroup.objects.create(
+            name="Cond A", slug="cond-a", default_model_id="m_group"
+        )
+        self.p1 = User.objects.create_user(
+            email="p001@study.local", password="pw", study_model_id="m_alpha",
+            participant_code="p001",
+        )
+        self.p2 = User.objects.create_user(
+            email="p002@study.local", password="pw", study_group=self.group,
+            participant_code="p002",
+        )
+        self.orphan = User.objects.create_user(
+            email="p003@study.local", password="pw", participant_code="p003"
+        )
+        self.preflight = reverse("tova_admin_preflight")
+        self.progress = reverse("tova_admin_progress")
+
+    def test_preflight_renders_with_no_backend(self):
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", side_effect=RuntimeError("down")):
+            resp = self.client.get(self.preflight)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_preflight_counts_direct_and_inherited_assignments(self):
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", return_value=600):
+            resp = self.client.get(self.preflight)
+        rows = {r["model_id"]: r for r in resp.context["rows"]}
+        self.assertEqual(rows["m_alpha"]["participants"], 1)
+        self.assertEqual(rows["m_group"]["participants"], 1, "inherited from the group")
+
+    def test_preflight_flags_a_model_missing_from_the_store(self):
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", return_value=600):
+            resp = self.client.get(self.preflight)
+        rows = {r["model_id"]: r for r in resp.context["rows"]}
+        self.assertFalse(rows["m_alpha"]["ready"])
+        self.assertIn("model store", rows["m_alpha"]["error"])
+
+    def test_preflight_marks_a_healthy_dashboard_ready(self):
+        with mock.patch(
+            "web.admin.available_dashboards",
+            return_value=[("m_alpha", "Alpha  (m_alpha · corpus c1)")],
+        ), mock.patch("web.views._study_corpus_size", return_value=600):
+            resp = self.client.get(self.preflight)
+        rows = {r["model_id"]: r for r in resp.context["rows"]}
+        self.assertTrue(rows["m_alpha"]["ready"])
+        self.assertEqual(rows["m_alpha"]["corpus_size"], 600)
+        self.assertIsNone(rows["m_alpha"]["error"])
+
+    def test_preflight_counts_people_who_cannot_start(self):
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", return_value=1):
+            resp = self.client.get(self.preflight)
+        self.assertEqual(resp.context["unassigned"], 1, "the orphan")
+
+    def test_progress_renders_empty(self):
+        with mock.patch("web.admin.available_dashboards", return_value=[]):
+            resp = self.client.get(self.progress)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["totals"]["total"], 0)
+
+    def test_progress_counts_the_funnel(self):
+        s1 = study_flow.get_or_create_session(self.p1)
+        study_flow.record_consent(s1)
+        study_flow.begin_task(s1, self.p1)
+        study_flow.finish_task(s1, early=True)
+        StudyResponse.objects.create(
+            user=self.p1, model_id="m_alpha", tf_score=3, tf_answered=4,
+            task_duration_s=400,
+        )
+        study_flow.complete_study(s1)
+        study_flow.get_or_create_session(self.p2)  # consent not given
+
+        with mock.patch("web.admin.available_dashboards", return_value=[]):
+            resp = self.client.get(self.progress)
+
+        totals = resp.context["totals"]
+        self.assertEqual(totals["total"], 2)
+        self.assertEqual(totals["consented"], 1)
+        self.assertEqual(totals["started"], 1)
+        self.assertEqual(totals["complete"], 1)
+        self.assertEqual(totals["submitted"], 1)
+
+        rows = {r["model_id"]: r for r in resp.context["rows"]}
+        self.assertEqual(rows["m_alpha"]["mean_score"], 3.0)
+        self.assertEqual(rows["m_alpha"]["complete"], 1)
+
+    def test_both_pages_are_staff_only(self):
+        self.client.force_login(self.p1)
+        for url in (self.preflight, self.progress):
+            with self.subTest(url=url):
+                resp = self.client.get(url)
+                self.assertNotEqual(resp.status_code, 200)
+
+
 class ModeratedSessionTests(TestCase):
     """The protocol has two administration modes; the data has to say which."""
 

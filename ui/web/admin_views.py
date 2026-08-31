@@ -13,7 +13,7 @@ from django.urls import reverse
 from tova.api.models.data_schemas import DraftType
 from tova.core import drafts
 
-from web.models import User
+from web.models import StudyGroup, User
 from web.services import runtime as R
 
 logger = logging.getLogger(__name__)
@@ -128,6 +128,171 @@ def tova_dashboards(request: HttpRequest) -> HttpResponse:
         "dashboard_url_base": reverse("web:dashboard"),
     }
     return render(request, "admin/tova_dashboards.html", context)
+
+
+@staff_member_required
+def tova_preflight(request: HttpRequest) -> HttpResponse:
+    """Is this study actually ready to run?
+
+    Every dashboard a participant is assigned to, with the things that go wrong
+    silently: no participants, a corpus that cannot be read, a backend that does
+    not answer. The failure this prevents is an admin discovering a broken
+    dashboard because a paid participant hit it.
+
+    Degrades rather than erroring -- an unreachable backend is exactly the
+    condition this page exists to report, so it must still render.
+    """
+    from web.models import ParticipantSession, User
+    from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
+    from web.admin import available_dashboards
+
+    labels = dict(available_dashboards())
+
+    assigned = (
+        User.objects.filter(is_staff=False, is_superuser=False)
+        .exclude(study_model_id="")
+        .values_list("study_model_id", flat=True)
+    )
+    counts: dict[str, int] = {}
+    for model_id in assigned:
+        counts[model_id] = counts.get(model_id, 0) + 1
+
+    # Group defaults count too: those participants inherit the dashboard.
+    for group in StudyGroup.objects.exclude(default_model_id=""):
+        n = group.users.filter(
+            is_staff=False, is_superuser=False, study_model_id=""
+        ).count()
+        if n:
+            counts[group.default_model_id] = counts.get(group.default_model_id, 0) + n
+
+    rows: list[dict[str, Any]] = []
+    for model_id in sorted(set(counts) | set(labels)):
+        n_participants = counts.get(model_id, 0)
+        label = labels.get(model_id, model_id).split("  (")[0]
+        known = model_id in labels
+
+        corpus_size = None
+        error = None
+        if known:
+            try:
+                from web.views import _study_corpus_size
+
+                corpus_size = _study_corpus_size(model_id)
+                if corpus_size is None:
+                    error = "Corpus size unavailable"
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning("preflight: corpus size failed for %s: %s", model_id, e)
+                error = "Backend unreachable"
+        else:
+            error = "Not found in the model store"
+
+        al_states = {
+            user_has_feature(u, FEATURE_ACTIVE_LEARNING)
+            for u in User.objects.filter(study_model_id=model_id)
+        }
+        if not al_states:
+            active_learning = "—"
+        elif al_states == {True}:
+            active_learning = "On"
+        elif al_states == {False}:
+            active_learning = "Off"
+        else:
+            active_learning = "Mixed"
+
+        rows.append(
+            {
+                "model_id": model_id,
+                "label": label,
+                "participants": n_participants,
+                "corpus_size": corpus_size,
+                "active_learning": active_learning,
+                "error": error,
+                "ready": bool(known and not error and n_participants),
+            }
+        )
+
+    unassigned = User.objects.filter(
+        is_staff=False, is_superuser=False, study_model_id="", study_group__isnull=True
+    ).count()
+    started = ParticipantSession.objects.exclude(task_started_at=None).count()
+
+    return render(
+        request,
+        "admin/tova_preflight.html",
+        {
+            "rows": rows,
+            "unassigned": unassigned,
+            "started": started,
+            "any_problems": any(not r["ready"] for r in rows),
+        },
+    )
+
+
+@staff_member_required
+def tova_progress(request: HttpRequest) -> HttpResponse:
+    """How far along is collection, per condition?
+
+    Answers "are we done yet", which the row-by-row session changelist does not.
+    """
+    from django.db.models import Avg, Count, Q
+
+    from web.models import ParticipantSession, StudyResponse
+    from web.admin import available_dashboards
+
+    labels = dict(available_dashboards())
+    S = ParticipantSession
+
+    per_condition = (
+        S.objects.values("model_id")
+        .annotate(
+            total=Count("user"),
+            consented=Count("user", filter=Q(consented_at__isnull=False)),
+            started=Count("user", filter=Q(task_started_at__isnull=False)),
+            in_questions=Count("user", filter=Q(stage=S.STAGE_POST)),
+            complete=Count("user", filter=Q(stage=S.STAGE_DONE)),
+            moderated=Count("user", filter=Q(moderated=True)),
+        )
+        .order_by("model_id")
+    )
+
+    scores = {
+        r["model_id"]: r
+        for r in StudyResponse.objects.values("model_id").annotate(
+            mean_score=Avg("tf_score"),
+            mean_answered=Avg("tf_answered"),
+            mean_duration=Avg("task_duration_s"),
+            n=Count("user"),
+        )
+    }
+
+    rows = []
+    for row in per_condition:
+        model_id = row["model_id"] or ""
+        stats = scores.get(model_id, {})
+        rows.append(
+            {
+                **row,
+                "label": labels.get(model_id, model_id or "—").split("  (")[0],
+                "mean_score": stats.get("mean_score"),
+                "mean_answered": stats.get("mean_answered"),
+                "mean_duration": stats.get("mean_duration"),
+                "submitted": stats.get("n", 0),
+            }
+        )
+
+    totals = {
+        "total": S.objects.count(),
+        "consented": S.objects.exclude(consented_at=None).count(),
+        "started": S.objects.exclude(task_started_at=None).count(),
+        "complete": S.objects.filter(stage=S.STAGE_DONE).count(),
+        "submitted": StudyResponse.objects.count(),
+    }
+
+    return render(
+        request,
+        "admin/tova_progress.html",
+        {"rows": rows, "totals": totals},
+    )
 
 
 @staff_member_required

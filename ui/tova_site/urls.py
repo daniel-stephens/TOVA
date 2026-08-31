@@ -13,6 +13,16 @@ urlpatterns = [
         name="tova_admin_root",
     ),
     path(
+        "admin/tova/preflight/",
+        admin.site.admin_view(admin_views.tova_preflight),
+        name="tova_admin_preflight",
+    ),
+    path(
+        "admin/tova/progress/",
+        admin.site.admin_view(admin_views.tova_progress),
+        name="tova_admin_progress",
+    ),
+    path(
         "admin/tova/corpora/",
         admin.site.admin_view(admin_views.tova_corpora),
         name="tova_admin_corpora",
