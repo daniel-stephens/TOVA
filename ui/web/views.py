@@ -4347,6 +4347,7 @@ def study_post(request):
         defaults={
             "study_group": session.study_group,
             "model_id": session.model_id,
+            "instrument_version": study_flow.INSTRUMENT_VERSION,
             "tf_answers": tf_answers,
             "tf_score": study_flow.score_tf(tf_answers),
             "tf_answered": study_flow.count_tf_answered(tf_answers),

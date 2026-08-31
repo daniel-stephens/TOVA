@@ -2,7 +2,7 @@
 
 Participants move monotonically through:
 
-    instructions -> task -> post_study -> done
+    consent -> instructions -> task -> post_study -> done
 
 The tables below declare which named routes are reachable at each stage;
 ``StudyFlowMiddleware`` enforces them. Keeping the tables here (rather than
@@ -36,8 +36,29 @@ from web.study_features import (
 DEFAULT_TASK_MINUTES = 30
 
 
-def task_minutes() -> int:
-    return int(getattr(settings, "STUDY_TASK_MINUTES", DEFAULT_TASK_MINUTES))
+def task_minutes(subject=None) -> int:
+    """Exploration minutes for *subject*, falling back to the global default.
+
+    Resolution order mirrors the tri-state used for active learning: the
+    participant's own override, then their group's, then ``STUDY_TASK_MINUTES``.
+
+    The approved protocol specifies a fixed 30-minute period, so the default is
+    what a real run uses -- the overrides exist for piloting, and to let a later
+    study vary exposure per condition without another schema change.
+    """
+    default = int(getattr(settings, "STUDY_TASK_MINUTES", DEFAULT_TASK_MINUTES))
+    if subject is None:
+        return default
+
+    own = getattr(subject, "task_minutes", None)
+    if own:
+        return int(own)
+
+    group = getattr(subject, "study_group", None)
+    inherited = getattr(group, "task_minutes", None) if group else None
+    if inherited:
+        return int(inherited)
+    return default
 
 
 # ---------------------------------------------------------------------------
@@ -66,60 +87,23 @@ IRB_CONTACT_EMAIL = "irb@umd.edu"
 # Post-study instrument
 # ---------------------------------------------------------------------------
 
-#: Correct answers for the true/false statements, keyed by field name.
-#: This lives server-side deliberately -- it used to sit in the DOM as
-#: ``data-answer`` attributes, where participants could read it via view-source.
-TF_KEY = {
-    "tf1": "true",
-    "tf2": "false",
-    "tf3": "true",
-    "tf4": "false",
-}
-
-#: Explicitly declining to answer. The approved consent says "You may skip a
-#: question", so this has to be a first-class response rather than a validation
-#: error. Kept distinct from ``unsure``: "I would rather not say" and "I don't
-#: know" are different findings, and collapsing them would lose that.
-TF_DECLINED = "declined"
-
-TF_VALID_VALUES = {"true", "false", "unsure", TF_DECLINED}
-
-#: Free-text questions: field name -> the category label shown on the page.
-OPEN_QUESTIONS = {
-    "motive": "Motive",
-    "connections": "Connections",
-    "timeline": "Timeline",
-    "threads": "Distinguishing threads",
-}
+# The instrument itself lives in web.instruments so that revising the questions
+# is a versioned change rather than an invisible one. Re-exported here because
+# the views, the admin export and the tests have always reached for
+# study_flow.TF_KEY and there is no value in churning those call sites.
+from web.instruments import (  # noqa: F401  (re-export)
+    INSTRUMENT_VERSION,
+    OPEN_QUESTIONS,
+    TF_DECLINED,
+    TF_KEY,
+    TF_VALID_VALUES,
+    count_tf_answered,
+    score_tf,
+)
 
 #: Label for documents whose theme could not be resolved. Matches the
 #: ``'Other'`` fallback already present in the picker's ``updateTrigger``.
 UNCLASSIFIED_THEME = "Unclassified"
-
-
-def score_tf(answers: dict) -> int:
-    """Number of true/false statements answered correctly.
-
-    ``unsure`` is not correct, but it is stored verbatim so the distinction
-    between "wrong" and "didn't know" survives into analysis.
-    """
-    return sum(1 for key, correct in TF_KEY.items() if answers.get(key) == correct)
-
-
-def count_tf_answered(answers: dict) -> int:
-    """How many statements got a substantive response.
-
-    Read alongside :func:`score_tf`: a low score because someone skipped six
-    questions is a different result from a low score because they were wrong,
-    and without this the two are indistinguishable in the export. Skipped
-    (absent) and ``declined`` both count as unanswered; ``unsure`` does not,
-    because saying so is a real answer.
-    """
-    return sum(
-        1
-        for key in TF_KEY
-        if answers.get(key) not in (None, "", TF_DECLINED)
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -239,14 +223,16 @@ def begin_task(session: ParticipantSession, user=None) -> ParticipantSession:
     session.study_group = subject.study_group
     session.model_id = get_study_model_id(subject) or session.model_id
     session.active_learning = user_has_feature(subject, FEATURE_ACTIVE_LEARNING)
+    session.task_minutes = task_minutes(subject)
     session.task_started_at = now
-    session.task_ends_at = now + _dt.timedelta(minutes=task_minutes())
+    session.task_ends_at = now + _dt.timedelta(minutes=session.task_minutes)
     session.advance_to(ParticipantSession.STAGE_TASK)
     session.save(
         update_fields=[
             "study_group",
             "model_id",
             "active_learning",
+            "task_minutes",
             "task_started_at",
             "task_ends_at",
             "stage",

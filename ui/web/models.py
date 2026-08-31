@@ -37,6 +37,14 @@ class StudyGroup(models.Model):
         help_text="Trained model ID all users in this group land on after login.",
     )
     enable_active_learning = models.BooleanField(default=True)
+    task_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Exploration minutes for this condition. Leave blank to use the "
+            "site default (30, as the protocol specifies)."
+        ),
+    )
 
     class Meta:
         db_table = "web_study_groups"
@@ -86,6 +94,12 @@ class User(AbstractUser):
             "Study code used in exported data. Set automatically for generated "
             "participant logins."
         ),
+    )
+    task_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="exploration minutes",
+        help_text="Overrides the group and the site default. Blank inherits.",
     )
     # Tri-state: None inherits from the study group (or defaults to on).
     enable_active_learning = models.BooleanField(
@@ -217,6 +231,10 @@ class ParticipantSession(models.Model):
         help_text="Run as a live remote one-on-one session with a researcher present.",
     )
 
+    #: Snapshotted at task start with the rest of the condition, so changing an
+    #: override mid-study cannot alter a clock that is already running.
+    task_minutes = models.PositiveIntegerField(null=True, blank=True)
+
     task_started_at = models.DateTimeField(null=True, blank=True)
     task_ends_at = models.DateTimeField(null=True, blank=True)
     task_completed_at = models.DateTimeField(null=True, blank=True)
@@ -272,6 +290,11 @@ class StudyResponse(models.Model):
         StudyGroup, models.SET_NULL, null=True, blank=True, related_name="responses"
     )
     model_id = models.CharField(max_length=255, blank=True)
+
+    #: Which version of the instrument this was scored against. Without it a
+    #: mid-study wording change would make old and new scores silently
+    #: incomparable. See web.instruments.
+    instrument_version = models.CharField(max_length=64, blank=True)
 
     tf_answers = models.JSONField(default=dict, blank=True)
     tf_score = models.IntegerField(default=0)

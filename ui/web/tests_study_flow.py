@@ -2071,6 +2071,86 @@ class StudyResponseExportTests(TestCase):
         self.assertContains(resp, self.url)
 
 
+class TaskMinutesTests(StudyFlowTestCase):
+    """Exposure time is per-condition, and frozen once a clock is running."""
+
+    def test_defaults_to_the_protocol_thirty(self):
+        self.assertEqual(study_flow.task_minutes(self.participant), 30)
+
+    def test_group_override_applies(self):
+        self.group.task_minutes = 45
+        self.group.save()
+        self.participant.refresh_from_db()
+        self.assertEqual(study_flow.task_minutes(self.participant), 45)
+
+    def test_per_user_override_beats_the_group(self):
+        self.group.task_minutes = 45
+        self.group.save()
+        self.participant.task_minutes = 10
+        self.participant.save()
+        self.participant.refresh_from_db()
+        self.assertEqual(study_flow.task_minutes(self.participant), 10)
+
+    def test_snapshotted_at_task_start(self):
+        self.participant.task_minutes = 12
+        self.participant.save()
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.task_minutes, 12)
+        span = (session.task_ends_at - session.task_started_at).total_seconds()
+        self.assertAlmostEqual(span, 12 * 60, delta=2)
+
+    def test_changing_it_mid_run_does_not_move_a_running_clock(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        before = ParticipantSession.objects.get(pk=self.participant.pk).task_ends_at
+
+        self.participant.task_minutes = 90
+        self.participant.save()
+        self.client.get(reverse("web:study_timer"))
+
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.task_ends_at, before)
+        self.assertEqual(session.task_minutes, 30)
+
+
+class InstrumentVersionTests(StudyFlowTestCase):
+    """Scores must stay interpretable if the questions are ever revised."""
+
+    def submit(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        self.client.post(
+            reverse("web:study_post"),
+            {"tf1": "true", "tf2": "false", "tf3": "true", "tf4": "false",
+             "motive": "a", "connections": "b", "timeline": "c", "threads": "d"},
+        )
+
+    def test_version_is_stamped_on_submission(self):
+        self.submit()
+        self.assertEqual(
+            StudyResponse.objects.get().instrument_version,
+            study_flow.INSTRUMENT_VERSION,
+        )
+
+    def test_study_flow_still_re_exports_the_instrument(self):
+        """Call sites have always used study_flow.TF_KEY; keep that working."""
+        from web import instruments
+
+        self.assertIs(study_flow.TF_KEY, instruments.TF_KEY)
+        self.assertIs(study_flow.OPEN_QUESTIONS, instruments.OPEN_QUESTIONS)
+        self.assertIs(study_flow.score_tf, instruments.score_tf)
+
+    def test_an_earlier_response_keeps_the_version_it_was_scored_under(self):
+        self.submit()
+        with mock.patch.object(study_flow, "INSTRUMENT_VERSION", "corpusbio-v2"):
+            self.assertEqual(
+                StudyResponse.objects.get().instrument_version, "corpusbio-v1"
+            )
+
+
 class ModeratedSessionTests(TestCase):
     """The protocol has two administration modes; the data has to say which."""
 

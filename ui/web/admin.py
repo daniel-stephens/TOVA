@@ -845,7 +845,7 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
     def EXPORT_COLUMNS(self):
         cols = [
             "participant", "dashboard", "study_group", "active_learning",
-            "consent_version", "consented_at",
+            "task_minutes", "consent_version", "consented_at", "instrument_version",
             "task_started_at", "task_completed_at", "task_duration_s",
             "finished_early", "moderated",
         ]
@@ -889,8 +889,10 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
                     r.model_id,
                     r.study_group.name if r.study_group_id else "",
                     "" if session is None else int(bool(session.active_learning)),
+                    getattr(session, "task_minutes", None) or "",
                     getattr(session, "consent_version", "") or "",
                     _iso(getattr(session, "consented_at", None)),
+                    r.instrument_version,
                     _iso(getattr(session, "task_started_at", None)),
                     _iso(getattr(session, "task_completed_at", None)),
                     r.task_duration_s if r.task_duration_s is not None else "",
