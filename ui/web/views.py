@@ -4278,12 +4278,16 @@ def study_post(request):
     post = request.POST
     errors: dict[str, str] = {}
 
+    # Nothing here is mandatory. The approved consent tells participants "You
+    # may skip a question", so a blank field is a valid response and must be
+    # recorded as one -- only a value we do not recognise is an error. A form
+    # that refuses to submit would contradict the document they consented to.
     tf_answers = {}
     for key in study_flow.TF_KEY:
         val = (post.get(key) or "").strip().lower()
         if not val:
-            errors[key] = "Please choose an answer."
-        elif val not in study_flow.TF_VALID_VALUES:
+            continue
+        if val not in study_flow.TF_VALID_VALUES:
             errors[key] = "Invalid answer."
         else:
             tf_answers[key] = val
@@ -4291,8 +4295,6 @@ def study_post(request):
     open_answers = {}
     for key in study_flow.OPEN_QUESTIONS:
         text = (post.get(key) or "").strip()
-        if not text:
-            errors[key] = "Please answer this question."
         open_answers[key] = {
             "text": text,
             "citations": _study_parse_citations(post.get(f"{key}_citations", "")),
@@ -4326,6 +4328,7 @@ def study_post(request):
             "model_id": session.model_id,
             "tf_answers": tf_answers,
             "tf_score": study_flow.score_tf(tf_answers),
+            "tf_answered": study_flow.count_tf_answered(tf_answers),
             "open_answers": open_answers,
             "payload": post.dict(),
             "task_duration_s": session.task_duration_s,

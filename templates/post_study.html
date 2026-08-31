@@ -105,6 +105,36 @@
   .choice-opt input[value="false"]:checked + .choice { background: #fbeceb; border-color: var(--red); color: var(--red); font-weight: 600; }
   .choice-opt input[value="unsure"]:checked + .choice { background: #fbf3e6; border-color: var(--amber); color: var(--amber); font-weight: 600; }
 
+  /* Declining is a first-class response -- the consent grants it explicitly --
+     but it is not one of the three substantive answers, so it sits apart from
+     them rather than competing for the same visual weight. */
+  .opt-out {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .opt-out input { margin: 0; accent-color: var(--muted); }
+  .opt-out:hover { color: var(--ink); }
+  .opt-out input:checked ~ span { color: var(--ink); font-weight: 600; }
+
+  .privacy-note {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    margin: 0 0 22px;
+    padding: 11px 14px;
+    background: var(--panel);
+    border-radius: 8px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
   .statement.has-error { border-color: var(--red); }
   .qblock.has-error textarea { border-color: var(--red); }
   .err { color: var(--red); font-size: 12.5px; margin: 8px 0 0; }
@@ -310,7 +340,8 @@
 
   <section>
     <h2>True or false</h2>
-    <p class="hint">Based on what you read, not what the labels said.</p>
+    <p class="hint">Based on what you read, not what the labels said.
+      You can skip any statement you'd rather not answer.</p>
 
     <div class="statement{% if errors.tf1 %} has-error{% endif %}">
       <p>The investigation team found that approvals for high-risk edits were being pushed through outside the normal review process by someone at the executive level.</p>
@@ -328,6 +359,10 @@
             <span class="choice">Not sure</span>
           </label>
       </div>
+      <label class="opt-out">
+        <input type="radio" name="tf1" value="declined"{% if submitted.tf1 == "declined" %} checked{% endif %}>
+        <span>Prefer not to answer</span>
+      </label>
       {% if errors.tf1 %}<p class="err">{{ errors.tf1 }}</p>{% endif %}
     </div>
 
@@ -347,6 +382,10 @@
             <span class="choice">Not sure</span>
           </label>
       </div>
+      <label class="opt-out">
+        <input type="radio" name="tf2" value="declined"{% if submitted.tf2 == "declined" %} checked{% endif %}>
+        <span>Prefer not to answer</span>
+      </label>
       {% if errors.tf2 %}<p class="err">{{ errors.tf2 }}</p>{% endif %}
     </div>
 
@@ -366,6 +405,10 @@
             <span class="choice">Not sure</span>
           </label>
       </div>
+      <label class="opt-out">
+        <input type="radio" name="tf3" value="declined"{% if submitted.tf3 == "declined" %} checked{% endif %}>
+        <span>Prefer not to answer</span>
+      </label>
       {% if errors.tf3 %}<p class="err">{{ errors.tf3 }}</p>{% endif %}
     </div>
 
@@ -385,13 +428,24 @@
             <span class="choice">Not sure</span>
           </label>
       </div>
+      <label class="opt-out">
+        <input type="radio" name="tf4" value="declined"{% if submitted.tf4 == "declined" %} checked{% endif %}>
+        <span>Prefer not to answer</span>
+      </label>
       {% if errors.tf4 %}<p class="err">{{ errors.tf4 }}</p>{% endif %}
     </div>
   </section>
 
   <section>
     <h2>In your own words</h2>
-    <p class="hint">Pick the specific emails you'd point a colleague to, if you remember which ones.</p>
+    <p class="hint">Pick the specific emails you'd point a colleague to, if you remember which ones.
+      Every question here is optional &mdash; leave any of them blank if you'd rather not answer.</p>
+
+    <p class="privacy-note">
+      <span aria-hidden="true">&#9432;</span>
+      <span>Please don't type any information that identifies you or anyone else &mdash; no names,
+        emails, or contact details. Your answers are stored against a study code, not your name.</span>
+    </p>
 
     <div class="qblock{% if errors.motive %} has-error{% endif %}">
       <span class="cat-tag">Motive</span>

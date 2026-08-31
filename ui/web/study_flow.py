@@ -76,7 +76,13 @@ TF_KEY = {
     "tf4": "false",
 }
 
-TF_VALID_VALUES = {"true", "false", "unsure"}
+#: Explicitly declining to answer. The approved consent says "You may skip a
+#: question", so this has to be a first-class response rather than a validation
+#: error. Kept distinct from ``unsure``: "I would rather not say" and "I don't
+#: know" are different findings, and collapsing them would lose that.
+TF_DECLINED = "declined"
+
+TF_VALID_VALUES = {"true", "false", "unsure", TF_DECLINED}
 
 #: Free-text questions: field name -> the category label shown on the page.
 OPEN_QUESTIONS = {
@@ -98,6 +104,22 @@ def score_tf(answers: dict) -> int:
     between "wrong" and "didn't know" survives into analysis.
     """
     return sum(1 for key, correct in TF_KEY.items() if answers.get(key) == correct)
+
+
+def count_tf_answered(answers: dict) -> int:
+    """How many statements got a substantive response.
+
+    Read alongside :func:`score_tf`: a low score because someone skipped six
+    questions is a different result from a low score because they were wrong,
+    and without this the two are indistinguishable in the export. Skipped
+    (absent) and ``declined`` both count as unanswered; ``unsure`` does not,
+    because saying so is a real answer.
+    """
+    return sum(
+        1
+        for key in TF_KEY
+        if answers.get(key) not in (None, "", TF_DECLINED)
+    )
 
 
 # ---------------------------------------------------------------------------

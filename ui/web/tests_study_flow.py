@@ -502,15 +502,95 @@ class PostStudyTests(StudyFlowTestCase):
         self.assertEqual(response.tf_score, 3)
         self.assertEqual(response.tf_answers["tf1"], "unsure")
 
-    def test_missing_answers_are_rejected_and_input_preserved(self):
+    def test_blank_answers_are_accepted_because_the_consent_permits_skipping(self):
+        """Replaces a test that asserted the opposite.
+
+        The form used to reject any blank field with a 400. The approved consent
+        says "You may skip a question", so refusing to submit contradicted the
+        document the participant agreed to. Skipping is now recorded, not
+        blocked -- and a skipped field is stored as such rather than dropped.
+        """
         self.advance_to_post()
         resp = self.client.post(
             reverse("web:study_post"), self.valid_payload(tf1="", motive="")
+        )
+        self.assertRedirects(
+            resp, reverse("web:study_done"), fetch_redirect_response=False
+        )
+        response = StudyResponse.objects.get()
+        self.assertNotIn("tf1", response.tf_answers)
+        self.assertEqual(response.open_answers["motive"]["text"], "")
+
+    def test_an_entirely_blank_submission_is_accepted(self):
+        """Someone may decline every question and still complete the study."""
+        self.advance_to_post()
+        blank = {key: "" for key in self.valid_payload()}
+        resp = self.client.post(reverse("web:study_post"), blank)
+        self.assertRedirects(
+            resp, reverse("web:study_done"), fetch_redirect_response=False
+        )
+        response = StudyResponse.objects.get()
+        self.assertEqual(response.tf_answers, {})
+        self.assertEqual(response.tf_score, 0)
+        self.assertEqual(response.tf_answered, 0)
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_DONE)
+
+    def test_declining_is_stored_distinctly_from_unsure(self):
+        """"Would rather not say" and "don't know" are different findings."""
+        self.advance_to_post()
+        self.client.post(
+            reverse("web:study_post"),
+            self.valid_payload(tf1="declined", tf2="unsure"),
+        )
+        response = StudyResponse.objects.get()
+        self.assertEqual(response.tf_answers["tf1"], "declined")
+        self.assertEqual(response.tf_answers["tf2"], "unsure")
+
+    def test_answered_count_separates_skipping_from_being_wrong(self):
+        self.advance_to_post()
+        self.client.post(
+            reverse("web:study_post"),
+            # tf1 correct, tf2 declined, tf3 skipped, tf4 answered wrongly.
+            self.valid_payload(tf1="true", tf2="declined", tf3="", tf4="true"),
+        )
+        response = StudyResponse.objects.get()
+        self.assertEqual(response.tf_score, 1)
+        self.assertEqual(response.tf_answered, 2, "declined and blank are not answers")
+
+    def test_unsure_still_counts_as_having_answered(self):
+        self.advance_to_post()
+        self.client.post(
+            reverse("web:study_post"),
+            self.valid_payload(tf1="unsure", tf2="unsure", tf3="unsure", tf4="unsure"),
+        )
+        response = StudyResponse.objects.get()
+        self.assertEqual(response.tf_score, 0)
+        self.assertEqual(response.tf_answered, 4)
+
+    def test_an_unrecognised_value_is_still_an_error(self):
+        """Permissive about absence, not about garbage."""
+        self.advance_to_post()
+        resp = self.client.post(
+            reverse("web:study_post"), self.valid_payload(tf1="maybe")
         )
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(StudyResponse.objects.exists())
         body = resp.content.decode()
         self.assertIn("Marcos and Priya saw the same approval pattern.", body)
+
+    def test_the_form_offers_a_way_to_decline(self):
+        self.advance_to_post()
+        body = self.client.get(reverse("web:study_post")).content.decode()
+        self.assertIn('value="declined"', body)
+        self.assertIn("Prefer not to answer", body)
+
+    def test_the_form_warns_against_entering_identifying_information(self):
+        self.advance_to_post()
+        rendered = visible_text(
+            self.client.get(reverse("web:study_post")).content.decode()
+        )
+        self.assertIn("identifies you", rendered)
 
     def test_citations_are_optional(self):
         self.advance_to_post()

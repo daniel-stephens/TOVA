@@ -240,6 +240,10 @@ class StudyResponse(models.Model):
 
     tf_answers = models.JSONField(default=dict, blank=True)
     tf_score = models.IntegerField(default=0)
+    #: Statements given a substantive answer. Read with ``tf_score``: it
+    #: separates "got it wrong" from "chose not to answer", which the consent
+    #: explicitly permits.
+    tf_answered = models.IntegerField(default=0)
     open_answers = models.JSONField(default=dict, blank=True)
     payload = models.JSONField(default=dict, blank=True)
 
