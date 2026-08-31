@@ -209,6 +209,14 @@ class ParticipantSession(models.Model):
     consented_at = models.DateTimeField(null=True, blank=True)
     consent_version = models.CharField(max_length=64, blank=True)
 
+    # The protocol describes two ways of running a session: independently, or as
+    # a live remote one-on-one where the participant thinks aloud and the
+    # researcher takes written notes. Which one this was is part of the record.
+    moderated = models.BooleanField(
+        default=False,
+        help_text="Run as a live remote one-on-one session with a researcher present.",
+    )
+
     task_started_at = models.DateTimeField(null=True, blank=True)
     task_ends_at = models.DateTimeField(null=True, blank=True)
     task_completed_at = models.DateTimeField(null=True, blank=True)
@@ -315,6 +323,48 @@ class TopicRename(models.Model):
 
     def __str__(self) -> str:
         return f"{self.model_id}/{self.topic_id} -> {self.label}"
+
+
+class ResearcherNote(models.Model):
+    """A note taken by a researcher during a moderated session.
+
+    The approved protocol names moderated-session notes as research records, so
+    they belong in the dataset keyed to the participant's study code rather than
+    in someone's local file where they cannot be linked to anything.
+
+    ``author`` is the staff member who wrote it, kept separate from ``user``
+    (the participant the note is about) -- that distinction matters when more
+    than one researcher runs sessions.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        User,
+        models.CASCADE,
+        related_name="researcher_notes",
+        verbose_name="participant",
+    )
+    author = models.ForeignKey(
+        User,
+        models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="authored_notes",
+        verbose_name="written by",
+    )
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "web_researcher_notes"
+        ordering = ["user", "created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"], name="ix_note_user_time"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.export_id}: {self.text[:60]}"
 
 
 class InteractionEvent(models.Model):

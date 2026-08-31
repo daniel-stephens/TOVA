@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from web.models import (
     InteractionEvent,
+    ResearcherNote,
     ParticipantSession,
     StudyGroup,
     StudyResponse,
@@ -2068,6 +2069,75 @@ class StudyResponseExportTests(TestCase):
     def test_download_link_is_on_the_changelist(self):
         resp = self.client.get(reverse("admin:web_studyresponse_changelist"))
         self.assertContains(resp, self.url)
+
+
+class ModeratedSessionTests(TestCase):
+    """The protocol has two administration modes; the data has to say which."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.p1 = User.objects.create_user(
+            email="p001@study.local", password="pw", study_model_id="m_alpha",
+            participant_code="p001",
+        )
+        self.session = study_flow.get_or_create_session(self.p1)
+
+    def test_sessions_are_independent_by_default(self):
+        self.assertFalse(self.session.moderated)
+
+    def test_admin_action_marks_a_session_moderated(self):
+        url = reverse("admin:web_participantsession_changelist")
+        self.client.post(url, {
+            "action": "mark_moderated",
+            "_selected_action": [str(self.p1.pk)],
+        })
+        self.session.refresh_from_db()
+        self.assertTrue(self.session.moderated)
+
+    def test_admin_action_marks_it_back(self):
+        ParticipantSession.objects.update(moderated=True)
+        url = reverse("admin:web_participantsession_changelist")
+        self.client.post(url, {
+            "action": "mark_independent",
+            "_selected_action": [str(self.p1.pk)],
+        })
+        self.session.refresh_from_db()
+        self.assertFalse(self.session.moderated)
+
+    def test_notes_are_linked_to_the_participant_and_the_author(self):
+        note = ResearcherNote.objects.create(
+            user=self.p1, author=self.admin, text="Kept re-reading the settlement thread."
+        )
+        self.assertEqual(note.user, self.p1)
+        self.assertEqual(note.author, self.admin)
+        self.assertIn("p001", str(note))
+
+    def test_notes_survive_the_author_being_deleted(self):
+        """Losing a staff account must not destroy the research record."""
+        note = ResearcherNote.objects.create(
+            user=self.p1, author=self.admin, text="Thought aloud about the timeline."
+        )
+        self.admin.delete()
+        note.refresh_from_db()
+        self.assertIsNone(note.author)
+        self.assertEqual(note.text, "Thought aloud about the timeline.")
+
+    def test_notes_are_writable_in_the_admin(self):
+        """Unlike the other study tables, which are deliberately read-only."""
+        resp = self.client.get(reverse("admin:web_researchernote_add"))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_moderated_flag_reaches_the_response_export(self):
+        self.session.moderated = True
+        self.session.save()
+        StudyResponse.objects.create(user=self.p1, model_id="m_alpha")
+        resp = self.client.get(reverse("admin:web_studyresponse_responses_csv"))
+        import csv, io
+
+        rows = list(csv.reader(io.StringIO(b"".join(resp.streaming_content).decode())))
+        record = dict(zip(*rows))
+        self.assertEqual(record["moderated"], "1")
 
 
 class InteractionCsvExportTests(TestCase):

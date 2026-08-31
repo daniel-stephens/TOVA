@@ -21,6 +21,7 @@ from web.models import (
     ChatMessage,
     InteractionEvent,
     ParticipantSession,
+    ResearcherNote,
     StudyGroup,
     StudyResponse,
     TopicRename,
@@ -743,17 +744,19 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
         "study_group",
         "stage",
         "model_id",
+        "moderated",
         "task_started_at",
         "task_completed_at",
         "finished_early",
     )
-    list_filter = ("stage", "study_group", "finished_early")
+    list_filter = ("stage", "study_group", "finished_early", "moderated")
     search_fields = ("user__email", "model_id")
     readonly_fields = (
         "user",
         "study_group",
         "model_id",
         "stage",
+        "moderated",
         "task_started_at",
         "task_ends_at",
         "task_completed_at",
@@ -771,7 +774,17 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
         count = queryset.delete()[0]
         self.message_user(request, f"Reset {count} participant session(s).")
 
-    actions = ["reset_participants"]
+    @admin.action(description=_("Mark as a moderated session"))
+    def mark_moderated(self, request, queryset):
+        n = queryset.update(moderated=True)
+        self.message_user(request, _("Marked %(n)d session(s) as moderated.") % {"n": n})
+
+    @admin.action(description=_("Mark as an independent session"))
+    def mark_independent(self, request, queryset):
+        n = queryset.update(moderated=False)
+        self.message_user(request, _("Marked %(n)d session(s) as independent.") % {"n": n})
+
+    actions = ["reset_participants", "mark_moderated", "mark_independent"]
 
     def has_delete_permission(self, request, obj=None):
         # Needed so the reset action can run; still staff-gated by the changelist.
@@ -913,6 +926,37 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
     @admin.action(description=_("Export selected responses to CSV"))
     def export_selected_csv(self, request, queryset):
         return self._stream_responses(queryset, "tova-study-responses-selection.csv")
+
+
+@admin.register(ResearcherNote)
+class ResearcherNoteAdmin(admin.ModelAdmin):
+    """Writable, unlike the other study tables.
+
+    Moderated-session notes are typed by a researcher during the session, so
+    this is the one study model that has to be editable in the admin. The
+    author defaults to whoever is signed in.
+    """
+
+    list_display = ("participant", "author", "preview", "created_at")
+    list_filter = ("author", "created_at")
+    search_fields = ("text", "user__email", "user__participant_code")
+    autocomplete_fields = ("user", "author")
+    readonly_fields = ("created_at", "updated_at")
+    date_hierarchy = "created_at"
+
+    @admin.display(description=_("Participant"), ordering="user__participant_code")
+    def participant(self, obj):
+        return obj.user.export_id if obj.user_id else "\u2014"
+
+    @admin.display(description=_("Note"))
+    def preview(self, obj):
+        text = (obj.text or "").strip().replace("\n", " ")
+        return (text[:90] + "\u2026") if len(text) > 90 else text
+
+    def save_model(self, request, obj, form, change):
+        if obj.author_id is None:
+            obj.author = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(TopicRename)
