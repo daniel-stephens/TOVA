@@ -1486,6 +1486,15 @@
   const navHistory = [];
   let activeLearningIndex = 0;
   let selectedSuggestion = null;
+  /* How the pending label was arrived at, and when the current document was
+     shown. Sent with the label so the study can tell an accepted suggestion
+     from a typed one -- the difference between "the model helped" and "the
+     model was ignored", which is otherwise unrecoverable after the fact. */
+  let labelProvenance = "unknown";
+  let labelSuggestionRank = null;
+  let docShownAt = null;
+  let docShownFor = null;
+  let lastInputModality = "other";
   let searchTerm = "";
   let statusState = { num_total: 0, num_labeled: 0, class_distribution: {} };
   let saveFeedbackTimeout = null;
@@ -2771,6 +2780,15 @@
 
     syncLabelControlsForDoc(doc);
 
+    // New document on screen: restart the dwell clock and forget how the last
+    // label was chosen, so provenance can never carry over between documents.
+    if (doc && doc.id !== docShownFor) {
+      docShownFor = doc.id;
+      docShownAt = performance.now();
+      labelProvenance = "unknown";
+      labelSuggestionRank = null;
+    }
+
     prevBtn.disabled = activeLearningIndex === 0 && navHistory.length === 0;
     nextBtn.disabled = !canSkipToNext();
 
@@ -2789,16 +2807,39 @@
     const chip = chips[idx];
     if (!chip) return;
     selectedSuggestion = chip.dataset.label || "";
+    labelProvenance = "suggestion";
+    labelSuggestionRank = idx + 1;
+    lastInputModality = "keyboard";
     setLabelInputValue(selectedSuggestion, { force: true });
     const doc = getCurrentDoc();
     if (doc) renderLabelChips(doc);
     updateApplyButton();
   };
 
-  const postLabel = (docId, label) => jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
+  /* What the model was proposing at the moment of the action. Captured here
+     because it is unrecoverable afterwards: once the model is retrained on the
+     new labels, its earlier suggestions and confidence are gone. */
+  const labelContext = (docId, bulk) => {
+    const doc = getDocById(docId);
+    const suggestions = doc ? getSuggestionSet(doc).map(getSuggestionLabel) : [];
+    return {
+      provenance: labelProvenance,
+      suggestion_rank: labelProvenance === "suggestion" ? labelSuggestionRank : null,
+      suggestions_shown: suggestions,
+      model_label: doc && doc.label && doc.label !== "\u2014" ? doc.label : "",
+      model_confidence: typeof doc?.confidence === "number" ? doc.confidence : null,
+      dwell_ms: docShownAt ? Math.max(0, Math.round(performance.now() - docShownAt)) : null,
+      modality: lastInputModality,
+      bulk: Boolean(bulk),
+    };
+  };
+
+  const postLabel = (docId, label, bulk) => jsonFetch(`{% url_for 'active_learning_two_label' %}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model_id: modelId, doc_id: docId, label }),
+    body: JSON.stringify({
+      model_id: modelId, doc_id: docId, label, ...labelContext(docId, bulk),
+    }),
   });
 
   const deleteLabel = (docId) => jsonFetch(`{% url_for 'active_learning_two_unlabel' %}`, {
@@ -2846,7 +2887,7 @@
     for (const id of targetIds) {
       const snapshot = snapshotDoc(id);
       try {
-        const rec = await postLabel(id, labelToApply);
+        const rec = await postLabel(id, labelToApply, bulk);
         syncLabels(rec.current_labels || {});
         setDocHumanLabel(id, labelToApply);
         updateLabeledDocRow(id);
@@ -2984,6 +3025,9 @@
     if (customLabelInput) {
       customLabelInput.addEventListener("input", (e) => {
         selectedSuggestion = e.target.value.trim() || null;
+        labelProvenance = "typed";
+        labelSuggestionRank = null;
+        lastInputModality = "keyboard";
         updateApplyButton();
         const current = getCurrentDoc();
         if (current) renderLabelChips(current);
@@ -3013,6 +3057,9 @@
         const chip = e.target.closest(".al2-label-chip");
         if (!chip) return;
         selectedSuggestion = chip.dataset.label || "";
+        labelProvenance = "suggestion";
+        labelSuggestionRank = [...chip.parentElement.children].indexOf(chip) + 1;
+        lastInputModality = "mouse";
         setLabelInputValue(selectedSuggestion, { force: true });
         const doc = getCurrentDoc();
         if (doc) renderLabelChips(doc);

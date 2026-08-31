@@ -390,6 +390,111 @@ class ResearcherNote(models.Model):
         return f"{self.user.export_id}: {self.text[:60]}"
 
 
+class InteractionEventModality:
+    """Modality choices shared by InteractionEvent and LabelEvent.
+
+    Declared once so the two tables cannot drift apart -- they are joined on
+    modality during analysis.
+    """
+
+    MOUSE = "mouse"
+    KEYBOARD = "keyboard"
+    OTHER = "other"
+    CHOICES = [(MOUSE, "Mouse"), (KEYBOARD, "Keyboard"), (OTHER, "Other")]
+
+
+class LabelEvent(models.Model):
+    """One annotation action by a participant, with how it was arrived at.
+
+    Document labels are written straight through to the backend
+    (``/active-learning/{model}/label``) and were never persisted here, so the
+    central artifact of the annotation task sat outside the analytic dataset --
+    unjoined to participant, condition or timing. This table is that record.
+
+    It is deliberately denormalised: each row carries what the model was
+    proposing *at the moment of the action*, because that is unrecoverable
+    afterwards once the model has been retrained on the new labels.
+
+    Serves four questions:
+
+    * are the suggestions useful -- ``provenance``, ``suggestion_rank``,
+      ``agreed_with_model``
+    * are the labels reliable -- ``label`` per ``doc_id`` per participant, so
+      agreement between people on the same dashboard is computable
+    * does active learning converge -- ``sequence_index`` against
+      ``model_confidence`` over a session
+    * is annotation efficient -- ``dwell_ms`` and ``modality``
+    """
+
+    #: Where the applied label came from.
+    FROM_SUGGESTION = "suggestion"   # clicked or keyed a suggested chip
+    FROM_TYPED = "typed"             # free text, including datalist picks
+    FROM_UNKNOWN = "unknown"         # client sent no provenance
+    PROVENANCE_CHOICES = [
+        (FROM_SUGGESTION, "Accepted a suggestion"),
+        (FROM_TYPED, "Typed their own"),
+        (FROM_UNKNOWN, "Unknown"),
+    ]
+
+    APPLIED = "applied"
+    REMOVED = "removed"
+    ACTION_CHOICES = [(APPLIED, "Applied"), (REMOVED, "Removed")]
+
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(User, models.CASCADE, related_name="label_events")
+    study_group = models.ForeignKey(
+        StudyGroup, models.SET_NULL, null=True, blank=True, related_name="label_events"
+    )
+    model_id = models.CharField(max_length=255, db_index=True)
+    doc_id = models.CharField(max_length=255, db_index=True)
+
+    action = models.CharField(max_length=8, choices=ACTION_CHOICES, default=APPLIED)
+    label = models.CharField(max_length=255, blank=True)
+
+    provenance = models.CharField(
+        max_length=16, choices=PROVENANCE_CHOICES, default=FROM_UNKNOWN
+    )
+    #: 1-based position of the accepted suggestion; null when typed.
+    suggestion_rank = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The suggestions on offer when the action happened, in order.
+    suggestions_shown = models.JSONField(default=list, blank=True)
+
+    #: The model's own label for this document, and its confidence in it.
+    #: Document-level: the backend does not return per-suggestion scores.
+    model_label = models.CharField(max_length=255, blank=True)
+    model_confidence = models.FloatField(null=True, blank=True)
+    #: Whether the applied label matched the model's own label.
+    agreed_with_model = models.BooleanField(null=True, blank=True)
+
+    #: Applied to several documents at once from the bulk bar.
+    bulk = models.BooleanField(default=False)
+    #: Changed a label this participant had already applied to this document.
+    is_revision = models.BooleanField(default=False)
+    previous_label = models.CharField(max_length=255, blank=True)
+
+    #: Milliseconds between the document being shown and the label applied.
+    dwell_ms = models.PositiveIntegerField(null=True, blank=True)
+    modality = models.CharField(
+        max_length=8, choices=InteractionEventModality.CHOICES, default="other"
+    )
+    #: 0-based position of this action within the participant's session, so a
+    #: convergence curve can be drawn without re-sorting on timestamps.
+    sequence_index = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "web_label_events"
+        ordering = ["user", "sequence_index", "id"]
+        indexes = [
+            models.Index(fields=["user", "model_id"], name="ix_levent_user_model"),
+            models.Index(fields=["model_id", "doc_id"], name="ix_levent_model_doc"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} {self.action} {self.doc_id} -> {self.label}"[:80]
+
+
 class InteractionEvent(models.Model):
     """One participant interaction, tagged with how it was made.
 
@@ -403,10 +508,10 @@ class InteractionEvent(models.Model):
     verbatim, because those are the shortcuts worth measuring.
     """
 
-    MOUSE = "mouse"
-    KEYBOARD = "keyboard"
-    OTHER = "other"
-    MODALITY_CHOICES = [(MOUSE, "Mouse"), (KEYBOARD, "Keyboard"), (OTHER, "Other")]
+    MOUSE = InteractionEventModality.MOUSE
+    KEYBOARD = InteractionEventModality.KEYBOARD
+    OTHER = InteractionEventModality.OTHER
+    MODALITY_CHOICES = InteractionEventModality.CHOICES
 
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey(User, models.CASCADE, related_name="interaction_events")

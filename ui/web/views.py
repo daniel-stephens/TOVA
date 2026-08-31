@@ -53,6 +53,8 @@ from web.models import (
     AuditLog,
     ChatMessage,
     InteractionEvent,
+    InteractionEventModality,
+    LabelEvent,
     ParticipantSession,
     StudyResponse,
     TopicRename,
@@ -2356,6 +2358,96 @@ def active_learning_two_status(request):
         return JsonResponse({"error": f"Upstream connection error: {e}"}, status=502)
 
 
+def _record_label_event(request, *, model_id, doc_id, label, action, payload):
+    """Persist a participant's annotation action alongside the upstream write.
+
+    The upstream call is the source of truth for the model; this is the source
+    of truth for the *study*. Recorded here rather than client-side so a label
+    is captured even when the browser sends no provenance -- the enrichment is
+    optional, the fact of the label is not.
+
+    Never raises: losing telemetry must not fail a participant's label.
+    """
+    try:
+        user = request.user
+        if not is_study_participant(user):
+            return None
+
+        session = study_flow.get_or_create_session(user)
+        prior = LabelEvent.objects.filter(user=user, model_id=model_id)
+
+        previous = (
+            prior.filter(doc_id=doc_id, action=LabelEvent.APPLIED)
+            .order_by("-sequence_index")
+            .values_list("label", flat=True)
+            .first()
+        )
+
+        provenance = str(payload.get("provenance") or "").strip()
+        if provenance not in dict(LabelEvent.PROVENANCE_CHOICES):
+            provenance = LabelEvent.FROM_UNKNOWN
+
+        rank = payload.get("suggestion_rank")
+        try:
+            rank = int(rank) if rank not in (None, "") else None
+        except (TypeError, ValueError):
+            rank = None
+
+        confidence = payload.get("model_confidence")
+        try:
+            confidence = float(confidence) if confidence not in (None, "") else None
+        except (TypeError, ValueError):
+            confidence = None
+
+        dwell = payload.get("dwell_ms")
+        try:
+            dwell = int(dwell) if dwell not in (None, "") else None
+        except (TypeError, ValueError):
+            dwell = None
+        # A negative dwell is impossible. Clamping it to 0 would put a label
+        # applied in "no time at all" into the efficiency figures as though it
+        # were real; unknown is the honest value.
+        if dwell is not None and dwell < 0:
+            dwell = None
+
+        model_label = str(payload.get("model_label") or "").strip()[:255]
+        suggestions = payload.get("suggestions_shown")
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        modality = str(payload.get("modality") or "").strip()
+        if modality not in dict(InteractionEventModality.CHOICES):
+            modality = InteractionEventModality.OTHER
+
+        agreed = None
+        if action == LabelEvent.APPLIED and model_label:
+            agreed = label.strip().lower() == model_label.strip().lower()
+
+        return LabelEvent.objects.create(
+            user=user,
+            study_group=session.study_group,
+            model_id=model_id,
+            doc_id=doc_id,
+            action=action,
+            label=label[:255],
+            provenance=provenance,
+            suggestion_rank=rank,
+            suggestions_shown=suggestions[:10],
+            model_label=model_label,
+            model_confidence=confidence,
+            agreed_with_model=agreed,
+            bulk=bool(payload.get("bulk")),
+            is_revision=bool(previous) and action == LabelEvent.APPLIED,
+            previous_label=(previous or "")[:255],
+            dwell_ms=dwell,
+            modality=modality,
+            sequence_index=prior.count(),
+        )
+    except Exception:  # pragma: no cover - telemetry must never break labelling
+        logger.warning("could not record label event", exc_info=True)
+        return None
+
+
 @login_required
 @require_study_feature(FEATURE_ACTIVE_LEARNING, json_response=True)
 def active_learning_two_label(request):
@@ -2382,6 +2474,13 @@ def active_learning_two_label(request):
             json={"doc_id": doc_id, "label": label},
             timeout=(3.05, 30),
         )
+        # Only record what upstream accepted, so the study data cannot claim a
+        # label the model never received.
+        if up.ok:
+            _record_label_event(
+                request, model_id=model_id, doc_id=doc_id, label=label,
+                action=LabelEvent.APPLIED, payload=payload,
+            )
         return HttpResponse(
             up.content,
             status=up.status_code,
@@ -2416,6 +2515,13 @@ def active_learning_two_unlabel(request):
             f"{R.API}/active-learning/{model_id}/label/{doc_id}",
             timeout=(3.05, 30),
         )
+        # An undo is part of the annotation record: without it a revision looks
+        # like a gap in the sequence rather than a decision the participant made.
+        if up.ok:
+            _record_label_event(
+                request, model_id=model_id, doc_id=doc_id, label="",
+                action=LabelEvent.REMOVED, payload=payload,
+            )
         return HttpResponse(
             up.content,
             status=up.status_code,

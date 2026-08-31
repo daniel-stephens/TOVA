@@ -144,7 +144,7 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
     """
     from web.models import ParticipantSession, User
     from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
-    from web.admin import available_dashboards
+    from web.admin import available_dashboards, corpus_for_model
 
     labels = dict(available_dashboards())
 
@@ -205,6 +205,7 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
                 "label": label,
                 "participants": n_participants,
                 "corpus_size": corpus_size,
+                "corpus_id": corpus_for_model(model_id),
                 "active_learning": active_learning,
                 "error": error,
                 "ready": bool(known and not error and n_participants),
@@ -216,6 +217,15 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
     ).count()
     started = ParticipantSession.objects.exclude(task_started_at=None).count()
 
+    # The study varies the model backbone over ONE corpus. If two conditions are
+    # built on different corpora, the comparison is between corpora as well as
+    # between models, and the result means nothing -- so this is checked here
+    # rather than discovered during analysis.
+    corpora_in_use = {
+        r["corpus_id"] for r in rows if r["participants"] and r["corpus_id"]
+    }
+    mixed_corpora = sorted(corpora_in_use) if len(corpora_in_use) > 1 else []
+
     return render(
         request,
         "admin/tova_preflight.html",
@@ -223,7 +233,8 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
             "rows": rows,
             "unassigned": unassigned,
             "started": started,
-            "any_problems": any(not r["ready"] for r in rows),
+            "mixed_corpora": mixed_corpora,
+            "any_problems": any(not r["ready"] for r in rows) or bool(mixed_corpora),
         },
     )
 

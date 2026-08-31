@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from web.models import (
     InteractionEvent,
+    LabelEvent,
     ResearcherNote,
     ParticipantSession,
     StudyGroup,
@@ -138,7 +139,8 @@ class StudyFlowTestCase(TestCase):
             enable_active_learning=True,
         )
         self.participant = User.objects.create_user(
-            email="p001@study.local", password="pw", study_group=self.group
+            email="p001@study.local", password="pw", study_group=self.group,
+            participant_code="p001",
         )
         self.outsider = User.objects.create_user(email="nobody@example.com", password="pw")
         self.staff = User.objects.create_user(
@@ -2750,3 +2752,247 @@ class ActiveLearningPrototypeTests(StudyFlowTestCase):
         resp = self.client.get(self.url, {"model_id": "m_test"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn(reverse("web:study_instructions"), resp["Location"])
+
+
+class LabelEventTests(StudyFlowTestCase):
+    """The annotation record: labels, and how the participant arrived at them.
+
+    Document labels are written through to the backend, so before this they
+    existed nowhere in the study database -- the central artifact of the
+    annotation task was outside the analytic dataset.
+    """
+
+    URL = "web:active_learning_two_label"
+
+    def setUp(self):
+        super().setUp()
+        self.participant.study_model_id = "m_test"
+        self.participant.save()
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+
+    def label(self, **payload):
+        body = {"model_id": "m_test", "doc_id": "d1", "label": "Approval oversight"}
+        body.update(payload)
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True), \
+             mock.patch("web.views.requests.post") as post:
+            post.return_value = mock.Mock(
+                ok=True, status_code=200, content=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            return self.client.post(
+                reverse(self.URL), data=json.dumps(body),
+                content_type="application/json",
+            )
+
+    def test_a_label_is_recorded_in_the_study_database(self):
+        self.label()
+        e = LabelEvent.objects.get()
+        self.assertEqual(e.user, self.participant)
+        self.assertEqual(e.doc_id, "d1")
+        self.assertEqual(e.label, "Approval oversight")
+        self.assertEqual(e.model_id, "m_test")
+        self.assertEqual(e.action, LabelEvent.APPLIED)
+
+    def test_accepting_a_suggestion_is_distinguishable_from_typing(self):
+        """The measure of whether the assistance is working at all."""
+        self.label(doc_id="d1", provenance="suggestion", suggestion_rank=1)
+        self.label(doc_id="d2", provenance="typed", label="Something else")
+
+        a, b = LabelEvent.objects.order_by("sequence_index")
+        self.assertEqual(a.provenance, LabelEvent.FROM_SUGGESTION)
+        self.assertEqual(a.suggestion_rank, 1)
+        self.assertEqual(b.provenance, LabelEvent.FROM_TYPED)
+        self.assertIsNone(b.suggestion_rank)
+
+    def test_agreement_with_the_model_is_computed(self):
+        self.label(doc_id="d1", label="Approval oversight", model_label="Approval oversight")
+        self.label(doc_id="d2", label="Something else", model_label="Approval oversight")
+        a, b = LabelEvent.objects.order_by("sequence_index")
+        self.assertTrue(a.agreed_with_model)
+        self.assertFalse(b.agreed_with_model)
+
+    def test_agreement_is_null_when_the_model_had_no_label(self):
+        """Unknown must not masquerade as disagreement."""
+        self.label(model_label="")
+        self.assertIsNone(LabelEvent.objects.get().agreed_with_model)
+
+    def test_confidence_and_dwell_are_captured_for_convergence_and_efficiency(self):
+        self.label(model_confidence=0.61, dwell_ms=8400, modality="keyboard")
+        e = LabelEvent.objects.get()
+        self.assertAlmostEqual(e.model_confidence, 0.61)
+        self.assertEqual(e.dwell_ms, 8400)
+        self.assertEqual(e.modality, "keyboard")
+
+    def test_sequence_index_orders_a_session(self):
+        for i in range(3):
+            self.label(doc_id=f"d{i}")
+        self.assertEqual(
+            list(LabelEvent.objects.order_by("sequence_index").values_list("sequence_index", flat=True)),
+            [0, 1, 2],
+        )
+
+    def test_relabelling_the_same_document_is_marked_a_revision(self):
+        self.label(doc_id="d1", label="First")
+        self.label(doc_id="d1", label="Second")
+        a, b = LabelEvent.objects.order_by("sequence_index")
+        self.assertFalse(a.is_revision)
+        self.assertTrue(b.is_revision)
+        self.assertEqual(b.previous_label, "First")
+
+    def test_removing_a_label_is_recorded_too(self):
+        """An undo is a decision, not a gap in the sequence."""
+        self.label(doc_id="d1")
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True), \
+             mock.patch("web.views.requests.delete") as delete:
+            delete.return_value = mock.Mock(
+                ok=True, status_code=200, content=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            self.client.post(
+                reverse("web:active_learning_two_unlabel"),
+                data=json.dumps({"model_id": "m_test", "doc_id": "d1"}),
+                content_type="application/json",
+            )
+        self.assertEqual(
+            list(LabelEvent.objects.order_by("sequence_index").values_list("action", flat=True)),
+            [LabelEvent.APPLIED, LabelEvent.REMOVED],
+        )
+
+    def test_nothing_is_recorded_when_upstream_rejects_the_label(self):
+        """The study data must not claim a label the model never received."""
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True), \
+             mock.patch("web.views.requests.post") as post:
+            post.return_value = mock.Mock(
+                ok=False, status_code=502, content=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            self.client.post(
+                reverse(self.URL),
+                data=json.dumps({"model_id": "m_test", "doc_id": "d1", "label": "x"}),
+                content_type="application/json",
+            )
+        self.assertFalse(LabelEvent.objects.exists())
+
+    def test_a_client_that_sends_no_provenance_still_records_the_label(self):
+        """Enrichment is optional; the fact of the label is not."""
+        self.label()
+        e = LabelEvent.objects.get()
+        self.assertEqual(e.provenance, LabelEvent.FROM_UNKNOWN)
+        self.assertIsNone(e.suggestion_rank)
+        self.assertEqual(e.label, "Approval oversight")
+
+    def test_garbage_provenance_is_ignored_rather_than_stored(self):
+        self.label(provenance="../etc/passwd", suggestion_rank="banana",
+                   model_confidence="NaN-ish", dwell_ms=-5)
+        e = LabelEvent.objects.get()
+        self.assertEqual(e.provenance, LabelEvent.FROM_UNKNOWN)
+        self.assertIsNone(e.suggestion_rank)
+        self.assertIsNone(e.model_confidence)
+        self.assertIsNone(e.dwell_ms)
+
+    def test_labels_are_attributable_for_inter_annotator_agreement(self):
+        """Two participants on one dashboard labelling one document."""
+        other = User.objects.create_user(
+            email="p002@study.local", password="pw",
+            study_model_id="m_test", participant_code="p002",
+        )
+        self.label(doc_id="shared", label="Approval oversight")
+        self.client.force_login(other)
+        consent_for(other)
+        self.client.post(reverse("web:study_begin"))
+        self.label(doc_id="shared", label="Assay anomalies")
+
+        rows = LabelEvent.objects.filter(doc_id="shared")
+        self.assertEqual(rows.count(), 2)
+        self.assertEqual(
+            {r.user.export_id: r.label for r in rows},
+            {"p001": "Approval oversight", "p002": "Assay anomalies"},
+        )
+
+
+class LabelEventExportTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.p = User.objects.create_user(
+            email="p001@study.local", password="pw", participant_code="p001"
+        )
+        LabelEvent.objects.create(
+            user=self.p, model_id="m_alpha", doc_id="d1", label="Approval oversight",
+            provenance=LabelEvent.FROM_SUGGESTION, suggestion_rank=2,
+            suggestions_shown=["Approval oversight", "Assay anomalies"],
+            model_label="Assay anomalies", model_confidence=0.61,
+            agreed_with_model=False, dwell_ms=8400, modality="keyboard",
+            sequence_index=0,
+        )
+        self.url = reverse("admin:web_labelevent_labels_csv")
+
+    def rows(self):
+        import csv, io
+        body = b"".join(self.client.get(self.url).streaming_content).decode()
+        return list(csv.reader(io.StringIO(body)))
+
+    def test_export_carries_what_each_question_needs(self):
+        header, row = self.rows()
+        rec = dict(zip(header, row))
+        self.assertEqual(rec["participant"], "p001")
+        self.assertEqual(rec["provenance"], "suggestion")
+        self.assertEqual(rec["suggestion_rank"], "2")
+        self.assertEqual(rec["model_confidence"], "0.61")
+        self.assertEqual(rec["agreed_with_model"], "0")
+        self.assertEqual(rec["dwell_ms"], "8400")
+        self.assertEqual(rec["sequence_index"], "0")
+
+    def test_export_carries_no_email(self):
+        body = b"".join(self.client.get(self.url).streaming_content).decode()
+        self.assertNotIn("@", body)
+
+    def test_download_link_is_on_the_changelist(self):
+        resp = self.client.get(reverse("admin:web_labelevent_changelist"))
+        self.assertContains(resp, self.url)
+
+
+class CorpusConsistencyTests(TestCase):
+    """The backbone is the variable; the corpus must not be.
+
+    If two conditions are built on different corpora, a difference between them
+    cannot be attributed to the model. Caught before recruiting rather than
+    during analysis.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        User.objects.create_user(email="p001@study.local", password="pw",
+                                 study_model_id="m_alpha", participant_code="p001")
+        User.objects.create_user(email="p002@study.local", password="pw",
+                                 study_model_id="m_beta", participant_code="p002")
+        self.url = reverse("tova_admin_preflight")
+
+    def render(self, corpora):
+        dashboards = [(m, f"{m}  ({m} · corpus {c})") for m, c in corpora.items()]
+        with mock.patch("web.admin.available_dashboards", return_value=dashboards), \
+             mock.patch("web.admin.corpus_for_model", side_effect=lambda m: corpora.get(m, "")), \
+             mock.patch("web.views._study_corpus_size", return_value=600):
+            return self.client.get(self.url)
+
+    def test_same_corpus_is_not_flagged(self):
+        resp = self.render({"m_alpha": "c_one", "m_beta": "c_one"})
+        self.assertEqual(resp.context["mixed_corpora"], [])
+        self.assertNotContains(resp, "not on the same corpus")
+
+    def test_different_corpora_are_flagged_loudly(self):
+        resp = self.render({"m_alpha": "c_one", "m_beta": "c_two"})
+        self.assertEqual(resp.context["mixed_corpora"], ["c_one", "c_two"])
+        self.assertContains(resp, "not on the same corpus")
+
+    def test_an_unassigned_dashboard_does_not_trigger_the_warning(self):
+        """Only conditions people are actually in can confound the comparison."""
+        resp = self.render({"m_alpha": "c_one", "m_beta": "c_one", "m_spare": "c_other"})
+        self.assertEqual(resp.context["mixed_corpora"], [])
+
+    def test_the_corpus_is_shown_per_dashboard(self):
+        resp = self.render({"m_alpha": "c_one", "m_beta": "c_one"})
+        rows = {r["model_id"]: r for r in resp.context["rows"]}
+        self.assertEqual(rows["m_alpha"]["corpus_id"], "c_one")

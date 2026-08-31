@@ -20,6 +20,7 @@ from web.models import (
     AuditLog,
     ChatMessage,
     InteractionEvent,
+    LabelEvent,
     ParticipantSession,
     ResearcherNote,
     StudyGroup,
@@ -75,6 +76,19 @@ def _iso(value):
     return value.isoformat() if value else ""
 
 
+#: model_id -> corpus_id, filled in by available_dashboards(). The study varies
+#: the model backbone over ONE corpus, so which corpus a dashboard is actually
+#: built on is the thing that has to be verified before recruiting.
+_CORPUS_BY_MODEL: dict[str, str] = {}
+
+
+def corpus_for_model(model_id: str) -> str:
+    """Corpus a trained model was built on, or "" if unknown."""
+    if model_id not in _CORPUS_BY_MODEL:
+        available_dashboards()
+    return _CORPUS_BY_MODEL.get(model_id, "")
+
+
 def available_dashboards() -> list[tuple[str, str]]:
     """(model_id, label) for every trained model, for dashboard pickers.
 
@@ -102,6 +116,7 @@ def available_dashboards() -> list[tuple[str, str]]:
             name = meta.get("name") or tr.get("model_name") or ""
             label = f"{name or draft.id}  ({draft.id} \u00b7 corpus {corpus[:14]})"
             out.append((draft.id, label))
+            _CORPUS_BY_MODEL[draft.id] = corpus
     except Exception:
         return []
     out.sort(key=lambda pair: pair[1].lower())
@@ -978,6 +993,97 @@ class TopicRenameAdmin(_ReadOnlyStudyAdmin):
     list_filter = ("model_id",)
     search_fields = ("user__email", "model_id", "label")
     readonly_fields = ("user", "model_id", "topic_id", "label", "updated_at")
+
+
+@admin.register(LabelEvent)
+class LabelEventAdmin(_ReadOnlyStudyAdmin):
+    """The annotation record: what was labelled, and how it was arrived at."""
+
+    list_display = (
+        "created_at", "participant", "doc_id", "label", "provenance",
+        "suggestion_rank", "agreed_with_model", "model_confidence",
+        "dwell_ms", "modality", "sequence_index",
+    )
+    list_filter = ("action", "provenance", "agreed_with_model", "bulk",
+                   "is_revision", "modality", "model_id")
+    search_fields = ("user__participant_code", "user__email", "doc_id", "label")
+    readonly_fields = tuple(f.name for f in LabelEvent._meta.fields)
+    date_hierarchy = "created_at"
+    change_list_template = "admin/web/labelevent/change_list.html"
+    actions = ["export_selected_csv"]
+
+    @admin.display(description=_("Participant"), ordering="user__participant_code")
+    def participant(self, obj):
+        return obj.user.export_id if obj.user_id else "\u2014"
+
+    def get_urls(self):
+        from django.urls import path
+
+        return [
+            path(
+                "labels.csv",
+                self.admin_site.admin_view(self.labels_csv),
+                name="web_labelevent_labels_csv",
+            ),
+        ] + super().get_urls()
+
+    EXPORT_COLUMNS = [
+        "created_at", "participant", "study_group", "dashboard", "sequence_index",
+        "doc_id", "action", "label", "provenance", "suggestion_rank",
+        "suggestions_shown", "model_label", "model_confidence", "agreed_with_model",
+        "bulk", "is_revision", "previous_label", "dwell_ms", "modality",
+    ]
+
+    def _stream(self, queryset, filename):
+        import csv as _csv
+        import json as _json
+
+        from django.http import StreamingHttpResponse
+
+        class _Echo:
+            def write(self, value):
+                return value
+
+        writer = _csv.writer(_Echo())
+        qs = queryset.select_related("user", "study_group").order_by(
+            "user__participant_code", "user_id", "sequence_index", "id"
+        )
+
+        def rows():
+            yield writer.writerow(self.EXPORT_COLUMNS)
+            for e in qs.iterator(chunk_size=2000):
+                yield writer.writerow([
+                    e.created_at.isoformat(),
+                    e.user.export_id if e.user_id else "",
+                    e.study_group.name if e.study_group_id else "",
+                    e.model_id,
+                    e.sequence_index,
+                    e.doc_id,
+                    e.action,
+                    e.label,
+                    e.provenance,
+                    e.suggestion_rank if e.suggestion_rank is not None else "",
+                    _json.dumps(e.suggestions_shown, separators=(",", ":")) if e.suggestions_shown else "",
+                    e.model_label,
+                    e.model_confidence if e.model_confidence is not None else "",
+                    "" if e.agreed_with_model is None else int(e.agreed_with_model),
+                    int(e.bulk),
+                    int(e.is_revision),
+                    e.previous_label,
+                    e.dwell_ms if e.dwell_ms is not None else "",
+                    e.modality,
+                ])
+
+        resp = StreamingHttpResponse(rows(), content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    def labels_csv(self, request):
+        return self._stream(LabelEvent.objects.all(), "tova-label-events.csv")
+
+    @admin.action(description=_("Export selected label events to CSV"))
+    def export_selected_csv(self, request, queryset):
+        return self._stream(queryset, "tova-label-events-selection.csv")
 
 
 @admin.register(InteractionEvent)

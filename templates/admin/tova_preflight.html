@@ -12,6 +12,18 @@
     is otherwise a paid participant.
   </p>
 
+  {% if mixed_corpora %}
+    <p class="errornote" style="max-width: 52em;">
+      <strong>Conditions are not on the same corpus.</strong>
+      Participants are assigned to dashboards built on
+      {{ mixed_corpora|length }} different corpora:
+      {% for c in mixed_corpora %}<code>{{ c }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
+      This study varies the model backbone over one corpus &mdash; if the corpus
+      varies too, a difference between conditions cannot be attributed to the
+      model. Fix this before recruiting.
+    </p>
+  {% endif %}
+
   {% if any_problems %}
     <p class="errornote" style="max-width: 52em;">
       Some dashboards below are not ready. A row is ready when the model is in
@@ -25,6 +37,7 @@
         <th>{% translate "Status" %}</th>
         <th>{% translate "Dashboard" %}</th>
         <th style="text-align: right;">{% translate "Participants" %}</th>
+        <th>{% translate "Corpus" %}</th>
         <th style="text-align: right;">{% translate "Documents" %}</th>
         <th>{% translate "Active learning" %}</th>
         <th>{% translate "Problem" %}</th>
@@ -53,12 +66,13 @@
             <span style="color: #b7791f;">0</span>
           {% endif %}
         </td>
+        <td><code style="font-size: 11px;">{{ row.corpus_id|default:"&mdash;" }}</code></td>
         <td style="text-align: right;">{{ row.corpus_size|default:"&mdash;" }}</td>
         <td>{{ row.active_learning }}</td>
         <td style="color: #b7791f;">{{ row.error|default:"" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="6">{% translate "No dashboards found." %}</td></tr>
+      <tr><td colspan="7">{% translate "No dashboards found." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
