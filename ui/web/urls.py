@@ -147,8 +147,11 @@ urlpatterns = [
         views.get_topic_renames,
         name="get_topic_renames",
     ),
-    # Study flow: instructions -> task -> post-study -> done
+    # Study flow: consent -> instructions -> task -> post-study -> done
     path("study/login", _x(views.study_login), name="study_login"),
+    path("study/consent", views.study_consent, name="study_consent"),
+    path("study/consent/accept", _x(views.study_consent_accept), name="study_consent_accept"),
+    path("study/consent/declined", views.study_consent_declined, name="study_consent_declined"),
     path("study/instructions", views.study_instructions, name="study_instructions"),
     path("study/begin", _x(views.study_begin), name="study_begin"),
     path("study/task", views.study_task, name="study_task"),

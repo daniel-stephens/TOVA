@@ -1,0 +1,337 @@
+{% comment %}
+Consent screen for the TOVA CorpusBio study (UMD IRB package 1936243-1).
+
+The study runs on IMPLIED CONSENT: the participant consents by clicking
+through, and there is no signed form. That makes the text on this page the
+consent instrument itself.
+
+Everything inside .consent-text is reproduced VERBATIM from the approved
+document ("TOVA CorpusBio - consent document revised.docx"). Do not paraphrase,
+summarise, reorder or "tighten" it. The paragraph breaks follow the sentence
+groupings already present in the source. If the wording ever changes, change
+web.study_flow.CONSENT_VERSION in the same commit so each participant's record
+says which version they agreed to.
+
+The "at a glance" band above it is explicitly labelled as orientation, draws
+only on facts stated in the approved text, and does not replace it.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — Consent to participate</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --panel: #f7f8fa;
+    --blue: #2f6fed;
+    --blue-bg: #eaf0fe;
+    --green: #1a8f5f;
+    --amber: #b7791f;
+    --amber-bg: #fbf3e6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #ffffff;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  .brand .page { color: #9aa0aa; font-size: 14px; }
+  header .status { color: #9aa0aa; font-size: 13px; }
+
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+  }
+
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px; }
+  .lede {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 28px;
+  }
+
+  /* Orientation only. Explicitly not a substitute for the consent text. */
+  .glance {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 18px 20px 16px;
+    margin: 0 0 14px;
+  }
+  .glance h2 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .glance dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    gap: 9px 18px;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .glance dt { color: var(--muted); }
+  .glance dd { margin: 0; }
+  .glance .note {
+    margin: 15px 0 0;
+    padding-top: 13px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  .content-note {
+    border-left: 3px solid var(--amber);
+    background: var(--amber-bg);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 0 0 30px;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  .content-note b { color: var(--amber); }
+
+  .consent-text {
+    font-size: 15px;
+    line-height: 1.72;
+  }
+  .consent-text p { margin: 0 0 17px; }
+
+  .investigator {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 15px 18px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .investigator .who { font-weight: 600; }
+  .investigator .where, .investigator a { color: var(--muted); }
+  .investigator a { text-decoration: none; }
+  .investigator a:hover { text-decoration: underline; }
+
+  .attestation {
+    border: 1px solid var(--blue);
+    background: var(--blue-bg);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin: 30px 0 22px;
+  }
+  .attestation p {
+    margin: 0 0 18px;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .begin {
+    appearance: none;
+    border: 0;
+    border-radius: 8px;
+    background: var(--blue);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px 26px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .begin:hover { background: #2560d8; }
+  .decline {
+    color: var(--muted);
+    font-size: 13.5px;
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1px;
+  }
+  .decline:hover { color: var(--ink); border-bottom-color: var(--muted); }
+
+  .footer-note {
+    margin: 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+  .footer-note a { color: var(--muted); }
+  .print-link {
+    display: inline-block;
+    margin-top: 10px;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--blue);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* "You may download or print a copy of this page for your records." */
+  @media print {
+    header, .actions, .print-link, .glance { display: none !important; }
+    body { color: #000; }
+    main { max-width: none; padding: 0; }
+    .consent-text { font-size: 12pt; line-height: 1.6; }
+    .attestation, .investigator, .content-note {
+      border: 1px solid #999;
+      background: none;
+    }
+    a[href^="mailto:"]::after { content: " (" attr(href) ")"; }
+  }
+</style>
+</head>
+<body>
+
+<header data-no-log>
+  <div class="brand">
+    <span class="logo">TOVA</span>
+    <span class="page">Consent to participate</span>
+  </div>
+  <div class="status">University of Maryland</div>
+</header>
+
+<main>
+  <h1>Consent to participate in this research</h1>
+  <p class="lede">Please read this in full before deciding. Taking part is your choice, and you
+    can stop at any point without giving a reason.</p>
+
+  <section class="glance" aria-label="Summary">
+    <h2>At a glance</h2>
+    <dl>
+      <dt>What you'll do</dt>
+      <dd>Explore approximately 600 synthetic internal emails using one assigned interface.</dd>
+
+      <dt>Exploration time</dt>
+      <dd>A fixed {{ task_minutes }}-minute period.</dd>
+
+      <dt>Then</dt>
+      <dd>Four true/false/not-sure questions and four written questions, answered from memory.</dd>
+
+      <dt>Total time</dt>
+      <dd>Approximately 30 to 60 minutes.</dd>
+
+      <dt>Payment</dt>
+      <dd>Stated in the recruitment posting before you begin.</dd>
+
+      <dt>Taking part</dt>
+      <dd>Completely voluntary. You may skip a question or stop at any time.</dd>
+    </dl>
+    <p class="note">This summary is here to orient you. The full text below is what you are
+      agreeing to, and it is the part that counts.</p>
+  </section>
+
+  <p class="content-note">
+    <b>Content note.</b> The fictional emails discuss organizational misconduct, data
+    manipulation, and gene-therapy safety issues.
+  </p>
+
+  <div class="consent-text">
+    <p>Your participation in this research is completely voluntary. You may choose not to take
+      part at all. If you decide to participate in this research, you may stop participating at
+      any time. If you decide not to participate in this study or if you stop participating at
+      any time, you will not be penalized or lose any benefits to which you otherwise qualify.
+      If you decide to stop taking part in the study, if you have questions, concerns, or
+      complaints, or if you need to report an injury related to the research, please contact the
+      investigator:</p>
+
+    <div class="investigator">
+      <div class="who">Jordan Boyd-Graber</div>
+      <div class="where">Iribe 4146 University of Maryland</div>
+      <div><a href="mailto:jbg@umiacs.umd.edu">jbg@umiacs.umd.edu</a></div>
+      <div class="where">(301) 405-6766</div>
+    </div>
+
+    <p>For this study, you will explore approximately 600 synthetic internal emails from a
+      fictional biotechnology organization using one assigned interface. Some interfaces use
+      large language models (LLMs) to generate topics or labels. AI-generated information may be
+      inaccurate or incomplete. During a fixed 30-minute exploration period, you will browse
+      emails and work with the assigned tool. You will be told the general kinds of questions
+      that will follow, but not the exact questions. When exploration ends, the tool will close
+      and you will answer four true/false/not-sure questions and four written questions from
+      memory. You may also select the email IDs that support your written answers. You will not
+      be able to reopen the emails during the questionnaire.</p>
+
+    <p>You may participate independently or in a live remote one-on-one session. In a moderated
+      session, you will share only the study-tool window, think aloud, and answer neutral
+      questions about how you use and learn from the tool. The researcher will take written
+      notes. No audio, video, screenshots, or screen recording will occur. The full study will
+      take approximately 30 to 60 minutes. Payment and any bonus terms will be stated in the
+      approved recruitment posting before you begin.</p>
+
+    <p>Research records may include your questionnaire responses; selected supporting email IDs;
+      themes, topics, or labels displayed or edited during the session; AI interactions where
+      applicable; application logs such as time, emails opened, queries, retrieval results, and
+      topic or label edits; and moderated-session notes where applicable. Data will be linked
+      only to a study-specific code. A recruitment platform may display account information for
+      scheduling and payment, but it will not be copied into the analytic dataset. Please do not
+      enter or say identifying information. The fictional emails discuss organizational
+      misconduct, data manipulation, and gene-therapy safety issues. You may skip a question,
+      stop screen sharing, or stop participation at any time. There are no direct benefits.
+      De-identified responses and AI interactions may be included in research publications or
+      released research datasets.</p>
+
+    <p>The research team will use coded responses, selected evidence, themes or labels,
+      applicable AI interactions, application logs, and moderated-session notes to compare
+      factual learning, cross-document reasoning, evidence use, and interaction patterns across
+      the assigned interfaces. Data will be reviewed and anonymized before any public release,
+      and results will be reported without direct identifiers.</p>
+  </div>
+
+  <section class="attestation">
+    <p>If you click the link below to continue, you confirm that you are at least 18 years old,
+      are located in and will participate from the United States, and consent to participate in
+      this study.</p>
+    <form method="post" action="{% url 'web:study_consent_accept' %}" class="actions">
+      {% csrf_token %}
+      <button type="submit" class="begin" data-log="consent_accept">
+        I consent — continue
+      </button>
+      <a class="decline" data-log="consent_decline"
+         href="{% url 'web:study_consent_declined' %}">I do not wish to take part</a>
+    </form>
+  </section>
+
+  <p class="footer-note">
+    Note: This project has been reviewed by the University of Maryland Institutional Review
+    Board (<a href="mailto:{{ irb_email }}">{{ irb_email }}</a>; Package Number {{ irb_package }}).
+    <br>
+    <button type="button" class="print-link" id="printConsent" data-log="consent_print">
+      Download or print a copy of this page for your records
+    </button>
+  </p>
+</main>
+
+<script>
+  (function () {
+    var btn = document.getElementById('printConsent');
+    if (btn) { btn.addEventListener('click', function () { window.print(); }); }
+  })();
+</script>
+
+{% include "study/_telemetry.html" %}
+
+</body>
+</html>

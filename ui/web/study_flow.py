@@ -41,6 +41,28 @@ def task_minutes() -> int:
 
 
 # ---------------------------------------------------------------------------
+# Informed consent
+# ---------------------------------------------------------------------------
+
+#: Identifies the consent text a participant was shown, stamped onto their
+#: session when they consent.
+#:
+#: The study runs under UMD IRB package 1936243-1 on *implied* consent: the
+#: participant consents by clicking through, and there is no signed form. That
+#: makes the rendered text the consent instrument itself, so it is reproduced
+#: verbatim in ``templates/study/consent.html`` -- never paraphrased, summarised
+#: or reordered. Bump this constant in the same commit as any change to that
+#: wording, so the export always says which version each participant agreed to.
+#:
+#: Source: "TOVA CorpusBio - consent document revised.docx".
+CONSENT_VERSION = "corpusbio-2026-08-30-revised"
+
+#: IRB identifiers shown to participants and carried into the export.
+IRB_PACKAGE_NUMBER = "1936243-1"
+IRB_CONTACT_EMAIL = "irb@umd.edu"
+
+
+# ---------------------------------------------------------------------------
 # Post-study instrument
 # ---------------------------------------------------------------------------
 
@@ -135,6 +157,14 @@ _AL_URL_NAMES = {
 }
 
 STAGE_URL_NAMES = {
+    # Nothing but the consent page itself is reachable before consenting -- not
+    # the instructions, and not the tool.
+    ParticipantSession.STAGE_CONSENT: {
+        "study_consent",
+        "study_consent_accept",
+        "study_consent_declined",
+        "study_events",
+    },
     ParticipantSession.STAGE_INSTRUCTIONS: {"study_instructions", "study_begin", "study_events"},
     ParticipantSession.STAGE_TASK: _TASK_URL_NAMES,
     # study_timer/study_finish stay reachable after the task so the countdown
@@ -230,7 +260,25 @@ def stage_redirect_url(session: ParticipantSession) -> str:
         return reverse("web:study_post")
     if session.stage == ParticipantSession.STAGE_DONE:
         return reverse("web:study_done")
-    return reverse("web:study_instructions")
+    if session.stage == ParticipantSession.STAGE_INSTRUCTIONS:
+        return reverse("web:study_instructions")
+    return reverse("web:study_consent")
+
+
+def record_consent(session: ParticipantSession) -> ParticipantSession:
+    """Record implied consent and open the instructions. Idempotent.
+
+    Re-POSTing never restamps the timestamp: the first click is the one that
+    happened, and an accidental double-submit must not rewrite the record.
+    """
+    if session.consented_at is not None:
+        return session
+
+    session.consented_at = timezone.now()
+    session.consent_version = CONSENT_VERSION
+    session.advance_to(ParticipantSession.STAGE_INSTRUCTIONS)
+    session.save(update_fields=["consented_at", "consent_version", "stage"])
+    return session
 
 
 def has_submitted(user) -> bool:

@@ -1,0 +1,62 @@
+{% comment %}
+Shown to a participant who declines consent. Their session is left at the
+consent stage and never started, so nothing about them enters the analytic
+dataset beyond the account the research team created.
+
+Deliberately offers no "are you sure?" and no path back into the study on this
+page -- declining has to be as easy as consenting, or it isn't really a choice.
+Returning to the consent screen is still possible by navigating back, which is
+the participant's own action rather than a prompt from us.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — You have not taken part</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: #16181d;
+    background: #ffffff;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  header .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  header .page { color: #9aa0aa; font-size: 14px; }
+  main {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 72px 24px;
+    text-align: center;
+  }
+  h1 { font-size: 21px; font-weight: 600; margin: 0 0 14px; }
+  p { color: #6b7280; font-size: 14.5px; line-height: 1.7; margin: 0 0 14px; }
+  a { color: #6b7280; }
+</style>
+</head>
+<body>
+
+<header data-no-log>
+  <span class="logo">TOVA</span>
+  <span class="page">No longer taking part</span>
+</header>
+
+<main>
+  <h1>You have not taken part in this study</h1>
+  <p>Nothing has been recorded, and there is nothing further to do. You can close this window.</p>
+  <p>If you reached this page by accident, or have questions about the study, contact the
+    research team who invited you, or the University of Maryland Institutional Review Board at
+    <a href="mailto:{{ irb_email }}">{{ irb_email }}</a>.</p>
+</main>
+
+</body>
+</html>

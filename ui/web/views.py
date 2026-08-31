@@ -3882,6 +3882,56 @@ def _study_session(request):
 
 
 @login_required
+def study_consent(request):
+    """The consent screen: the first thing a participant sees.
+
+    The study runs on implied consent, so this page *is* the consent
+    instrument. The text is reproduced verbatim from the approved document; the
+    only liberties taken are presentational (a summary band, headings, print
+    styles), never editorial.
+    """
+    session = _study_session(request)
+    return render(
+        request,
+        "study/consent.html",
+        {
+            "session": session,
+            "task_minutes": study_flow.task_minutes(),
+            "consent_version": study_flow.CONSENT_VERSION,
+            "irb_package": study_flow.IRB_PACKAGE_NUMBER,
+            "irb_email": study_flow.IRB_CONTACT_EMAIL,
+        },
+    )
+
+
+@login_required
+def study_consent_accept(request):
+    """Record implied consent. The click is the consent."""
+    if request.method != "POST":
+        return redirect(reverse("web:study_consent"))
+    session = _study_session(request)
+    study_flow.record_consent(session)
+    _log_audit(
+        request,
+        "study_consent",
+        "study",
+        str(request.user.pk),
+        session.consent_version,
+    )
+    return redirect(reverse("web:study_instructions"))
+
+
+@login_required
+def study_consent_declined(request):
+    """Shown to someone who declines. Their session is left un-started."""
+    return render(
+        request,
+        "study/declined.html",
+        {"irb_email": study_flow.IRB_CONTACT_EMAIL},
+    )
+
+
+@login_required
 def study_instructions(request):
     session = _study_session(request)
     corpus_size = None

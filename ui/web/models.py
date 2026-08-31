@@ -132,24 +132,33 @@ class ChatMessage(models.Model):
 class ParticipantSession(models.Model):
     """Tracks a study participant's progress through the flow.
 
-    Stages advance monotonically: instructions -> task -> post_study -> done.
+    Stages advance monotonically:
+    consent -> instructions -> task -> post_study -> done.
     ``study_group`` and ``model_id`` are snapshotted when the task begins so an
     admin retargeting a group mid-study cannot move a running participant onto a
     different model.
     """
 
+    STAGE_CONSENT = "consent"
     STAGE_INSTRUCTIONS = "instructions"
     STAGE_TASK = "task"
     STAGE_POST = "post_study"
     STAGE_DONE = "done"
 
     STAGE_CHOICES = [
+        (STAGE_CONSENT, "Consent"),
         (STAGE_INSTRUCTIONS, "Instructions"),
         (STAGE_TASK, "Exploration task"),
         (STAGE_POST, "Post-study questions"),
         (STAGE_DONE, "Complete"),
     ]
-    STAGE_ORDER = [STAGE_INSTRUCTIONS, STAGE_TASK, STAGE_POST, STAGE_DONE]
+    STAGE_ORDER = [
+        STAGE_CONSENT,
+        STAGE_INSTRUCTIONS,
+        STAGE_TASK,
+        STAGE_POST,
+        STAGE_DONE,
+    ]
 
     user = models.OneToOneField(
         User, models.CASCADE, primary_key=True, related_name="participant_session"
@@ -162,8 +171,16 @@ class ParticipantSession(models.Model):
     # change the condition a running participant is already in.
     active_learning = models.BooleanField(default=True)
     stage = models.CharField(
-        max_length=16, choices=STAGE_CHOICES, default=STAGE_INSTRUCTIONS, db_index=True
+        max_length=16, choices=STAGE_CHOICES, default=STAGE_CONSENT, db_index=True
     )
+
+    # Informed consent. The study runs on implied consent -- a participant
+    # consents by clicking through -- so the record of it is this timestamp plus
+    # the version of the text they were shown. Storing the version means a later
+    # revision to the consent document stays attributable per participant
+    # instead of being retconned across the whole dataset.
+    consented_at = models.DateTimeField(null=True, blank=True)
+    consent_version = models.CharField(max_length=64, blank=True)
 
     task_started_at = models.DateTimeField(null=True, blank=True)
     task_ends_at = models.DateTimeField(null=True, blank=True)

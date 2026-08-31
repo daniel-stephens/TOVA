@@ -24,6 +24,91 @@ from web import study_flow
 from web.services import runtime as R
 
 
+def consent_for(user):
+    """Put *user* past the consent gate, the way clicking through would.
+
+    Consent is stage one for every participant, so tests that are about a later
+    stage need this to get there. Goes through ``study_flow.record_consent`` so
+    the stamp and the stage transition stay identical to production.
+    """
+    return study_flow.record_consent(study_flow.get_or_create_session(user))
+
+
+def visible_text(html: str) -> str:
+    """Rendered text with tags dropped and whitespace collapsed.
+
+    Lets a test assert on what a participant actually reads, independent of how
+    the markup happens to be wrapped in the template source.
+    """
+    import re
+
+    text = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = (
+        text.replace("&mdash;", "—")
+        .replace("&amp;", "&")
+        .replace("&nbsp;", " ")
+        .replace("&#x27;", "'")
+        .replace("&#39;", "'")
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
+
+#: The approved consent text, paragraph by paragraph, exactly as it appears in
+#: "TOVA CorpusBio - consent document revised.docx". The study runs on implied
+#: consent, so this wording *is* the instrument -- if a well-meaning edit ever
+#: paraphrases or trims it on the page, that is a protocol deviation, and this
+#: is the test that catches it.
+APPROVED_CONSENT_PARAGRAPHS = [
+    "Your participation in this research is completely voluntary. You may choose not to take "
+    "part at all. If you decide to participate in this research, you may stop participating at "
+    "any time. If you decide not to participate in this study or if you stop participating at "
+    "any time, you will not be penalized or lose any benefits to which you otherwise qualify. "
+    "If you decide to stop taking part in the study, if you have questions, concerns, or "
+    "complaints, or if you need to report an injury related to the research, please contact the "
+    "investigator:",
+
+    "For this study, you will explore approximately 600 synthetic internal emails from a "
+    "fictional biotechnology organization using one assigned interface. Some interfaces use "
+    "large language models (LLMs) to generate topics or labels. AI-generated information may be "
+    "inaccurate or incomplete. During a fixed 30-minute exploration period, you will browse "
+    "emails and work with the assigned tool. You will be told the general kinds of questions "
+    "that will follow, but not the exact questions. When exploration ends, the tool will close "
+    "and you will answer four true/false/not-sure questions and four written questions from "
+    "memory. You may also select the email IDs that support your written answers. You will not "
+    "be able to reopen the emails during the questionnaire.",
+
+    "You may participate independently or in a live remote one-on-one session. In a moderated "
+    "session, you will share only the study-tool window, think aloud, and answer neutral "
+    "questions about how you use and learn from the tool. The researcher will take written "
+    "notes. No audio, video, screenshots, or screen recording will occur. The full study will "
+    "take approximately 30 to 60 minutes. Payment and any bonus terms will be stated in the "
+    "approved recruitment posting before you begin.",
+
+    "Research records may include your questionnaire responses; selected supporting email IDs; "
+    "themes, topics, or labels displayed or edited during the session; AI interactions where "
+    "applicable; application logs such as time, emails opened, queries, retrieval results, and "
+    "topic or label edits; and moderated-session notes where applicable. Data will be linked "
+    "only to a study-specific code. A recruitment platform may display account information for "
+    "scheduling and payment, but it will not be copied into the analytic dataset. Please do not "
+    "enter or say identifying information. The fictional emails discuss organizational "
+    "misconduct, data manipulation, and gene-therapy safety issues. You may skip a question, "
+    "stop screen sharing, or stop participation at any time. There are no direct benefits. "
+    "De-identified responses and AI interactions may be included in research publications or "
+    "released research datasets.",
+
+    "The research team will use coded responses, selected evidence, themes or labels, "
+    "applicable AI interactions, application logs, and moderated-session notes to compare "
+    "factual learning, cross-document reasoning, evidence use, and interaction patterns across "
+    "the assigned interfaces. Data will be reviewed and anonymized before any public release, "
+    "and results will be reported without direct identifiers.",
+
+    "If you click the link below to continue, you confirm that you are at least 18 years old, "
+    "are located in and will participate from the United States, and consent to participate in "
+    "this study.",
+]
+
+
 def read_template_source(relative_path: str) -> str:
     """Read a template's raw source off disk, wherever the checkout is rooted.
 
@@ -59,8 +144,18 @@ class StudyFlowTestCase(TestCase):
             email="admin@example.com", password="pw", is_staff=True
         )
 
-    def login_participant(self):
+    def login_participant(self, consent=True):
+        """Sign a participant in, past the consent gate by default.
+
+        Consent is the first stage, so almost every test here would otherwise
+        spend its first line clicking through it to reach the behaviour it
+        actually cares about. Recorded directly rather than over HTTP so these
+        tests do not depend on the consent view to test the timer or the
+        questionnaire. Pass ``consent=False`` to sit at the gate itself.
+        """
         self.client.force_login(self.participant)
+        if consent:
+            consent_for(self.participant)
 
 
 class StageGatingTests(StudyFlowTestCase):
@@ -137,6 +232,7 @@ class DashboardOnlyGatingTests(TestCase):
             email="p001@study.local", password="pw", study_model_id="m_solo"
         )
         self.client.force_login(self.participant)
+        consent_for(self.participant)
 
     def test_is_treated_as_a_participant(self):
         from web.study_features import is_study_participant
@@ -173,6 +269,120 @@ class DashboardOnlyGatingTests(TestCase):
         session = ParticipantSession.objects.get(pk=self.participant.pk)
         self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
         self.assertEqual(session.model_id, "m_solo")
+
+
+class ConsentTests(StudyFlowTestCase):
+    """The study runs on implied consent, so the click is the record."""
+
+    def test_participants_land_on_consent_first(self):
+        self.login_participant(consent=False)
+        resp = self.client.get(reverse("web:study_instructions"))
+        self.assertRedirects(
+            resp, reverse("web:study_consent"), fetch_redirect_response=False
+        )
+
+    def test_nothing_else_is_reachable_before_consenting(self):
+        self.login_participant(consent=False)
+        for name in ("study_instructions", "study_post", "study_done", "dashboard"):
+            with self.subTest(route=name):
+                resp = self.client.get(reverse(f"web:{name}"))
+                self.assertEqual(resp.status_code, 302, name)
+                self.assertIn(reverse("web:study_consent"), resp["Location"], name)
+
+    def test_cannot_begin_the_task_before_consenting(self):
+        self.login_participant(consent=False)
+        self.client.post(reverse("web:study_begin"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_CONSENT)
+        self.assertIsNone(session.task_started_at)
+
+    def test_renders_the_approved_text_verbatim(self):
+        """Every approved paragraph, word for word. See the constant's comment."""
+        self.login_participant(consent=False)
+        resp = self.client.get(reverse("web:study_consent"))
+        self.assertEqual(resp.status_code, 200)
+        rendered = visible_text(resp.content.decode())
+
+        for i, paragraph in enumerate(APPROVED_CONSENT_PARAGRAPHS):
+            with self.subTest(paragraph=i):
+                self.assertIn(
+                    paragraph,
+                    rendered,
+                    f"approved consent paragraph {i} is missing or was reworded",
+                )
+
+    def test_page_carries_the_investigator_and_irb_identifiers(self):
+        self.login_participant(consent=False)
+        rendered = visible_text(
+            self.client.get(reverse("web:study_consent")).content.decode()
+        )
+        self.assertIn("Jordan Boyd-Graber", rendered)
+        self.assertIn("jbg@umiacs.umd.edu", rendered)
+        self.assertIn("(301) 405-6766", rendered)
+        self.assertIn(study_flow.IRB_PACKAGE_NUMBER, rendered)
+        self.assertIn(study_flow.IRB_CONTACT_EMAIL, rendered)
+
+    def test_participants_can_print_a_copy_for_their_records(self):
+        """The approved text promises this affordance explicitly."""
+        self.login_participant(consent=False)
+        body = self.client.get(reverse("web:study_consent")).content.decode()
+        self.assertIn("window.print()", body)
+        self.assertIn("@media print", body)
+
+    def test_accepting_records_consent_and_advances(self):
+        self.login_participant(consent=False)
+        resp = self.client.post(reverse("web:study_consent_accept"))
+        self.assertRedirects(
+            resp, reverse("web:study_instructions"), fetch_redirect_response=False
+        )
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_INSTRUCTIONS)
+        self.assertIsNotNone(session.consented_at)
+        self.assertEqual(session.consent_version, study_flow.CONSENT_VERSION)
+
+    def test_accepting_twice_does_not_restamp(self):
+        """An accidental double-submit must not rewrite when consent happened."""
+        self.login_participant(consent=False)
+        self.client.post(reverse("web:study_consent_accept"))
+        first = ParticipantSession.objects.get(pk=self.participant.pk).consented_at
+
+        self.client.post(reverse("web:study_consent_accept"))
+        again = ParticipantSession.objects.get(pk=self.participant.pk).consented_at
+        self.assertEqual(first, again)
+
+    def test_get_on_the_accept_route_does_not_consent(self):
+        self.login_participant(consent=False)
+        self.client.get(reverse("web:study_consent_accept"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertIsNone(session.consented_at)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_CONSENT)
+
+    def test_declining_records_nothing_and_starts_nothing(self):
+        self.login_participant(consent=False)
+        resp = self.client.get(reverse("web:study_consent_declined"))
+        self.assertEqual(resp.status_code, 200)
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertIsNone(session.consented_at)
+        self.assertIsNone(session.task_started_at)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_CONSENT)
+
+    def test_a_version_bump_does_not_disturb_someone_already_running(self):
+        """Their record keeps the version they actually agreed to."""
+        self.login_participant(consent=False)
+        self.client.post(reverse("web:study_consent_accept"))
+        self.client.post(reverse("web:study_begin"))
+
+        with mock.patch.object(study_flow, "CONSENT_VERSION", "some-later-version"):
+            self.client.get(reverse("web:study_task"))
+            session = ParticipantSession.objects.get(pk=self.participant.pk)
+            self.assertEqual(session.consent_version, "corpusbio-2026-08-30-revised")
+            self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
+
+    def test_stage_still_never_moves_backwards(self):
+        session = study_flow.get_or_create_session(self.participant)
+        session.advance_to(ParticipantSession.STAGE_TASK)
+        self.assertFalse(session.advance_to(ParticipantSession.STAGE_CONSENT))
+        self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
 
 
 class TimerTests(StudyFlowTestCase):
@@ -345,6 +555,7 @@ class TopicRenameTests(StudyFlowTestCase):
             self.assertEqual(renames["topic_labels"], {"3": "Approval oversight"})
 
             self.client.force_login(other)
+            consent_for(other)
             self.client.post(reverse("web:study_begin"))
             other_renames = self.client.get(
                 reverse("web:get_topic_renames", args=["m_test"])
@@ -418,7 +629,9 @@ class StudyDocsTests(StudyFlowTestCase):
     TOPIC_ID = {"d1": "0", "d2": "1", "d3": "1"}
 
     def advance_to_post(self, user=None):
-        self.client.force_login(user or self.participant)
+        subject = user or self.participant
+        self.client.force_login(subject)
+        consent_for(subject)
         self.client.post(reverse("web:study_begin"))
         self.client.post(reverse("web:study_finish"))
 
@@ -1036,6 +1249,16 @@ class StudyLoginTests(StudyFlowTestCase):
         self.assertEqual(a, b)
 
     def test_signing_in_lands_on_the_current_stage(self):
+        resp = self.client.post(
+            reverse("web:study_login"),
+            {"email": self.participant.email, "password": "pw"},
+        )
+        self.assertRedirects(
+            resp, reverse("web:study_consent"), fetch_redirect_response=False
+        )
+
+    def test_signing_in_again_lands_on_the_stage_they_reached(self):
+        consent_for(self.participant)
         resp = self.client.post(
             reverse("web:study_login"),
             {"email": self.participant.email, "password": "pw"},
