@@ -1938,6 +1938,107 @@ class WiderInteractionCaptureTests(StudyFlowTestCase):
         )
 
 
+class StudyResponseExportTests(TestCase):
+    """The outcome data had no export at all; this is the analysis file."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.group = StudyGroup.objects.create(name="Cond A", slug="cond-a")
+        self.p1 = User.objects.create_user(
+            email="p001@study.local", password="pw", study_model_id="m_alpha",
+            study_group=self.group, participant_code="p001",
+        )
+        session = study_flow.get_or_create_session(self.p1)
+        study_flow.record_consent(session)
+        study_flow.begin_task(session, self.p1)
+        study_flow.finish_task(session, early=True)
+        StudyResponse.objects.create(
+            user=self.p1,
+            study_group=self.group,
+            model_id="m_alpha",
+            tf_answers={"tf1": "true", "tf2": "true", "tf3": "declined"},
+            tf_score=1,
+            tf_answered=2,
+            open_answers={
+                "motive": {"text": "The settlement, ended it.", "citations": ["d1", "d2"]},
+                "connections": {"text": "", "citations": []},
+                "timeline": {"text": "Eight months", "citations": []},
+                "threads": {"text": "Separate", "citations": []},
+            },
+            task_duration_s=421,
+            form_duration_ms=90000,
+        )
+        self.url = reverse("admin:web_studyresponse_responses_csv")
+
+    def body(self, resp):
+        return b"".join(resp.streaming_content).decode()
+
+    def rows(self):
+        import csv, io
+
+        return list(csv.reader(io.StringIO(self.body(self.client.get(self.url)))))
+
+    def test_one_row_per_participant(self):
+        rows = self.rows()
+        self.assertEqual(len(rows), 2, "header plus one response")
+
+    def test_columns_cover_the_instrument_and_the_condition(self):
+        header = self.rows()[0]
+        for col in ("participant", "dashboard", "study_group", "active_learning",
+                    "consent_version", "consented_at", "task_duration_s",
+                    "finished_early", "tf1", "tf1_correct", "tf_score",
+                    "tf_answered", "motive", "motive_citations", "submitted_at"):
+            self.assertIn(col, header)
+
+    def test_row_carries_the_values(self):
+        header, row = self.rows()
+        record = dict(zip(header, row))
+        self.assertEqual(record["participant"], "p001")
+        self.assertEqual(record["dashboard"], "m_alpha")
+        self.assertEqual(record["study_group"], "Cond A")
+        self.assertEqual(record["consent_version"], study_flow.CONSENT_VERSION)
+        self.assertEqual(record["tf_score"], "1")
+        self.assertEqual(record["tf_answered"], "2")
+        self.assertEqual(record["finished_early"], "1")
+        self.assertEqual(record["active_learning"], "1")
+        self.assertEqual(record["tf1"], "true")
+        self.assertEqual(record["tf1_correct"], "1")
+        self.assertEqual(record["tf2_correct"], "0", "tf2's key is false")
+        self.assertEqual(record["tf3"], "declined")
+        self.assertEqual(record["motive_citations"], "d1 d2")
+        self.assertEqual(record["connections"], "")
+
+    def test_commas_and_unicode_survive_the_round_trip(self):
+        """A free-text answer is the most likely thing to break a CSV."""
+        response = StudyResponse.objects.get()
+        response.open_answers["motive"]["text"] = 'He said "no", then — 🙂\nnew line'
+        response.save()
+        record = dict(zip(*self.rows()))
+        self.assertEqual(record["motive"], 'He said "no", then — 🙂\nnew line')
+
+    def test_export_carries_no_email_addresses(self):
+        self.assertNotIn("@", self.body(self.client.get(self.url)))
+
+    def test_empty_export_is_a_valid_header_only_file(self):
+        StudyResponse.objects.all().delete()
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertIn("participant", rows[0])
+
+    def test_a_response_without_a_session_does_not_break_the_export(self):
+        """Defensive: the export must not 500 on an odd row."""
+        ParticipantSession.objects.all().delete()
+        record = dict(zip(*self.rows()))
+        self.assertEqual(record["participant"], "p001")
+        self.assertEqual(record["consent_version"], "")
+        self.assertEqual(record["active_learning"], "")
+
+    def test_download_link_is_on_the_changelist(self):
+        resp = self.client.get(reverse("admin:web_studyresponse_changelist"))
+        self.assertContains(resp, self.url)
+
+
 class InteractionCsvExportTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email="root@example.com", password="pw")

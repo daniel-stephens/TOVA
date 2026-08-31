@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
+from web import study_flow
 from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
 from web.models import (
     AuditLog,
@@ -55,6 +56,11 @@ def participant_code_for(email: str) -> str | None:
     if domain not in STUDY_LOGIN_DOMAINS:
         return None
     return local or None
+
+
+def _iso(value):
+    """ISO-8601 for a datetime, empty string for None. Keeps CSV cells uniform."""
+    return value.isoformat() if value else ""
 
 
 def available_dashboards() -> list[tuple[str, str]]:
@@ -774,15 +780,23 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
 
 @admin.register(StudyResponse)
 class StudyResponseAdmin(_ReadOnlyStudyAdmin):
-    list_display = ("user", "study_group", "tf_score", "task_duration_s", "submitted_at")
-    list_filter = ("study_group", "tf_score")
-    search_fields = ("user__email", "model_id")
+    list_display = (
+        "participant",
+        "study_group",
+        "tf_score",
+        "tf_answered",
+        "task_duration_s",
+        "submitted_at",
+    )
+    list_filter = ("study_group", "tf_score", "model_id")
+    search_fields = ("user__email", "user__participant_code", "model_id")
     readonly_fields = (
         "user",
         "study_group",
         "model_id",
         "tf_answers",
         "tf_score",
+        "tf_answered",
         "open_answers",
         "payload",
         "task_duration_s",
@@ -790,6 +804,115 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
         "submitted_at",
     )
     date_hierarchy = "submitted_at"
+    change_list_template = "admin/web/studyresponse/change_list.html"
+    actions = ["export_selected_csv"]
+
+    @admin.display(description=_("Participant"), ordering="user__participant_code")
+    def participant(self, obj):
+        return obj.user.export_id if obj.user_id else "—"
+
+    def get_urls(self):
+        from django.urls import path
+
+        return [
+            path(
+                "responses.csv",
+                self.admin_site.admin_view(self.responses_csv),
+                name="web_studyresponse_responses_csv",
+            ),
+        ] + super().get_urls()
+
+    # ------------------------------------------------------------------
+    # Analysis export
+    # ------------------------------------------------------------------
+
+    #: One row per participant. Deliberately flat -- the point is a file that
+    #: goes straight into R or pandas without unpacking JSON blobs by hand.
+    @property
+    def EXPORT_COLUMNS(self):
+        cols = [
+            "participant", "dashboard", "study_group", "active_learning",
+            "consent_version", "consented_at",
+            "task_started_at", "task_completed_at", "task_duration_s",
+            "finished_early", "moderated",
+        ]
+        for key in study_flow.TF_KEY:
+            cols += [key, f"{key}_correct"]
+        cols += ["tf_score", "tf_answered"]
+        for key in study_flow.OPEN_QUESTIONS:
+            cols += [key, f"{key}_citations"]
+        cols += ["form_duration_ms", "submitted_at"]
+        return cols
+
+    def _stream_responses(self, queryset, filename):
+        """Stream one row per participant, keyed by study code.
+
+        Streamed and iterated the same way as the interaction export so a large
+        cohort does not have to fit in memory.
+        """
+        import csv as _csv
+
+        from django.http import StreamingHttpResponse
+
+        class _Echo:
+            def write(self, value):
+                return value
+
+        writer = _csv.writer(_Echo())
+        columns = self.EXPORT_COLUMNS
+        qs = queryset.select_related(
+            "user", "study_group", "user__participant_session"
+        ).order_by("user__participant_code", "user_id")
+
+        def rows():
+            yield writer.writerow(columns)
+            for r in qs.iterator(chunk_size=500):
+                session = getattr(r.user, "participant_session", None) if r.user_id else None
+                answers = r.tf_answers or {}
+                open_answers = r.open_answers or {}
+
+                row = [
+                    r.user.export_id if r.user_id else "",
+                    r.model_id,
+                    r.study_group.name if r.study_group_id else "",
+                    "" if session is None else int(bool(session.active_learning)),
+                    getattr(session, "consent_version", "") or "",
+                    _iso(getattr(session, "consented_at", None)),
+                    _iso(getattr(session, "task_started_at", None)),
+                    _iso(getattr(session, "task_completed_at", None)),
+                    r.task_duration_s if r.task_duration_s is not None else "",
+                    "" if session is None else int(bool(session.finished_early)),
+                    "" if session is None else int(bool(getattr(session, "moderated", False))),
+                ]
+                for key, correct in study_flow.TF_KEY.items():
+                    given = answers.get(key, "")
+                    row += [given, int(given == correct)]
+                row += [r.tf_score, r.tf_answered]
+                for key in study_flow.OPEN_QUESTIONS:
+                    entry = open_answers.get(key) or {}
+                    row += [
+                        entry.get("text", ""),
+                        " ".join(entry.get("citations") or []),
+                    ]
+                row += [
+                    r.form_duration_ms if r.form_duration_ms is not None else "",
+                    _iso(r.submitted_at),
+                ]
+                yield writer.writerow(row)
+
+        resp = StreamingHttpResponse(rows(), content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    def responses_csv(self, request):
+        """Every response. Linked from the changelist."""
+        return self._stream_responses(
+            StudyResponse.objects.all(), "tova-study-responses.csv"
+        )
+
+    @admin.action(description=_("Export selected responses to CSV"))
+    def export_selected_csv(self, request, queryset):
+        return self._stream_responses(queryset, "tova-study-responses-selection.csv")
 
 
 @admin.register(TopicRename)
