@@ -719,6 +719,37 @@ class InstructionsTests(StudyFlowTestCase):
         self.assertIn("Several hundred", resp.content.decode())
 
 
+class ParticipantCopyTests(StudyFlowTestCase):
+    """Participant-facing copy must not contradict the consent document."""
+
+    def instructions(self):
+        self.login_participant()
+        with mock.patch("web.views._study_corpus_size", return_value=600):
+            return visible_text(
+                self.client.get(reverse("web:study_instructions")).content.decode()
+            )
+
+    def test_does_not_promise_access_to_emails_during_the_questionnaire(self):
+        """The consent says the emails cannot be reopened. This used to say they could."""
+        body = self.instructions()
+        self.assertNotIn("be able to look documents up", body)
+        self.assertIn("won't be able to reopen the emails", body)
+        self.assertIn("from memory", body)
+
+    def test_says_that_interactions_are_logged(self):
+        self.assertIn("we record how you interact", self.instructions())
+
+    def test_not_sure_is_the_visible_label_for_unsure(self):
+        """The approved instrument says "true/false/not-sure"."""
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        body = self.client.get(reverse("web:study_post")).content.decode()
+        self.assertIn('value="unsure"', body)
+        self.assertIn("Not sure", body)
+        self.assertNotIn(">Unsure<", body)
+
+
 class TimerWidgetTests(StudyFlowTestCase):
     def test_timer_appears_on_the_dashboard_during_the_task(self):
         self.login_participant()
