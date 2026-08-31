@@ -3158,3 +3158,114 @@ class ConditionGroupTests(TestCase):
         for u in self.participants():
             self.assertIn(u.study_model_id, {"m_a", "m_b"})
             self.assertEqual(u.study_model_id, u.study_group.default_model_id)
+
+
+class ResumeAfterSignOutTests(StudyFlowTestCase):
+    """What happens when a participant signs out and comes back.
+
+    The ParticipantSession is a database row keyed on the user, so signing out
+    flushes the auth cookie and nothing else. The stage survives. The clock,
+    however, is an absolute deadline -- it does not pause.
+    """
+
+    def sign_in(self):
+        """Sign in and report the immediate redirect target."""
+        resp = self.client.post(
+            reverse("web:study_login"),
+            {"email": self.participant.email, "password": "pw"},
+        )
+        return resp["Location"]
+
+    def sign_in_and_follow(self):
+        """Where a browser actually ends up.
+
+        Login redirects to the canonical stage URL; /study/task then forwards to
+        the dashboard, and an expired task is closed by the middleware on that
+        next request rather than at login. So the landing page takes more than
+        one hop and only following the chain reflects what a participant sees.
+        """
+        resp = self.client.post(
+            reverse("web:study_login"),
+            {"email": self.participant.email, "password": "pw"},
+            follow=True,
+        )
+        return resp.request["PATH_INFO"]
+
+    def session(self):
+        return ParticipantSession.objects.get(pk=self.participant.pk)
+
+    def test_consent_is_not_asked_for_twice(self):
+        self.login_participant()          # consents
+        self.client.get(reverse("web:logout"))
+        self.assertEqual(self.sign_in(), reverse("web:study_instructions"))
+        self.assertIsNotNone(self.session().consented_at)
+
+    def test_signing_out_before_starting_loses_nothing(self):
+        self.login_participant()
+        self.client.get(reverse("web:logout"))
+
+        self.assertEqual(self.sign_in(), reverse("web:study_instructions"))
+        self.client.post(reverse("web:study_begin"))
+        s = self.session()
+        self.assertEqual(s.stage, ParticipantSession.STAGE_TASK)
+        self.assertGreater(s.seconds_remaining, 29 * 60, "full time still ahead")
+
+    def test_returning_mid_task_resumes_with_the_time_that_is_left(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        started = self.session().task_ends_at
+        self.client.get(reverse("web:logout"))
+
+        # Ten minutes pass while they are signed out.
+        s = self.session()
+        s.task_started_at -= dt.timedelta(minutes=10)
+        s.task_ends_at -= dt.timedelta(minutes=10)
+        s.save()
+
+        self.assertEqual(self.sign_in(), reverse("web:study_task"))
+        back = self.session()
+        self.assertEqual(back.stage, ParticipantSession.STAGE_TASK)
+        self.assertLess(back.seconds_remaining, 21 * 60,
+                        "the clock ran while they were away")
+        self.assertGreater(back.seconds_remaining, 19 * 60)
+        self.assertNotEqual(back.task_ends_at, started)
+
+    def test_the_clock_does_not_pause_while_signed_out(self):
+        """Signing out is not a way to buy more exploration time."""
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.get(reverse("web:logout"))
+
+        s = self.session()
+        s.task_started_at -= dt.timedelta(minutes=45)
+        s.task_ends_at -= dt.timedelta(minutes=45)
+        s.save()
+
+        # Coming back after the deadline: login still points at the task, and
+        # the middleware closes it on that request. The participant lands on the
+        # questionnaire and never gets to explore again.
+        self.assertEqual(self.sign_in_and_follow(), reverse("web:study_post"))
+        self.assertEqual(self.session().stage, ParticipantSession.STAGE_POST)
+        self.assertFalse(self.session().finished_early, "expired, not finished early")
+
+    def test_returning_after_submitting_lands_on_the_thank_you_page(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        self.client.post(reverse("web:study_post"), {
+            "tf1": "true", "tf2": "false", "tf3": "true", "tf4": "false",
+            "motive": "a", "connections": "b", "timeline": "c", "threads": "d",
+        })
+        self.client.get(reverse("web:logout"))
+        self.assertEqual(self.sign_in(), reverse("web:study_done"))
+
+    def test_answers_typed_but_not_submitted_are_lost(self):
+        """Documents a real risk: the questionnaire is not saved as you type."""
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        self.client.get(reverse("web:study_post"))   # opens the form, types nothing
+        self.client.get(reverse("web:logout"))
+
+        self.assertEqual(self.sign_in(), reverse("web:study_post"))
+        self.assertFalse(StudyResponse.objects.exists())
