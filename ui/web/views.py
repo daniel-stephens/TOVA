@@ -2411,6 +2411,9 @@ def _record_label_event(request, *, model_id, doc_id, label, action, payload):
             dwell = None
 
         model_label = str(payload.get("model_label") or "").strip()[:255]
+        # Stored as the client sent them. The backend chooses this shape, so it
+        # is passed through rather than reinterpreted -- if scores appear later
+        # they land here without a change on either side.
         suggestions = payload.get("suggestions_shown")
         if not isinstance(suggestions, list):
             suggestions = []

@@ -406,10 +406,22 @@ class InteractionEventModality:
 class LabelEvent(models.Model):
     """One annotation action by a participant, with how it was arrived at.
 
-    Document labels are written straight through to the backend
-    (``/active-learning/{model}/label``) and were never persisted here, so the
-    central artifact of the annotation task sat outside the analytic dataset --
-    unjoined to participant, condition or timing. This table is that record.
+    **This is an event log, not state.** The backend remains the single source
+    of truth for what the labels *are*: the UI still writes every label through
+    to ``/active-learning/{model}/label``, the model retrains there, and the
+    dashboard reads from it. Nothing here is ever read back as the current
+    label of a document.
+
+    What the backend cannot know is the study context, because the payload it
+    receives is only ``{doc_id, label}``: which participant, in which condition,
+    whether the label was a suggestion accepted or typed from scratch, which
+    rank, how long they read first, keyboard or mouse, and where it fell in
+    their session. That is behavioural data about a person rather than
+    annotation state about a corpus, and it belongs on this side.
+
+    ``doc_id`` and ``label`` are duplicated here deliberately, so provenance can
+    be joined to an outcome and inter-annotator agreement computed without
+    depending on the backend being reachable at analysis time.
 
     It is deliberately denormalised: each row carries what the model was
     proposing *at the moment of the action*, because that is unrecoverable

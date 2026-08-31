@@ -1659,12 +1659,18 @@
   };
   const normalizeSuggestion = (item, index) => {
     if (typeof item === "string") {
-      return { label: item, description: "", rank: index + 1 };
+      return { label: item, description: "", rank: index + 1, score: null };
     }
+    /* Score is passed through rather than dropped. The backend does not send one
+       today, so this is null in practice -- but if it ever does, it lands in the
+       study's label record without another change here. Several spellings are
+       accepted because the field name is the backend's to choose, not ours. */
+    const raw = item?.score ?? item?.confidence ?? item?.probability ?? null;
     return {
       label: String(item?.label || "").trim(),
       description: String(item?.description || "").trim(),
       rank: item?.rank ?? index + 1,
+      score: typeof raw === "number" ? raw : null,
     };
   };
   const getSuggestionLabel = (item) => {
@@ -2821,7 +2827,11 @@
      new labels, its earlier suggestions and confidence are gone. */
   const labelContext = (docId, bulk) => {
     const doc = getDocById(docId);
-    const suggestions = doc ? getSuggestionSet(doc).map(getSuggestionLabel) : [];
+    const suggestions = doc
+      ? getSuggestionSet(doc).map((sg) => ({
+          label: sg.label, rank: sg.rank, score: sg.score,
+        }))
+      : [];
     return {
       provenance: labelProvenance,
       suggestion_rank: labelProvenance === "suggestion" ? labelSuggestionRank : null,
