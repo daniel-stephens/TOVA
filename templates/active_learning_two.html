@@ -1402,8 +1402,8 @@
                 <div class="al2-suggestions-block">
                   <h3 class="al2-suggestions-heading">Suggested labels</h3>
                   <div id="al2LabelSuggestions"></div>
-                  <p class="al2-kbd-hint" aria-hidden="true">
-                    <kbd>1</kbd>–<kbd>3</kbd> pick · <kbd>Enter</kbd> save &amp; next ·
+                  <p class="al2-kbd-hint">
+                    <kbd>1</kbd>–<kbd>9</kbd> pick · <kbd>Enter</kbd> save &amp; next ·
                     <kbd>←</kbd>/<kbd>→</kbd> prev/skip · <kbd>/</kbd> search
                   </p>
                 </div>
@@ -2725,7 +2725,9 @@
       labelsEl.appendChild(hint);
       return;
     }
-    getSuggestionSet(doc).forEach((suggestion, index) => {
+    const suggestions = getSuggestionSet(doc);
+    const total = suggestions.length;
+    suggestions.forEach((suggestion, index) => {
       const label = getSuggestionLabel(suggestion);
       const rank = suggestion.rank ?? index + 1;
       const btn = document.createElement("button");
@@ -2733,7 +2735,12 @@
       btn.className = `al2-label-chip${selectedSuggestion === label ? " is-selected" : ""}`;
       btn.dataset.label = label;
       if (suggestion.description) btn.title = suggestion.description;
-      btn.setAttribute("aria-label", `Suggestion ${rank} of 3 (press ${index + 1}): ${label}`);
+      btn.setAttribute(
+        "aria-label",
+        index < 9
+          ? `Suggestion ${rank} of ${total} (press ${index + 1}): ${label}`
+          : `Suggestion ${rank} of ${total}: ${label}`
+      );
       if (index < 9) {
         const kbd = document.createElement("kbd");
         kbd.className = "al2-chip-kbd";

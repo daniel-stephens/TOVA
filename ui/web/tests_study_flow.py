@@ -2670,3 +2670,32 @@ class ModelAccessForParticipantsTests(TestCase):
 
     def test_unauthenticated_is_refused(self):
         self.assertFalse(R._verify_model_ownership(self.MINE, ""))
+
+
+class ActiveLearningKeyboardTests(TestCase):
+    """Keyboard affordances on the AL page.
+
+    Keyboard-vs-mouse is a measured outcome of this study, so a shortcut that
+    is mislabelled or invisible to assistive tech biases the very thing being
+    measured -- it turns a preference question into a discoverability question.
+    """
+
+    def source(self):
+        return read_template_source("active_learning_two.html")
+
+    def test_the_hint_matches_what_the_handler_accepts(self):
+        src = self.source()
+        # The handler takes 1-9; the hint used to advertise 1-3.
+        self.assertIn('e.key >= "1" && e.key <= "9"', src)
+        self.assertIn("<kbd>1</kbd>–<kbd>9</kbd> pick", src)
+
+    def test_the_shortcut_hint_is_not_hidden_from_assistive_tech(self):
+        src = self.source()
+        hint = src[src.index('class="al2-kbd-hint"'):][:200]
+        self.assertNotIn("aria-hidden", hint)
+
+    def test_suggestion_count_is_not_hardcoded(self):
+        """It announced "of 3" however many suggestions came back."""
+        src = self.source()
+        self.assertNotIn("of 3 (press", src)
+        self.assertIn("of ${total}", src)
