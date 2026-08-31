@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -20,6 +22,25 @@ from web.models import (
 )
 from web import study_flow
 from web.services import runtime as R
+
+
+def read_template_source(relative_path: str) -> str:
+    """Read a template's raw source off disk, wherever the checkout is rooted.
+
+    A few tests assert on the *text* of the telemetry collector rather than on
+    rendered output, so they need the file itself. Resolving through the
+    configured template dirs keeps them working whether the suite runs from
+    ``ui/`` (templates at ``../templates``) or inside the container (templates at
+    ``/app/templates``).
+    """
+    for directory in settings.TEMPLATES[0]["DIRS"]:
+        candidate = Path(directory) / relative_path
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    raise FileNotFoundError(
+        f"{relative_path} not found in template dirs: "
+        + ", ".join(str(d) for d in settings.TEMPLATES[0]["DIRS"])
+    )
 
 
 class StudyFlowTestCase(TestCase):
@@ -1277,7 +1298,7 @@ class InteractionLoggingTests(StudyFlowTestCase):
 
     def test_collector_substitutes_char_for_printable_keys(self):
         """Guards the one line that keeps this from being a keylogger."""
-        body = open("../templates/study/_telemetry.html", encoding="utf-8").read()
+        body = read_template_source("study/_telemetry.html")
         branch = body[body.index("} else if (key.length === 1) {"):]
         branch = branch[: branch.index("} else {")]
         self.assertIn("label = 'char';", branch)
@@ -1425,13 +1446,13 @@ class WiderInteractionCaptureTests(StudyFlowTestCase):
         )
 
     def test_collector_wires_every_documented_listener(self):
-        body = open("../templates/study/_telemetry.html", encoding="utf-8").read()
+        body = read_template_source("study/_telemetry.html")
         for evt in ("dblclick", "contextmenu", "change", "input", "copy", "paste",
                     "mouseup", "shown.bs.modal", "hidden.bs.modal", "resize"):
             self.assertIn(f"'{evt}'", body, f"no listener for {evt}")
 
     def test_elements_can_opt_out_of_logging(self):
-        body = open("../templates/study/_telemetry.html", encoding="utf-8").read()
+        body = read_template_source("study/_telemetry.html")
         self.assertIn("[data-no-log]", body)
         self.assertIn("suppressed(ev.target)", body)
 
@@ -1538,7 +1559,7 @@ class LogSuppressionTests(StudyFlowTestCase):
     """Decorative chrome is muted; the controls inside it are not."""
 
     def collector(self):
-        return open("../templates/study/_telemetry.html", encoding="utf-8").read()
+        return read_template_source("study/_telemetry.html")
 
     def test_override_is_implemented(self):
         js = self.collector()
