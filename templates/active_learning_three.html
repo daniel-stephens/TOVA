@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% comment %}
+Active learning, review-first layout (PROTOTYPE).
+
+A proposal in runnable form, not a migration. active_learning_two.html is
+untouched so the two can be compared side by side against the same model.
+
+Structure, style and behaviour are separated here on purpose -- the markup is
+below, the CSS is static/css/al3.css, the behaviour is static/js/al3.js. That
+separation is half the proposal: the current page fuses all three into one
+3,179-line file, which is why it resists change.
+
+Endpoints reach the script through data- attributes rather than template
+interpolation, which is what allows the JS to be a cacheable static file.
+
+Deliberately partial: bulk labelling, the "Similar" view and the preview modal
+are not implemented. See docs/user-study/active-learning-audit.md.
+{% endcomment %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/al3.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="al3 py-3 px-2 px-md-3"
+     id="al3"
+     data-model-id="{{ model_id|default:''|escape }}"
+     data-url-recommend="{% url_for 'active_learning_two_recommend' %}"
+     data-url-label="{% url_for 'active_learning_two_label' %}"
+     data-url-labels="{% url_for 'active_learning_two_labels' %}">
+
+  <p class="al3-note" data-no-log>
+    <strong>Prototype.</strong> A review-first layout for comparison against the
+    current active learning page. Bulk labelling, the “Similar” view and document
+    preview are not implemented here.
+  </p>
+
+  <div id="al3Banner" class="al3-banner is-hidden" role="status" aria-live="polite">
+    Every document in this model has a label. Nothing left to do.
+  </div>
+
+  <div class="al3-layout">
+
+    <!-- Review: the dominant column, because reading and labelling is the task -->
+    <div class="al3-card">
+      <div class="al3-progress">
+        <div class="al3-progress__row">
+          <span><span class="al3-progress__count"><span id="al3Count">0</span></span>
+            of <span id="al3Total">0</span> labeled</span>
+        </div>
+        <div class="al3-bar"><div class="al3-bar__fill" id="al3Fill" style="width: 0%"></div></div>
+      </div>
+
+      <div class="al3-doc">
+        <div class="al3-doc__head">
+          <span class="al3-doc__id" id="al3DocId" aria-live="polite">—</span>
+          <span class="al3-doc__current" id="al3Current"></span>
+        </div>
+        <p class="al3-doc__body" id="al3Body" tabindex="0">Loading documents…</p>
+      </div>
+
+      <!-- The action sits directly under the document, so read -> label is one
+           vertical path rather than a diagonal across two equal columns. -->
+      <div class="al3-action">
+        <p class="al3-action__legend">
+          <span><kbd>1</kbd>–<kbd>9</kbd> pick a suggestion</span>
+          <span><kbd>Enter</kbd> save &amp; next</span>
+          <span><kbd>←</kbd> <kbd>→</kbd> back / skip</span>
+          <span><kbd>/</kbd> search</span>
+        </p>
+
+        <div class="al3-chips" id="al3Chips"></div>
+
+        <div class="al3-entry">
+          <input type="text" id="al3Input" maxlength="120" autocomplete="off"
+                 placeholder="Type a label, or press 1–9 to pick one"
+                 aria-label="Label for this document">
+          <button type="button" class="al3-btn al3-btn--ghost" id="al3Back">Back</button>
+          <button type="button" class="al3-btn al3-btn--ghost" id="al3Skip">Skip</button>
+          <button type="button" class="al3-btn" id="al3Save" disabled>Save &amp; next</button>
+        </div>
+
+        <p class="al3-feedback" id="al3Feedback" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <!-- Queue: a rail, not a peer -->
+    <div class="al3-card al3-rail">
+      <div class="al3-rail__head">
+        <input type="search" id="al3Search" placeholder="Search by ID or label"
+               autocomplete="off" aria-label="Search documents">
+      </div>
+      <div class="al3-rail__list" id="al3List"></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/al3.js' %}" defer></script>
+{% endblock %}

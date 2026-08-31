@@ -97,6 +97,7 @@ urlpatterns = [
     path("delete-model/", _x(views.delete_model), name="delete_model_slash"),
     path("dashboard", _x(views.dashboard), name="dashboard"),
     path("active-learning-2", views.active_learning_two, name="active_learning_two"),
+    path("active-learning-3", views.active_learning_three, name="active_learning_three"),
     path(
         "api/active-learning-2/recommend",
         views.active_learning_two_recommend,

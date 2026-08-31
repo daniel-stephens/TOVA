@@ -2699,3 +2699,54 @@ class ActiveLearningKeyboardTests(TestCase):
         src = self.source()
         self.assertNotIn("of 3 (press", src)
         self.assertIn("of ${total}", src)
+
+
+class ActiveLearningPrototypeTests(StudyFlowTestCase):
+    """The prototype is off unless deliberately enabled."""
+
+    def setUp(self):
+        super().setUp()
+        self.participant.study_model_id = "m_test"
+        self.participant.save()
+        self.url = reverse("web:active_learning_three")
+
+    def test_404s_when_the_flag_is_off(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        resp = self.client.get(self.url, {"model_id": "m_test"})
+        self.assertEqual(resp.status_code, 404)
+
+    @override_settings(TOVA_ENABLE_AL3=True)
+    def test_renders_when_enabled(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
+            resp = self.client.get(self.url, {"model_id": "m_test"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn('id="al3"', body)
+        self.assertIn("css/al3.css", body)
+        self.assertIn("js/al3.js", body)
+
+    @override_settings(TOVA_ENABLE_AL3=True)
+    def test_style_and_behaviour_are_not_inlined(self):
+        """Half the proposal is that the page stops being one 3,000-line file."""
+        src = read_template_source("active_learning_three.html")
+        self.assertNotIn("<style", src)
+        self.assertNotIn("addEventListener", src)
+
+    @override_settings(TOVA_ENABLE_AL3=True)
+    def test_blocked_for_a_participant_whose_condition_excludes_it(self):
+        self.group.enable_active_learning = False
+        self.group.save()
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        resp = self.client.get(self.url, {"model_id": "m_test"})
+        self.assertEqual(resp.status_code, 302)
+
+    @override_settings(TOVA_ENABLE_AL3=True)
+    def test_is_not_reachable_before_the_task_begins(self):
+        self.login_participant()
+        resp = self.client.get(self.url, {"model_id": "m_test"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse("web:study_instructions"), resp["Location"])

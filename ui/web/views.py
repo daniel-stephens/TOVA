@@ -29,7 +29,7 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import RequestDataTooBig
 from django.core.paginator import Paginator
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from ruamel.yaml import YAML
@@ -2281,6 +2281,25 @@ def active_learning_two(request):
         "active_learning_two.html",
         _model_nav_context(model_id),
     )
+
+
+@login_required
+@require_study_feature(FEATURE_ACTIVE_LEARNING)
+def active_learning_three(request):
+    """Review-first active-learning prototype.
+
+    Behind TOVA_ENABLE_AL3 and 404s when it is off. The interface is the
+    independent variable in the running study, so this must not be reachable
+    unless someone deliberately turns it on -- and switching the study over to
+    it is a protocol decision, not an engineering one.
+    """
+    if not getattr(settings, "TOVA_ENABLE_AL3", False):
+        raise Http404("Active learning prototype is not enabled.")
+    model_id = (request.GET.get("model_id") or "").strip()
+    denied = _study_model_access_denied(request, model_id)
+    if denied:
+        return denied
+    return render(request, "active_learning_three.html", _model_nav_context(model_id))
 
 
 @login_required

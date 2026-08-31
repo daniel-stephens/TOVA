@@ -154,6 +154,7 @@ _TASK_URL_NAMES = {
 #: Unioned into the task stage only when the group has active learning enabled.
 _AL_URL_NAMES = {
     "active_learning_two",
+    "active_learning_three",
     "active_learning_two_recommend",
     "active_learning_two_status",
     "active_learning_two_label",

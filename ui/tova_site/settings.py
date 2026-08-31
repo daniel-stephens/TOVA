@@ -131,6 +131,11 @@ APPEND_SLASH = False
 # Minutes a study participant gets for the exploration task before it auto-closes.
 STUDY_TASK_MINUTES = _int_env("STUDY_TASK_MINUTES", 30)
 
+# Review-first active-learning prototype at /active-learning-3. Off by default:
+# the interface is the independent variable in the running study, so this must
+# never appear unless someone deliberately turns it on.
+TOVA_ENABLE_AL3 = _bool_env("TOVA_ENABLE_AL3", False)
+
 # Prolific hand-back. Without these a participant who finishes has no way to
 # claim payment, because Prolific only credits a submission that comes back
 # through the completion URL (or has the code entered manually).
