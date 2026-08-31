@@ -33,6 +33,30 @@ admin.site.site_title = _("TOVA Admin")
 admin.site.index_title = _("TOVA site administration")
 
 
+#: Login domains that mark an account as a generated study login rather than a
+#: real person's mailbox. An address at one of these is itself a study code, so
+#: its local part becomes the participant code.
+STUDY_LOGIN_DOMAINS = {"study.local", "example.com", "localhost", "invalid"}
+
+
+def participant_code_for(email: str) -> str | None:
+    """Study code for a generated participant login, or None for a real address.
+
+    ``p001@study.local`` -> ``p001``. A real mailbox gets no code, because
+    deriving one from it would carry the identifier it is supposed to replace
+    into the analytic dataset (the local part of a work address is usually a
+    name). Those accounts fall back to ``User.export_id``, which uses the row's
+    random UUID instead.
+    """
+    email = (email or "").strip().lower()
+    if "@" not in email:
+        return None
+    local, _, domain = email.partition("@")
+    if domain not in STUDY_LOGIN_DOMAINS:
+        return None
+    return local or None
+
+
 def available_dashboards() -> list[tuple[str, str]]:
     """(model_id, label) for every trained model, for dashboard pickers.
 
@@ -186,6 +210,10 @@ class CreateParticipantsForm(forms.Form):
         help_text=_("Unticked, an existing account is reassigned and its password reset."),
     )
 
+    #: Set during clean() when real email addresses were pasted. Surfaced on the
+    #: form rather than raised, because inviting named people is legitimate.
+    uncoded_warning = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         choices = available_dashboards()
@@ -220,6 +248,18 @@ class CreateParticipantsForm(forms.Form):
                 raise forms.ValidationError(
                     _("These do not look like email addresses: %s") % ", ".join(invalid[:5])
                 )
+
+            # Real mailboxes get no study code, so their data exports under the
+            # row's UUID instead. That is still de-identified, but it loses the
+            # readable p001/p002 labelling -- worth saying out loud rather than
+            # discovering at analysis time.
+            uncoded = [e for e in emails if not participant_code_for(e)]
+            if uncoded:
+                self.uncoded_warning = _(
+                    "%(n)d of these are real email addresses, so they get no study "
+                    "code and will export under an internal ID instead of p001-style "
+                    "labels. Generated logins are preferable for analysis."
+                ) % {"n": len(uncoded)}
         else:
             start = cleaned.get("start") or 1
             prefix = cleaned.get("prefix") or "p"
@@ -511,6 +551,7 @@ class UserAdmin(BaseUserAdmin):
                 user.study_model_id = model_id
                 user.enable_active_learning = active_learning
                 user.is_active = True
+                user.participant_code = participant_code_for(email)
                 user.set_password(password)
                 user.save()
 
@@ -826,7 +867,9 @@ class InteractionEventAdmin(_ReadOnlyStudyAdmin):
             for e in qs.iterator(chunk_size=2000):
                 yield writer.writerow([
                     e.created_at.isoformat(),
-                    e.user.email if e.user_id else "",
+                    # Study code, never the email address: the consent says data
+                    # is "linked only to a study-specific code".
+                    e.user.export_id if e.user_id else "",
                     e.model_id,
                     e.study_group.name if e.study_group_id else "",
                     e.stage,
@@ -880,18 +923,22 @@ class InteractionEventAdmin(_ReadOnlyStudyAdmin):
             [(r["model_id"] or "(none)", r["modality"], r["n"]) for r in qs]
         )
 
+        # Keyed by study code, not email: this table is research data and it has
+        # a CSV export, so an address here would land straight in the analytic
+        # dataset. Mirrors User.export_id, computed in SQL rather than per row.
         qs = (
-            InteractionEvent.objects.values("user__email", "model_id", "modality")
+            InteractionEvent.objects.values(
+                "user__participant_code", "user_id", "model_id", "modality"
+            )
             .annotate(n=Count("id"))
-            .order_by("user__email")
+            .order_by("user__participant_code", "user_id")
         )
-        by_user, user_dashboard = {}, {}
+        rows, user_dashboard = [], {}
         for r in qs:
-            email = r["user__email"]
-            user_dashboard[email] = r["model_id"] or "(none)"
-        by_user = self._rollup(
-            [(r["user__email"], r["modality"], r["n"]) for r in qs]
-        )
+            code = (r["user__participant_code"] or "").strip() or str(r["user_id"])
+            user_dashboard[code] = r["model_id"] or "(none)"
+            rows.append((code, r["modality"], r["n"]))
+        by_user = self._rollup(rows)
 
         shortcuts = (
             InteractionEvent.objects.filter(action="shortcut")

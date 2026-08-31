@@ -71,6 +71,22 @@ class User(AbstractUser):
         verbose_name="assigned dashboard",
         help_text="Trained model backing this user's dashboard. Assigning one makes them a study participant.",
     )
+    # The study-specific code this participant is known by in the analytic data.
+    # The approved consent says "Data will be linked only to a study-specific
+    # code", and that a recruitment platform's account information "will not be
+    # copied into the analytic dataset" -- so exports key on this and never on
+    # email. Generated accounts get it automatically (p001@study.local -> p001);
+    # it stays blank for staff and for anyone invited by real email address.
+    participant_code = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text=(
+            "Study code used in exported data. Set automatically for generated "
+            "participant logins."
+        ),
+    )
     # Tri-state: None inherits from the study group (or defaults to on).
     enable_active_learning = models.BooleanField(
         null=True,
@@ -88,6 +104,17 @@ class User(AbstractUser):
     class Meta:
         db_table = "web_users"
         ordering = ["-date_joined"]
+
+    @property
+    def export_id(self) -> str:
+        """The identifier this user appears under in exported research data.
+
+        Never the email address. Falls back to the primary key -- a random
+        UUID, which identifies the row without identifying the person -- so a
+        participant invited by real email still exports de-identified rather
+        than leaking an address into the analytic dataset.
+        """
+        return (self.participant_code or "").strip() or str(self.pk)
 
 
 class UserConfig(models.Model):

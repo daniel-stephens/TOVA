@@ -33,7 +33,7 @@ import sys
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from web.admin import available_dashboards
+from web.admin import available_dashboards, participant_code_for
 from web.models import ParticipantSession, User
 
 
@@ -236,6 +236,7 @@ class Command(BaseCommand):
                 if created:
                     user = User(email=email, name=email, auth_source="local")
 
+                user.participant_code = participant_code_for(email)
                 user.study_model_id = model_id
                 user.enable_active_learning = active_learning
                 user.is_active = True

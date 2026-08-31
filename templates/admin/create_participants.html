@@ -32,6 +32,10 @@
       <p class="errornote">{{ form.non_field_errors }}</p>
     {% endif %}
 
+    {% if form.uncoded_warning %}
+      <p class="warning" style="max-width: 46em;">{{ form.uncoded_warning }}</p>
+    {% endif %}
+
     <fieldset class="module aligned">
       <h2>{% translate "Who" %}</h2>
       {% for field in form %}

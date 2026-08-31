@@ -979,6 +979,53 @@ class PerUserDashboardTests(TestCase):
         self.assertEqual(b1.study_model_id, "m_beta")
 
 
+class ParticipantCodeTests(TestCase):
+    """The consent says data is "linked only to a study-specific code"."""
+
+    def test_generated_logins_get_a_readable_code(self):
+        from web.admin import participant_code_for
+
+        self.assertEqual(participant_code_for("p001@study.local"), "p001")
+        self.assertEqual(participant_code_for("P042@STUDY.LOCAL"), "p042")
+
+    def test_real_addresses_get_no_code(self):
+        """A work address's local part is usually a name -- not a de-identifier."""
+        from web.admin import participant_code_for
+
+        self.assertIsNone(participant_code_for("ana.lopez@lab.gov"))
+        self.assertIsNone(participant_code_for("not-an-email"))
+        self.assertIsNone(participant_code_for(""))
+
+    def test_export_id_prefers_the_code(self):
+        u = User.objects.create_user(
+            email="p007@study.local", password="pw", participant_code="p007"
+        )
+        self.assertEqual(u.export_id, "p007")
+
+    def test_export_id_never_falls_back_to_email(self):
+        u = User.objects.create_user(email="ana.lopez@lab.gov", password="pw")
+        self.assertEqual(u.export_id, str(u.pk))
+        self.assertNotIn("@", u.export_id)
+        self.assertNotIn("ana", u.export_id)
+
+    def test_codes_are_unique(self):
+        from django.db import IntegrityError
+
+        User.objects.create_user(
+            email="p001@study.local", password="pw", participant_code="p001"
+        )
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(
+                email="other@study.local", password="pw", participant_code="p001"
+            )
+
+    def test_blank_codes_do_not_collide(self):
+        """Unique + null: many staff accounts have no code at all."""
+        User.objects.create_user(email="a@x.com", password="pw")
+        User.objects.create_user(email="b@x.com", password="pw")
+        self.assertEqual(User.objects.filter(participant_code__isnull=True).count(), 2)
+
+
 class ConditionSnapshotTests(StudyFlowTestCase):
     def test_flipping_active_learning_mid_run_does_not_change_the_condition(self):
         self.participant.study_model_id = "m_test"
@@ -1708,10 +1755,12 @@ class KeyboardMouseComparisonTests(TestCase):
         self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
         self.client.force_login(self.admin)
         self.p1 = User.objects.create_user(
-            email="p1@s.local", password="pw", study_model_id="m_alpha"
+            email="p1@study.local", password="pw", study_model_id="m_alpha",
+            participant_code="p1",
         )
         self.p2 = User.objects.create_user(
-            email="p2@s.local", password="pw", study_model_id="m_beta"
+            email="p2@study.local", password="pw", study_model_id="m_beta",
+            participant_code="p2",
         )
         mk = InteractionEvent.objects.create
         for _ in range(3):
@@ -1738,8 +1787,11 @@ class KeyboardMouseComparisonTests(TestCase):
         with mock.patch("web.admin.available_dashboards", return_value=[]):
             resp = self.client.get(self.url)
         rows = {r["key"]: r for r in resp.context["by_user"]}
-        self.assertEqual(rows["p1@s.local"]["mouse"], 3)
-        self.assertEqual(rows["p2@s.local"]["keyboard"], 3)
+        self.assertEqual(rows["p1"]["mouse"], 3)
+        self.assertEqual(rows["p2"]["keyboard"], 3)
+        # The comparison table is research data: it identifies people by study
+        # code, never by the address they log in with.
+        self.assertNotIn("p1@study.local", rows)
 
     def test_shortcut_breakdown(self):
         with mock.patch("web.admin.available_dashboards", return_value=[]):
@@ -1752,7 +1804,8 @@ class KeyboardMouseComparisonTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         body = b"".join(resp.streaming_content).decode()
         self.assertIn("keyboard_share_pct", body)
-        self.assertIn("p1@s.local", body)
+        self.assertIn("p1", body)
+        self.assertNotIn("@", body, "no email address may reach the export")
 
     def test_link_from_the_event_changelist(self):
         with mock.patch("web.admin.available_dashboards", return_value=[]):
@@ -1891,11 +1944,12 @@ class InteractionCsvExportTests(TestCase):
         self.client.force_login(self.admin)
         self.group = StudyGroup.objects.create(name="Cond A", slug="cond-a")
         self.p1 = User.objects.create_user(
-            email="p1@s.local", password="pw", study_model_id="m_alpha",
-            study_group=self.group,
+            email="p1@study.local", password="pw", study_model_id="m_alpha",
+            study_group=self.group, participant_code="p1",
         )
         self.p2 = User.objects.create_user(
-            email="p2@s.local", password="pw", study_model_id="m_beta"
+            email="p2@study.local", password="pw", study_model_id="m_beta",
+            participant_code="p2",
         )
         InteractionEvent.objects.create(
             user=self.p1, study_group=self.group, model_id="m_alpha", stage="task",
@@ -1915,8 +1969,14 @@ class InteractionCsvExportTests(TestCase):
         body = self.body(self.client.get(self.url))
         lines = [ln for ln in body.strip().splitlines() if ln]
         self.assertEqual(len(lines), 3, "header plus two events")
-        self.assertIn("p1@s.local", body)
-        self.assertIn("p2@s.local", body)
+        self.assertIn("p1", body)
+        self.assertIn("p2", body)
+
+    def test_export_carries_no_email_addresses(self):
+        """The consent says data is linked only to a study-specific code."""
+        body = self.body(self.client.get(self.url))
+        self.assertNotIn("@", body)
+        self.assertNotIn("study.local", body)
 
     def test_export_carries_the_columns_analysis_needs(self):
         header = self.body(self.client.get(self.url)).splitlines()[0]
@@ -1926,7 +1986,7 @@ class InteractionCsvExportTests(TestCase):
 
     def test_detail_json_survives_the_round_trip(self):
         row = [ln for ln in self.body(self.client.get(self.url)).splitlines()
-               if "p1@s.local" in ln][0]
+               if ",p1," in ln][0]
         self.assertIn("settlement", row)
         self.assertIn("Cond A", row)
 
