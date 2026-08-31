@@ -120,6 +120,61 @@ class StageGatingTests(StudyFlowTestCase):
         self.assertEqual(resp.status_code, 302)
 
 
+class DashboardOnlyGatingTests(TestCase):
+    """Participants with a dashboard but no group must be gated too.
+
+    This is how the admin actually creates people: both the "Create
+    participants" flow and the "Assign dashboard" bulk action set
+    ``study_model_id`` and never a group. The middleware used to bail out
+    unless ``study_group_id`` was set, so exactly the participants the research
+    team creates were the ones that could walk straight past the flow -- and
+    every gating test above builds its participant *with* a group, which is why
+    nothing caught it.
+    """
+
+    def setUp(self):
+        self.participant = User.objects.create_user(
+            email="p001@study.local", password="pw", study_model_id="m_solo"
+        )
+        self.client.force_login(self.participant)
+
+    def test_is_treated_as_a_participant(self):
+        from web.study_features import is_study_participant
+
+        self.assertTrue(is_study_participant(self.participant))
+        self.assertIsNone(self.participant.study_group_id)
+
+    def test_cannot_skip_straight_to_the_questionnaire(self):
+        resp = self.client.get(reverse("web:study_post"))
+        self.assertRedirects(
+            resp, reverse("web:study_instructions"), fetch_redirect_response=False
+        )
+
+    def test_cannot_reach_admin_workflows(self):
+        resp = self.client.get(reverse("web:load_data_page"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertNotIn("load-data", resp["Location"])
+
+    def test_dashboard_is_gated_until_the_task_begins(self):
+        resp = self.client.get(reverse("web:dashboard"), {"model_id": "m_solo"})
+        self.assertRedirects(
+            resp, reverse("web:study_instructions"), fetch_redirect_response=False
+        )
+
+    def test_json_endpoints_get_409(self):
+        resp = self.client.post(
+            reverse("web:get_dashboard_data"), data="{}", content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_the_flow_still_works_end_to_end(self):
+        """Gating them must not mean trapping them."""
+        self.client.post(reverse("web:study_begin"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
+        self.assertEqual(session.model_id, "m_solo")
+
+
 class TimerTests(StudyFlowTestCase):
     def test_begin_starts_the_timer_and_advances_stage(self):
         self.login_participant()

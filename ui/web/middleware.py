@@ -72,6 +72,7 @@ class StudyFlowMiddleware:
         # Imported lazily: this module is imported from settings, before the app
         # registry is ready.
         from web.models import ParticipantSession
+        from web.study_features import is_study_participant
         from web.study_flow import (
             ALWAYS_ALLOWED,
             allowed_url_names,
@@ -85,7 +86,12 @@ class StudyFlowMiddleware:
             return None
         if user.is_staff or user.is_superuser or getattr(user, "is_admin", False):
             return None
-        if not getattr(user, "study_group_id", None):
+        # Must agree with is_study_participant() everywhere else: a dashboard
+        # assigned directly is enough. Gating on study_group_id alone left every
+        # participant made by the admin's "Create participants" flow ungated --
+        # that path sets study_model_id and never a group -- so they could reach
+        # /study/post directly and skip the task.
+        if not is_study_participant(user):
             return None
 
         match = getattr(request, "resolver_match", None)
