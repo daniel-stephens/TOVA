@@ -196,6 +196,21 @@ reports nothing missing.
 4. Confirm the consent wording against the approved version and bump
    `CONSENT_VERSION` if it differs.
 
+## One thing I did not change
+
+`manage.py check --deploy` reports five pre-existing warnings, none caused by
+this work: `SECURE_HSTS_SECONDS` unset, `SECURE_SSL_REDIRECT` not True, a short
+`SECRET_KEY`, and `SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE` not True.
+
+All five are environment configuration rather than code — `SESSION_COOKIE_SECURE`
+already follows `USE_HTTPS`, and `DJANGO_SECRET_KEY` is read from env. I left
+them alone because forcing them on would break local development.
+
+They are worth raising anyway: Prolific participants reach this over the public
+internet, and the session carries consent records and questionnaire responses.
+Before recruiting, the deployment wants `USE_HTTPS=true`, a real
+`DJANGO_SECRET_KEY`, and TLS termination in front of it.
+
 ## To verify in the morning, with the backend up
 
 - Walk the whole flow as a real participant: consent → instructions → task →
