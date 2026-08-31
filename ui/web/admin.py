@@ -56,7 +56,18 @@ def participant_code_for(email: str) -> str | None:
     local, _, domain = email.partition("@")
     if domain not in STUDY_LOGIN_DOMAINS:
         return None
-    return local or None
+    if not local:
+        return None
+
+    # Two study domains can yield the same local part -- p001@study.local and
+    # p001@example.com both want "p001". The column is unique, so taking it
+    # blindly would raise IntegrityError and 500 the create-participants page.
+    # Yielding the code instead leaves that account exporting under its UUID,
+    # which is still de-identified; a crash mid-cohort would be worse.
+    taken = (
+        User.objects.filter(participant_code=local).exclude(email=email).exists()
+    )
+    return None if taken else local
 
 
 def _iso(value):

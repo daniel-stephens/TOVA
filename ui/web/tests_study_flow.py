@@ -2253,6 +2253,99 @@ class PreflightAndProgressTests(TestCase):
                 self.assertNotEqual(resp.status_code, 200)
 
 
+class StudyEdgeCaseTests(StudyFlowTestCase):
+    """Things that only break once someone tries them."""
+
+    def test_next_parameter_cannot_be_used_to_skip_the_flow(self):
+        """Signing in with ?next=/study/post must not bypass consent."""
+        resp = self.client.post(
+            reverse("web:study_login"),
+            {"email": self.participant.email, "password": "pw",
+             "next": reverse("web:study_post")},
+            follow=True,
+        )
+        self.assertEqual(resp.request["PATH_INFO"], reverse("web:study_consent"))
+        self.assertIsNone(
+            ParticipantSession.objects.get(pk=self.participant.pk).consented_at
+        )
+
+    def test_telemetry_still_posts_while_at_the_consent_gate(self):
+        """study_events has to be reachable at every stage or logging has holes."""
+        self.login_participant(consent=False)
+        resp = self.client.post(
+            reverse("web:study_events"),
+            data=json.dumps({"events": [
+                {"action": "click", "modality": "mouse", "target": "consent_accept", "t": 10}
+            ]}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["stored"], 1)
+        self.assertEqual(InteractionEvent.objects.get().stage, "consent")
+
+    def test_a_duplicate_study_code_does_not_crash_creation(self):
+        """p001@study.local and p001@example.com both want "p001"."""
+        from web.admin import participant_code_for
+
+        User.objects.create_user(
+            email="p042@study.local", password="pw", participant_code="p042"
+        )
+        self.assertIsNone(participant_code_for("p042@example.com"))
+        # ...but the account that already owns it keeps it on a re-run.
+        self.assertEqual(participant_code_for("p042@study.local"), "p042")
+        # ...and a code nobody holds is still handed out.
+        self.assertEqual(participant_code_for("p043@example.com"), "p043")
+
+    def test_zero_task_minutes_falls_back_rather_than_ending_instantly(self):
+        self.participant.task_minutes = 0
+        self.participant.save()
+        self.assertEqual(study_flow.task_minutes(self.participant), 30)
+
+    def test_finishing_twice_does_not_move_the_stage_on_again(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        self.client.post(reverse("web:study_finish"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_POST)
+
+    def test_consent_page_is_not_reachable_once_signed_out(self):
+        resp = self.client.get(reverse("web:study_consent"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp["Location"])
+
+    def test_deleting_a_participant_removes_their_research_data(self):
+        """Withdrawal has to actually remove things."""
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        ResearcherNote.objects.create(user=self.participant, text="note")
+        InteractionEvent.objects.create(
+            user=self.participant, action="click", modality="mouse"
+        )
+        StudyResponse.objects.create(user=self.participant, model_id="m_test")
+
+        self.participant.delete()
+
+        self.assertFalse(ParticipantSession.objects.exists())
+        self.assertFalse(StudyResponse.objects.exists())
+        self.assertFalse(ResearcherNote.objects.exists())
+        self.assertFalse(InteractionEvent.objects.exists())
+
+    def test_unknown_event_actions_are_dropped_not_stored(self):
+        self.login_participant()
+        self.client.post(
+            reverse("web:study_events"),
+            data=json.dumps({"events": [
+                {"action": "keylog", "modality": "keyboard", "target": "x"},
+                {"action": "click", "modality": "mouse", "target": "y"},
+            ]}),
+            content_type="application/json",
+        )
+        self.assertEqual(
+            list(InteractionEvent.objects.values_list("action", flat=True)), ["click"]
+        )
+
+
 class ModeratedSessionTests(TestCase):
     """The protocol has two administration modes; the data has to say which."""
 
