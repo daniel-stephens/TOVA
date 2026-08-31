@@ -70,6 +70,50 @@
   .facts .lbl { color: var(--muted); }
 
   .closing { color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+
+  /* Prolific credits a submission only when the participant returns through
+     the completion URL, so this is the difference between finishing and being
+     paid. It gets the most prominent position on the page for that reason. */
+  .payout {
+    border: 1px solid var(--green);
+    background: #eaf6ef;
+    border-radius: 12px;
+    padding: 22px;
+    margin: 0 0 30px;
+    text-align: center;
+  }
+  .payout h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .payout p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 16px; }
+  .payout .code {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    background: #fff;
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 11px 20px;
+    margin: 0 0 16px;
+    user-select: all;
+  }
+  .payout .go {
+    display: inline-block;
+    background: var(--green);
+    color: #fff;
+    text-decoration: none;
+    font-size: 14.5px;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 12px 26px;
+  }
+  .payout .go:hover { background: #16794f; }
+  .payout .fallback { margin: 14px 0 0; font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -88,7 +132,27 @@
 <main>
   <div class="check">&#10003;</div>
   <h1>Thank you &mdash; you're all done</h1>
+  {% if completion_code or return_url %}
+  <p class="sub">Your responses have been recorded. One last step to confirm your participation.</p>
+
+  <div class="payout">
+    <h2>Confirm your submission</h2>
+    {% if completion_code %}
+    <p>Your completion code is</p>
+    <div class="code" data-log="completion_code">{{ completion_code }}</div>
+    {% endif %}
+    {% if return_url %}
+    <p>{% if completion_code %}Or use{% else %}Use{% endif %} the button below to return and
+      confirm automatically.</p>
+    <a class="go" href="{{ return_url }}" data-log="prolific_return">Return and confirm</a>
+    {% if completion_code %}
+    <p class="fallback">If the button doesn't work, enter the code above manually.</p>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% else %}
   <p class="sub">Your responses have been recorded. There's nothing further to do, and you can close this window.</p>
+  {% endif %}
 
   {% if response %}
   <div class="facts">

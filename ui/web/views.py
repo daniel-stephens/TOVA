@@ -4014,7 +4014,28 @@ def _wants_json_request(request) -> bool:
 def study_done(request):
     session = _study_session(request)
     response = StudyResponse.objects.filter(pk=request.user.pk).first()
-    return render(request, "study/done.html", {"session": session, "response": response})
+
+    # Prolific credits a submission only when the participant comes back through
+    # the completion URL. Build it from the configured code so the page can hand
+    # them a single button; when nothing is configured (the Upwork arm) the
+    # template drops the whole block.
+    completion_code = getattr(settings, "PROLIFIC_COMPLETION_CODE", "")
+    return_url = getattr(settings, "PROLIFIC_RETURN_URL", "")
+    if completion_code and not return_url:
+        return_url = "https://app.prolific.com/submissions/complete?" + urlencode(
+            {"cc": completion_code}
+        )
+
+    return render(
+        request,
+        "study/done.html",
+        {
+            "session": session,
+            "response": response,
+            "completion_code": completion_code,
+            "return_url": return_url,
+        },
+    )
 
 
 def _study_corpus_size(model_id: str) -> int | None:

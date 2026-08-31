@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -610,6 +610,46 @@ class PostStudyTests(StudyFlowTestCase):
         self.advance_to_post()
         self.client.post(reverse("web:study_post"), self.valid_payload())
         self.assertEqual(self.client.get(reverse("web:study_done")).status_code, 200)
+
+
+class CompletionCodeTests(StudyFlowTestCase):
+    """Finishing has to be claimable, or a participant does not get paid."""
+
+    def finish(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        self.client.post(reverse("web:study_finish"))
+        self.client.post(
+            reverse("web:study_post"),
+            {"tf1": "true", "tf2": "false", "tf3": "true", "tf4": "false",
+             "motive": "a", "connections": "b", "timeline": "c", "threads": "d"},
+        )
+
+    @override_settings(PROLIFIC_COMPLETION_CODE="C1A2B3C4", PROLIFIC_RETURN_URL="")
+    def test_code_is_shown_and_a_return_url_is_derived(self):
+        self.finish()
+        body = self.client.get(reverse("web:study_done")).content.decode()
+        self.assertIn("C1A2B3C4", body)
+        self.assertIn("https://app.prolific.com/submissions/complete?cc=C1A2B3C4", body)
+
+    @override_settings(
+        PROLIFIC_COMPLETION_CODE="C1A2B3C4",
+        PROLIFIC_RETURN_URL="https://app.prolific.com/submissions/complete?cc=OVERRIDE",
+    )
+    def test_an_explicit_return_url_wins(self):
+        self.finish()
+        body = self.client.get(reverse("web:study_done")).content.decode()
+        self.assertIn("cc=OVERRIDE", body)
+        self.assertNotIn("cc=C1A2B3C4", body)
+
+    @override_settings(PROLIFIC_COMPLETION_CODE="", PROLIFIC_RETURN_URL="")
+    def test_unconfigured_leaves_the_page_as_it_was(self):
+        """The Upwork arm has no completion code; the block must vanish."""
+        self.finish()
+        body = self.client.get(reverse("web:study_done")).content.decode()
+        self.assertNotIn("Confirm your submission", body)
+        self.assertIn("close this window", body)
+        self.assertNotIn("prolific.com", body)
 
 
 class TopicRenameTests(StudyFlowTestCase):

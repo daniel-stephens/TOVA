@@ -131,6 +131,15 @@ APPEND_SLASH = False
 # Minutes a study participant gets for the exploration task before it auto-closes.
 STUDY_TASK_MINUTES = _int_env("STUDY_TASK_MINUTES", 30)
 
+# Prolific hand-back. Without these a participant who finishes has no way to
+# claim payment, because Prolific only credits a submission that comes back
+# through the completion URL (or has the code entered manually).
+#
+# Both are optional and unset by default: the Upwork arm of this study has no
+# completion code, and with these blank the final page simply omits the block.
+PROLIFIC_COMPLETION_CODE = os.getenv("PROLIFIC_COMPLETION_CODE", "").strip()
+PROLIFIC_RETURN_URL = os.getenv("PROLIFIC_RETURN_URL", "").strip()
+
 # Self-registration. A self-registered user has no dashboard, so the study flow
 # middleware never gates them -- set this false for a study deployment so the
 # only way in is an account the research team created.
