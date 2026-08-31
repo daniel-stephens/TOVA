@@ -4481,6 +4481,7 @@ def study_post(request):
             "tf_answered": study_flow.count_tf_answered(tf_answers),
             "open_answers": open_answers,
             "payload": post.dict(),
+            # Presence, not wall-clock: the clock pauses when they are away.
             "task_duration_s": session.task_duration_s,
             "form_duration_ms": form_duration_ms,
         },

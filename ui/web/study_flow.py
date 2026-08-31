@@ -230,6 +230,8 @@ def begin_task(session: ParticipantSession, user=None) -> ParticipantSession:
     session.active_learning = user_has_feature(subject, FEATURE_ACTIVE_LEARNING)
     session.task_minutes = task_minutes(subject)
     session.task_started_at = now
+    session.task_elapsed_s = 0
+    session.last_seen_at = now
     session.task_ends_at = now + _dt.timedelta(minutes=session.task_minutes)
     session.advance_to(ParticipantSession.STAGE_TASK)
     session.save(
@@ -238,6 +240,8 @@ def begin_task(session: ParticipantSession, user=None) -> ParticipantSession:
             "model_id",
             "active_learning",
             "task_minutes",
+            "task_elapsed_s",
+            "last_seen_at",
             "task_started_at",
             "task_ends_at",
             "stage",
@@ -246,10 +250,48 @@ def begin_task(session: ParticipantSession, user=None) -> ParticipantSession:
     return session
 
 
+def touch_task(session: ParticipantSession) -> ParticipantSession:
+    """Charge the time since this participant's last request, and mark them seen.
+
+    This is what makes the clock pause. Presence is inferred from requests: a
+    gap within ``PRESENCE_MAX_GAP_S`` is time they were here and is charged; a
+    longer gap means they had signed out, closed the tab or lost connection, and
+    costs them nothing.
+
+    Called from the flow middleware, so every request a participant makes during
+    the task counts -- not only the timer widget's poll. A participant with
+    JavaScript disabled still accrues time by using the tool.
+    """
+    if session.stage != ParticipantSession.STAGE_TASK or not session.task_started_at:
+        return session
+
+    now = timezone.now()
+    charged = 0
+    if session.last_seen_at:
+        gap = (now - session.last_seen_at).total_seconds()
+        if 0 < gap <= ParticipantSession.PRESENCE_MAX_GAP_S:
+            charged = int(gap)
+
+    # Skip the write for rapid successive requests: a page load can fire several
+    # at once and there is no point in an UPDATE per asset.
+    if charged < 1 and session.last_seen_at is not None:
+        return session
+
+    session.task_elapsed_s = int(session.task_elapsed_s or 0) + charged
+    session.last_seen_at = now
+    session.task_ends_at = now + _dt.timedelta(seconds=session.seconds_remaining)
+    session.save(update_fields=["task_elapsed_s", "last_seen_at", "task_ends_at"])
+    return session
+
+
 def finish_task(session: ParticipantSession, *, early: bool) -> ParticipantSession:
     """Close the exploration task and move the participant to the questions."""
     if session.stage != ParticipantSession.STAGE_TASK:
         return session
+
+    # Charge the stretch since their last request before closing, or the final
+    # seconds of exploration would go unrecorded.
+    touch_task(session)
 
     session.task_completed_at = timezone.now()
     session.finished_early = bool(early)

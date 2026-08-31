@@ -432,7 +432,7 @@ class TimerTests(StudyFlowTestCase):
         self.client.post(reverse("web:study_begin"))
 
         ParticipantSession.objects.filter(pk=self.participant.pk).update(
-            task_ends_at=timezone.now() - dt.timedelta(seconds=1)
+            task_elapsed_s=31 * 60, last_seen_at=timezone.now()
         )
 
         resp = self.client.get(reverse("web:dashboard"), {"model_id": "m_test"})
@@ -923,7 +923,7 @@ class TimerHandoffTests(StudyFlowTestCase):
         self.login_participant()
         self.client.post(reverse("web:study_begin"))
         ParticipantSession.objects.filter(pk=self.participant.pk).update(
-            task_ends_at=timezone.now() - dt.timedelta(seconds=1)
+            task_elapsed_s=31 * 60, last_seen_at=timezone.now()
         )
 
         resp = self.client.get(reverse("web:study_timer"))
@@ -3210,43 +3210,62 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
         self.assertEqual(s.stage, ParticipantSession.STAGE_TASK)
         self.assertGreater(s.seconds_remaining, 29 * 60, "full time still ahead")
 
-    def test_returning_mid_task_resumes_with_the_time_that_is_left(self):
+    def test_time_signed_out_is_not_charged(self):
+        """The clock pauses: an absence costs no exploration time."""
         self.login_participant()
         self.client.post(reverse("web:study_begin"))
-        started = self.session().task_ends_at
+
+        # Five minutes of actual exploring.
+        s = self.session()
+        s.task_elapsed_s = 5 * 60
+        s.save()
         self.client.get(reverse("web:logout"))
 
-        # Ten minutes pass while they are signed out.
+        # Away for two hours. Only the last-seen stamp moves; presence does not.
         s = self.session()
-        s.task_started_at -= dt.timedelta(minutes=10)
-        s.task_ends_at -= dt.timedelta(minutes=10)
+        s.last_seen_at -= dt.timedelta(hours=2)
         s.save()
 
         self.assertEqual(self.sign_in(), reverse("web:study_task"))
         back = self.session()
-        self.assertEqual(back.stage, ParticipantSession.STAGE_TASK)
-        self.assertLess(back.seconds_remaining, 21 * 60,
-                        "the clock ran while they were away")
-        self.assertGreater(back.seconds_remaining, 19 * 60)
-        self.assertNotEqual(back.task_ends_at, started)
+        self.assertEqual(back.stage, ParticipantSession.STAGE_TASK,
+                         "still exploring, not pushed to the questions")
+        self.assertEqual(back.task_elapsed_s, 5 * 60,
+                         "the two hours away were not charged")
+        self.assertGreater(back.seconds_remaining, 24 * 60)
 
-    def test_the_clock_does_not_pause_while_signed_out(self):
-        """Signing out is not a way to buy more exploration time."""
+    def test_the_allowance_still_runs_out_once_it_is_spent(self):
+        """Pausing is not unlimited time: presence is what is budgeted."""
         self.login_participant()
         self.client.post(reverse("web:study_begin"))
         self.client.get(reverse("web:logout"))
 
         s = self.session()
-        s.task_started_at -= dt.timedelta(minutes=45)
-        s.task_ends_at -= dt.timedelta(minutes=45)
+        s.task_elapsed_s = 30 * 60          # the whole allowance, actually used
         s.save()
 
-        # Coming back after the deadline: login still points at the task, and
-        # the middleware closes it on that request. The participant lands on the
-        # questionnaire and never gets to explore again.
         self.assertEqual(self.sign_in_and_follow(), reverse("web:study_post"))
         self.assertEqual(self.session().stage, ParticipantSession.STAGE_POST)
-        self.assertFalse(self.session().finished_early, "expired, not finished early")
+        self.assertFalse(self.session().finished_early, "spent, not finished early")
+
+    def test_presence_accrues_only_while_they_are_actually_there(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+
+        # A request 20s later: within the tolerance, so it is charged.
+        s = self.session()
+        s.last_seen_at -= dt.timedelta(seconds=20)
+        s.save()
+        self.client.get(reverse("web:study_timer"))
+        self.assertGreaterEqual(self.session().task_elapsed_s, 19)
+
+        # A request an hour later: they were away, so nothing is charged.
+        charged = self.session().task_elapsed_s
+        s = self.session()
+        s.last_seen_at -= dt.timedelta(hours=1)
+        s.save()
+        self.client.get(reverse("web:study_timer"))
+        self.assertEqual(self.session().task_elapsed_s, charged)
 
     def test_returning_after_submitting_lands_on_the_thank_you_page(self):
         self.login_participant()

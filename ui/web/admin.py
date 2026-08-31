@@ -849,6 +849,7 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
         "moderated",
         "task_started_at",
         "task_completed_at",
+        "active_time",
         "finished_early",
     )
     list_filter = ("stage", "study_group", "finished_early", "moderated")
@@ -867,6 +868,17 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
         "completed_at",
     )
     date_hierarchy = "created_at"
+
+    @admin.display(description=_("Active / wall-clock"))
+    def active_time(self, obj):
+        """Time in the app versus start-to-finish. A gap means they were away."""
+        if not obj.task_started_at:
+            return "\u2014"
+        wall = obj.task_wallclock_s
+        active = int(obj.task_elapsed_s or 0)
+        if wall is None:
+            return f"{active}s"
+        return f"{active}s / {wall}s"
 
     @admin.action(description="Reset participant (clears their run and response)")
     def reset_participants(self, request, queryset):
@@ -948,7 +960,8 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
         cols = [
             "participant", "dashboard", "study_group", "active_learning",
             "task_minutes", "consent_version", "consented_at", "instrument_version",
-            "task_started_at", "task_completed_at", "task_duration_s",
+            "task_started_at", "task_completed_at",
+            "task_duration_s", "task_wallclock_s", "seconds_away",
             "finished_early", "moderated",
         ]
         for key in study_flow.TF_KEY:
@@ -997,7 +1010,11 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
                     r.instrument_version,
                     _iso(getattr(session, "task_started_at", None)),
                     _iso(getattr(session, "task_completed_at", None)),
+                    # Time actually in the app, then start-to-finish, then the
+                    # difference -- how long they were away mid-task.
                     r.task_duration_s if r.task_duration_s is not None else "",
+                    getattr(session, "task_wallclock_s", None) or "",
+                    getattr(session, "seconds_away", None) or "",
                     "" if session is None else int(bool(session.finished_early)),
                     "" if session is None else int(bool(getattr(session, "moderated", False))),
                 ]

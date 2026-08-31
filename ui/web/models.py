@@ -236,7 +236,19 @@ class ParticipantSession(models.Model):
     task_minutes = models.PositiveIntegerField(null=True, blank=True)
 
     task_started_at = models.DateTimeField(null=True, blank=True)
+    #: Projected end, recomputed on every ping. Display only -- the clock is
+    #: driven by accumulated presence, not by this timestamp.
     task_ends_at = models.DateTimeField(null=True, blank=True)
+
+    #: Seconds actually spent in the app during the task. The clock pauses when
+    #: the participant is gone: a request that arrives more than
+    #: PRESENCE_MAX_GAP_S after the previous one contributes nothing, so signing
+    #: out, closing the laptop or losing the connection costs no exploration
+    #: time. Wall-clock elapsed remains derivable from the two timestamps, and
+    #: the difference between them is time away.
+    task_elapsed_s = models.PositiveIntegerField(default=0)
+    #: When this participant was last seen making a request during the task.
+    last_seen_at = models.DateTimeField(null=True, blank=True)
     task_completed_at = models.DateTimeField(null=True, blank=True)
     finished_early = models.BooleanField(default=False)
 
@@ -250,25 +262,62 @@ class ParticipantSession(models.Model):
     def __str__(self) -> str:
         return f"{self.user.email} ({self.stage})"
 
+    #: A request arriving within this many seconds of the previous one counts as
+    #: continuous presence. Longer, and the participant is treated as away and
+    #: the gap is not charged. Comfortably above the timer widget's 30s poll, so
+    #: one dropped request does not read as an absence.
+    PRESENCE_MAX_GAP_S = 90
+
     @property
-    def seconds_remaining(self) -> int:
+    def task_total_seconds(self) -> int:
+        from django.conf import settings
+
+        minutes = self.task_minutes or getattr(settings, "STUDY_TASK_MINUTES", 30)
+        return int(minutes) * 60
+
+    @property
+    def active_seconds(self) -> int:
+        """Time spent in the app, including the stretch since the last ping."""
         from django.utils import timezone
 
-        if not self.task_ends_at:
+        total = int(self.task_elapsed_s or 0)
+        if self.last_seen_at and self.stage == self.STAGE_TASK:
+            gap = (timezone.now() - self.last_seen_at).total_seconds()
+            if 0 < gap <= self.PRESENCE_MAX_GAP_S:
+                total += int(gap)
+        return total
+
+    @property
+    def seconds_remaining(self) -> int:
+        if not self.task_started_at:
             return 0
-        return max(0, int((self.task_ends_at - timezone.now()).total_seconds()))
+        return max(0, self.task_total_seconds - self.active_seconds)
 
     @property
     def expired(self) -> bool:
-        from django.utils import timezone
-
-        return bool(self.task_ends_at and timezone.now() >= self.task_ends_at)
+        return bool(self.task_started_at) and self.seconds_remaining <= 0
 
     @property
     def task_duration_s(self) -> int | None:
+        """Time actually spent exploring. Compare with task_wallclock_s."""
+        if not self.task_started_at:
+            return None
+        return int(self.task_elapsed_s or 0)
+
+    @property
+    def task_wallclock_s(self) -> int | None:
+        """Start to finish including any time away, for reference."""
         if not (self.task_started_at and self.task_completed_at):
             return None
         return int((self.task_completed_at - self.task_started_at).total_seconds())
+
+    @property
+    def seconds_away(self) -> int | None:
+        """Wall-clock minus presence: how long they were gone mid-task."""
+        wall = self.task_wallclock_s
+        if wall is None:
+            return None
+        return max(0, wall - int(self.task_elapsed_s or 0))
 
     def advance_to(self, stage: str) -> bool:
         """Move forward to *stage*. Never moves backwards. Returns True if moved."""

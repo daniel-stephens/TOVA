@@ -79,6 +79,7 @@ class StudyFlowMiddleware:
             finish_task,
             get_or_create_session,
             stage_redirect_url,
+            touch_task,
         )
 
         user = getattr(request, "user", None)
@@ -105,10 +106,14 @@ class StudyFlowMiddleware:
 
         session = get_or_create_session(user)
 
-        # The deadline is enforced here, not in the browser. A participant who
-        # disables JavaScript or kills the tab still cannot keep exploring.
-        if session.stage == ParticipantSession.STAGE_TASK and session.expired:
-            finish_task(session, early=False)
+        # The clock is driven from here, not from the browser. Every request a
+        # participant makes during the task charges the time since their last
+        # one; a long gap is treated as absence and costs them nothing, which is
+        # what lets the clock pause when they sign out or close the tab.
+        if session.stage == ParticipantSession.STAGE_TASK:
+            touch_task(session)
+            if session.expired:
+                finish_task(session, early=False)
 
         if url_name in allowed_url_names(session, user):
             return None
