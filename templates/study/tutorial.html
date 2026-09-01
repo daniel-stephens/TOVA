@@ -201,7 +201,30 @@ answers one question they will actually have, in the order they will have it.
   </section>
 
   <section class="step">
-    <span class="step__n">3 &middot; Documents</span>
+    <span class="step__n">3 &middot; Naming</span>
+    <h2>You can rename a theme, or ask for a suggestion</h2>
+    <p>Open a theme and press the small pencil next to its name. You can type
+      whatever you like &mdash; a theme called "Topic 7" is much easier to remember
+      as "safety complaints".</p>
+    <figure>
+      <img src="{% static 'img/tutorial/rename-theme.png' %}"
+           alt="A text box containing the words Routine operations, next to a Suggest again button, above Save and Cancel buttons.">
+      <figcaption>Press <b>Suggest</b> and a proposed name appears in the box.</figcaption>
+    </figure>
+    <p><b>Suggest</b> asks the system to propose a name for that theme, based on
+      the documents in it. If you do not like the one it gives you, press it again
+      for a different one &mdash; there is no limit.</p>
+    <p>Nothing is saved until you press <b>Save</b>. Press <b>Cancel</b>, or just
+      close the theme, and the name stays exactly as it was.</p>
+    <div class="callout callout--warn">
+      <b>A suggestion is only a suggestion.</b> It comes from a machine reading the
+      same documents you can read, and it can be wrong or bland. Your own name for
+      a theme is usually the more useful one.
+    </div>
+  </section>
+
+  <section class="step">
+    <span class="step__n">4 &middot; Documents</span>
     <h2>Every document is in the list on the right</h2>
     <figure>
       <img src="{% static 'img/tutorial/documents.png' %}"
@@ -219,7 +242,7 @@ answers one question they will actually have, in the order they will have it.
   </section>
 
   <section class="step">
-    <span class="step__n">4 &middot; Reading</span>
+    <span class="step__n">5 &middot; Reading</span>
     <h2>Opening a document shows you why it was grouped that way</h2>
     <figure>
       <img src="{% static 'img/tutorial/doc-theme.png' %}"
@@ -232,7 +255,7 @@ answers one question they will actually have, in the order they will have it.
   </section>
 
   <section class="step">
-    <span class="step__n">5 &middot; Disagreeing</span>
+    <span class="step__n">6 &middot; Disagreeing</span>
     <h2>If a document is in the wrong theme, move it</h2>
     <figure>
       <img src="{% static 'img/tutorial/change-theme.png' %}"
@@ -252,7 +275,7 @@ answers one question they will actually have, in the order they will have it.
 
   {% if active_learning %}
   <section class="step">
-    <span class="step__n">6 &middot; Active learning</span>
+    <span class="step__n">7 &middot; Active learning</span>
     <h2>You can label documents one at a time</h2>
     <p>Your version of the tool has an <b>Active learning</b> button in the top right. It
       gives you a queue of documents and asks you to label each one, starting with the ones

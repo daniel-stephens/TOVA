@@ -3696,6 +3696,9 @@ class TutorialTests(StudyFlowTestCase):
 
     #: Everything that only makes sense to someone who will see the active
     #: learning page. None of it may appear for the arm that will not.
+    #: Phrases only the labelling page uses. Deliberately not the bare word
+    #: "suggestion": the Suggest button for naming a theme lives on the
+    #: dashboard, so both arms are told about it and both should be.
     AL_ONLY = [
         "Active learning",
         "You can label documents one at a time",
@@ -3703,7 +3706,7 @@ class TutorialTests(StudyFlowTestCase):
         "img/tutorial/al-label.png",
         "Recommended",
         "Save Label",
-        "suggestion",
+        "pick a suggestion",
         "labelling",
         "Labelling",
     ]
@@ -3753,6 +3756,30 @@ class TutorialTests(StudyFlowTestCase):
             with self.subTest(shared=shared):
                 self.assertIn(shared, with_al)
                 self.assertIn(shared, without_al)
+
+    def test_it_explains_renaming_and_the_suggest_button(self):
+        """Both are dashboard features, so both arms are told about them."""
+        with_al = self.tutorial_body(self.participant)
+        self.group.enable_active_learning = False
+        self.group.save()
+        other = User.objects.create_user(
+            email="p902@study.local", password="pw", study_group=self.group,
+            participant_code="p902",
+        )
+        without_al = self.tutorial_body(other)
+
+        for body in (with_al, without_al):
+            self.assertIn("rename a theme", body)
+            self.assertIn("press it again", body)
+            self.assertIn("img/tutorial/rename-theme.png", body)
+            self.assertIn("Nothing is saved until you press", body)
+
+    def test_the_sections_are_numbered_in_order(self):
+        import re
+
+        body = self.tutorial_body(self.participant)
+        numbers = [int(n) for n in re.findall(r'step__n">(\d+) ', body)]
+        self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
 
     def test_it_does_not_claim_the_clock_is_running(self):
         self.login_participant()
@@ -3882,3 +3909,67 @@ class ClockStartsWhenTheToolIsReadyTests(StudyFlowTestCase):
         session = self.session()
         self.assertIsNotNone(session.tool_ready_at)
         self.assertGreater(session.tool_ready_at, session.task_started_at)
+
+
+class ParticipantCanReachTheToolsTests(StudyFlowTestCase):
+    """Every control the tool shows a participant must actually work for them.
+
+    StudyFlowMiddleware is fail-closed: a view that is not listed for the task
+    stage is refused with 409. That is the right default, but it means a new
+    dashboard feature works when staff try it and silently does nothing for
+    participants. Three endpoints shipped that way.
+    """
+
+    #: Routes the dashboard calls while a participant is exploring.
+    TASK_ROUTES = [
+        "suggest_theme_label",
+        "set_document_theme",
+        "get_document_themes",
+        "rename_topic",
+        "get_topic_renames",
+        "get_dashboard_data",
+        "text_info",
+    ]
+
+    def test_the_task_stage_allows_everything_the_dashboard_calls(self):
+        from web.study_flow import STAGE_URL_NAMES
+
+        allowed = STAGE_URL_NAMES[ParticipantSession.STAGE_TASK]
+        for name in self.TASK_ROUTES:
+            with self.subTest(route=name):
+                self.assertIn(name, allowed)
+
+    def test_a_participant_is_not_refused_the_theme_tools(self):
+        self.login_participant()
+        begin_task(self.client)
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
+            resp = self.client.post(
+                reverse("web:suggest_theme_label"),
+                data=json.dumps({"model_id": "m_test", "theme_id": "0"}),
+                content_type="application/json",
+            )
+        self.assertNotEqual(resp.status_code, 409, "the flow refused a tool it shows")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_a_participant_can_move_a_document_between_themes(self):
+        self.login_participant()
+        begin_task(self.client)
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
+            resp = self.client.post(
+                reverse("web:set_document_theme"),
+                data=json.dumps({"model_id": "m_test", "doc_id": "d1", "theme": "Mine"}),
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(DocumentTheme.objects.get().theme, "Mine")
+
+    def test_the_tools_are_still_refused_outside_the_task(self):
+        """Fail-closed everywhere else: this is not a hole in the gating."""
+        self.login_participant()
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
+            resp = self.client.post(
+                reverse("web:suggest_theme_label"),
+                data=json.dumps({"model_id": "m_test", "theme_id": "0"}),
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 409)

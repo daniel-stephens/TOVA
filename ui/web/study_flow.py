@@ -147,6 +147,12 @@ _TASK_URL_NAMES = {
     "api_get_user_config_overrides",
     "rename_topic",
     "get_topic_renames",
+    # Dashboard theme tools. The middleware is fail-closed, so a view added
+    # without being listed here is refused for participants and the control
+    # silently does nothing -- which is what happened to these three.
+    "suggest_theme_label",
+    "set_document_theme",
+    "get_document_themes",
     "chat",
     "chat_stream",
     "get_chat_messages",
