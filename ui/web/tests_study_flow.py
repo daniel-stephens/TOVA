@@ -3699,16 +3699,21 @@ class TutorialTests(StudyFlowTestCase):
     #: Phrases only the labelling page uses. Deliberately not the bare word
     #: "suggestion": the Suggest button for naming a theme lives on the
     #: dashboard, so both arms are told about it and both should be.
+    #: Phrases the labelling PAGE uses and nothing else does. Whole phrases on
+    #: purpose: bare words like "labelling" and "suggestion" also describe
+    #: dashboard work that both arms are told about, and matching on those made
+    #: this test fire on legitimate shared content twice.
     AL_ONLY = [
         "Active learning",
         "You can label documents one at a time",
         "img/tutorial/al-queue.png",
         "img/tutorial/al-label.png",
+        "queue of documents",
+        "least sure about",
         "Recommended",
         "Save Label",
         "pick a suggestion",
-        "labelling",
-        "Labelling",
+        "Labelling is optional",
     ]
 
     def tutorial_body(self, user):
@@ -3757,8 +3762,9 @@ class TutorialTests(StudyFlowTestCase):
                 self.assertIn(shared, with_al)
                 self.assertIn(shared, without_al)
 
-    def test_it_explains_renaming_and_the_suggest_button(self):
-        """Both are dashboard features, so both arms are told about them."""
+    def test_both_kinds_of_labelling_are_shown_together(self):
+        """A theme and a single document -- both are dashboard work, so both arms
+        are told about both, in one place rather than scattered."""
         with_al = self.tutorial_body(self.participant)
         self.group.enable_active_learning = False
         self.group.save()
@@ -3769,10 +3775,19 @@ class TutorialTests(StudyFlowTestCase):
         without_al = self.tutorial_body(other)
 
         for body in (with_al, without_al):
-            self.assertIn("rename a theme", body)
-            self.assertIn("press it again", body)
+            # Labelling a theme, and asking for a suggested name.
+            self.assertIn("Labelling a theme", body)
             self.assertIn("img/tutorial/rename-theme.png", body)
+            self.assertIn("Press it again for a different one", body)
             self.assertIn("Nothing is saved until you press", body)
+            # Labelling one document.
+            self.assertIn("Labelling a single document", body)
+            self.assertIn("img/tutorial/change-theme.png", body)
+            self.assertIn("New theme", body)
+            # And both inside the one section.
+            section = body[body.index("5 &middot; Labelling"):body.index("If you remember")]
+            self.assertIn("Labelling a theme", section)
+            self.assertIn("Labelling a single document", section)
 
     def test_the_sections_are_numbered_in_order(self):
         import re
