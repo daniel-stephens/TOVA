@@ -5,6 +5,7 @@ from typing import Any
 
 import requests
 from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Count
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
@@ -34,7 +35,128 @@ def _owner_name_email_map(user_ids: set[str]) -> dict[str, dict[str, str]]:
 
 @staff_member_required
 def tova_console_root(request: HttpRequest) -> HttpResponse:
-    return render(request, "admin/tova_index.html")
+    """The study console: what to do next, in the order it has to happen.
+
+    Setting a study up used to mean knowing which of eight admin URLs to visit
+    and in what sequence, with nothing reporting where you had got to. This
+    walks the same sequence and reports the real state of each step, so the next
+    action is always the first thing that is not done.
+
+    Every count degrades to zero rather than raising: an unreachable backend
+    should leave this page readable, since it is where you would come to find
+    out that the backend is unreachable.
+    """
+    from django.conf import settings
+
+    from web.models import (
+        InteractionEvent, LabelEvent, ParticipantSession, StudyGroup,
+        StudyResponse, User,
+    )
+
+    S = ParticipantSession
+    state = preflight_state()
+
+    participants = User.objects.filter(is_staff=False, is_superuser=False)
+    enrolled = participants.exclude(study_model_id="") | participants.filter(
+        study_group__isnull=False
+    )
+    enrolled_n = enrolled.distinct().count()
+
+    conditions = StudyGroup.objects.annotate(n=Count("users")).order_by("name")
+    conditions_in_use = [c for c in conditions if c.n]
+
+    sessions = {
+        "total": S.objects.count(),
+        "consented": S.objects.exclude(consented_at=None).count(),
+        "started": S.objects.exclude(task_started_at=None).count(),
+        "complete": S.objects.filter(stage=S.STAGE_DONE).count(),
+    }
+    responses = StudyResponse.objects.count()
+
+    completion_code = bool(getattr(settings, "PROLIFIC_COMPLETION_CODE", ""))
+    signup_open = bool(getattr(settings, "TOVA_ALLOW_SIGNUP", True))
+
+    # done / attention / todo -- "attention" means started but something is wrong.
+    def step(key, state_, detail, **extra):
+        return {"key": key, "state": state_, "detail": detail, **extra}
+
+    if not state["dashboards_available"]:
+        models_step = step("models", "todo",
+                           "No trained models found. Train one before anything else.")
+    else:
+        models_step = step("models", "done",
+                           f"{state['dashboards_available']} trained "
+                           f"model{'s' if state['dashboards_available'] != 1 else ''} available.")
+
+    if not conditions_in_use:
+        conditions_step = step("conditions", "todo",
+                               "No conditions yet. Creating participants defines them.")
+    else:
+        names = ", ".join(c.name for c in conditions_in_use[:4])
+        more = "" if len(conditions_in_use) <= 4 else f" +{len(conditions_in_use) - 4} more"
+        conditions_step = step("conditions", "done",
+                               f"{len(conditions_in_use)} conditions: {names}{more}")
+
+    if not enrolled_n:
+        people_step = step("people", "todo", "No participants yet.")
+    elif state["unassigned"]:
+        people_step = step("people", "attention",
+                           f"{enrolled_n} enrolled, but {state['unassigned']} have no "
+                           "dashboard and cannot start.")
+    else:
+        people_step = step("people", "done", f"{enrolled_n} participants enrolled.")
+
+    if not state["in_use"]:
+        check_step = step("check", "todo", "Nothing assigned to check yet.")
+    elif state["mixed_corpora"]:
+        check_step = step("check", "attention",
+                          "Conditions are on different corpora \u2014 the comparison would be "
+                          "model and corpus, not model alone.")
+    elif state["problems"]:
+        n = len(state["problems"])
+        check_step = step("check", "attention",
+                          f"{n} dashboard{'s' if n != 1 else ''} would not work for the "
+                          "participants assigned to it.")
+    else:
+        check_step = step("check", "done",
+                          f"All {len(state['in_use'])} conditions ready, one corpus.")
+
+    # Sentence-cased by construction rather than with .capitalize(), which would
+    # lowercase "Prolific".
+    access_bits = []
+    if not completion_code:
+        access_bits.append("No Prolific completion code set")
+    if signup_open:
+        access_bits.append("self-registration is still open")
+    if access_bits:
+        access_step = step("access", "attention", "; ".join(access_bits) + ".")
+    else:
+        access_step = step("access", "done",
+                           "Completion code set, self-registration closed.")
+
+    if not sessions["started"]:
+        collect_step = step("collect", "todo", "Nobody has started yet.")
+    elif sessions["complete"] < sessions["started"]:
+        collect_step = step("collect", "attention",
+                            f"{sessions['complete']} of {sessions['started']} finished \u2014 "
+                            "collection in progress.")
+    else:
+        collect_step = step("collect", "done",
+                            f"All {sessions['complete']} started participants finished.")
+
+    steps = [models_step, conditions_step, people_step, check_step, access_step, collect_step]
+    next_step = next((s_ for s_ in steps if s_["state"] != "done"), None)
+
+    return render(request, "admin/tova_index.html", {
+        "steps": {s_["key"]: s_ for s_ in steps},
+        "next_key": next_step["key"] if next_step else None,
+        "state": state,
+        "sessions": sessions,
+        "responses": responses,
+        "label_events": LabelEvent.objects.count(),
+        "interaction_events": InteractionEvent.objects.count(),
+        "has_data": bool(responses or LabelEvent.objects.exists()),
+    })
 
 
 @staff_member_required
@@ -130,17 +252,12 @@ def tova_dashboards(request: HttpRequest) -> HttpResponse:
     return render(request, "admin/tova_dashboards.html", context)
 
 
-@staff_member_required
-def tova_preflight(request: HttpRequest) -> HttpResponse:
-    """Is this study actually ready to run?
+def preflight_state() -> dict:
+    """Every dashboard a participant could be sent to, and whether it will work.
 
-    Every dashboard a participant is assigned to, with the things that go wrong
-    silently: no participants, a corpus that cannot be read, a backend that does
-    not answer. The failure this prevents is an admin discovering a broken
-    dashboard because a paid participant hit it.
-
-    Degrades rather than erroring -- an unreachable backend is exactly the
-    condition this page exists to report, so it must still render.
+    Shared by the pre-flight page and the study console so the two can never
+    disagree about whether the study is ready. Degrades rather than raising: an
+    unreachable backend is exactly the condition this reports on.
     """
     from web.models import ParticipantSession, User
     from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
@@ -191,7 +308,7 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
             for u in User.objects.filter(study_model_id=model_id)
         }
         if not al_states:
-            active_learning = "—"
+            active_learning = "\u2014"
         elif al_states == {True}:
             active_learning = "On"
         elif al_states == {False}:
@@ -219,24 +336,33 @@ def tova_preflight(request: HttpRequest) -> HttpResponse:
 
     # The study varies the model backbone over ONE corpus. If two conditions are
     # built on different corpora, the comparison is between corpora as well as
-    # between models, and the result means nothing -- so this is checked here
-    # rather than discovered during analysis.
+    # between models, and the result means nothing.
     corpora_in_use = {
         r["corpus_id"] for r in rows if r["participants"] and r["corpus_id"]
     }
     mixed_corpora = sorted(corpora_in_use) if len(corpora_in_use) > 1 else []
 
-    return render(
-        request,
-        "admin/tova_preflight.html",
-        {
-            "rows": rows,
-            "unassigned": unassigned,
-            "started": started,
-            "mixed_corpora": mixed_corpora,
-            "any_problems": any(not r["ready"] for r in rows) or bool(mixed_corpora),
-        },
-    )
+    in_use = [r for r in rows if r["participants"]]
+    return {
+        "rows": rows,
+        "unassigned": unassigned,
+        "started": started,
+        "mixed_corpora": mixed_corpora,
+        "dashboards_available": len(labels),
+        "in_use": in_use,
+        "problems": [r for r in in_use if not r["ready"]],
+        "any_problems": any(not r["ready"] for r in rows) or bool(mixed_corpora),
+    }
+
+
+@staff_member_required
+def tova_preflight(request: HttpRequest) -> HttpResponse:
+    """Is this study actually ready to run?
+
+    The failure this prevents is an admin discovering a broken dashboard
+    because a paid participant hit it.
+    """
+    return render(request, "admin/tova_preflight.html", preflight_state())
 
 
 @staff_member_required

@@ -3288,3 +3288,115 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
 
         self.assertEqual(self.sign_in(), reverse("web:study_post"))
         self.assertFalse(StudyResponse.objects.exists())
+
+
+class StudyConsoleTests(TestCase):
+    """The console reports where setup actually is and what to do next."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+        self.url = reverse("tova_admin_root")
+
+    def load(self, dashboards=(), corpora=None, **settings_kwargs):
+        corpora = corpora or {}
+        opts = {"PROLIFIC_COMPLETION_CODE": "", "TOVA_ALLOW_SIGNUP": True}
+        opts.update(settings_kwargs)
+        with mock.patch("web.admin.available_dashboards", return_value=list(dashboards)), \
+             mock.patch("web.admin.corpus_for_model", side_effect=lambda m: corpora.get(m, "c_1")), \
+             mock.patch("web.views._study_corpus_size", return_value=600), \
+             override_settings(**opts):
+            return self.client.get(self.url)
+
+    def test_a_fresh_install_says_train_a_model_first(self):
+        resp = self.load()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["next_key"], "models")
+        self.assertEqual(resp.context["steps"]["models"]["state"], "todo")
+
+    def test_with_models_but_no_people_the_next_step_is_conditions(self):
+        resp = self.load(dashboards=[("m_a", "A  (m_a · corpus c_1)")])
+        self.assertEqual(resp.context["steps"]["models"]["state"], "done")
+        self.assertEqual(resp.context["next_key"], "conditions")
+
+    def test_participants_without_a_dashboard_are_flagged(self):
+        User.objects.create_user(email="stray@study.local", password="pw",
+                                 participant_code="stray")
+        StudyGroup.objects.create(name="A · AL on", slug="a-al-on",
+                                  default_model_id="m_a")
+        User.objects.create_user(email="p1@study.local", password="pw",
+                                 study_model_id="m_a", participant_code="p1")
+        resp = self.load(dashboards=[("m_a", "A  (m_a · corpus c_1)")])
+        self.assertEqual(resp.context["steps"]["people"]["state"], "attention")
+
+    def test_mixed_corpora_stop_the_check_step_passing(self):
+        for code, model in (("p1", "m_a"), ("p2", "m_b")):
+            User.objects.create_user(email=f"{code}@study.local", password="pw",
+                                     study_model_id=model, participant_code=code)
+        resp = self.load(
+            dashboards=[("m_a", "A  (m_a · corpus c_1)"), ("m_b", "B  (m_b · corpus c_2)")],
+            corpora={"m_a": "c_1", "m_b": "c_2"},
+        )
+        self.assertEqual(resp.context["steps"]["check"]["state"], "attention")
+        self.assertIn("different corpora", resp.context["steps"]["check"]["detail"])
+
+    def test_access_step_flags_missing_payment_and_open_signup(self):
+        resp = self.load()
+        detail = resp.context["steps"]["access"]["detail"]
+        self.assertEqual(resp.context["steps"]["access"]["state"], "attention")
+        self.assertIn("completion code", detail.lower())
+        self.assertIn("self-registration", detail.lower())
+        self.assertIn("Prolific", detail, "product name keeps its capital")
+
+    def test_access_step_passes_once_configured(self):
+        resp = self.load(PROLIFIC_COMPLETION_CODE="ABC123", TOVA_ALLOW_SIGNUP=False)
+        self.assertEqual(resp.context["steps"]["access"]["state"], "done")
+
+    def test_download_links_appear_only_once_there_is_data(self):
+        self.assertFalse(self.load().context["has_data"])
+        p = User.objects.create_user(email="p1@study.local", password="pw",
+                                     participant_code="p1", study_model_id="m_a")
+        StudyResponse.objects.create(user=p, model_id="m_a")
+        resp = self.load()
+        self.assertTrue(resp.context["has_data"])
+        self.assertContains(resp, reverse("admin:web_studyresponse_responses_csv"))
+
+    def test_it_still_renders_with_the_backend_down(self):
+        """This is where you would come to find out the backend is down."""
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", side_effect=RuntimeError("down")):
+            resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_it_is_staff_only(self):
+        self.client.force_login(
+            User.objects.create_user(email="nobody@x.com", password="pw")
+        )
+        self.assertNotEqual(self.client.get(self.url).status_code, 200)
+
+
+class AdminTemplateRenderTests(TestCase):
+    """Guards against template syntax that renders as visible text.
+
+    Django's {# #} comment is single-line only; a multi-line one is emitted
+    verbatim onto the page. That shipped once, on the admin homepage.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
+        self.client.force_login(self.admin)
+
+    def test_no_template_syntax_leaks_onto_admin_pages(self):
+        urls = [
+            reverse("admin:index"),
+            reverse("tova_admin_root"),
+            reverse("tova_admin_preflight"),
+            reverse("tova_admin_progress"),
+        ]
+        with mock.patch("web.admin.available_dashboards", return_value=[]), \
+             mock.patch("web.views._study_corpus_size", return_value=600):
+            for url in urls:
+                with self.subTest(url=url):
+                    body = self.client.get(url).content.decode()
+                    for leak in ("{#", "#}", "{%", "%}", "{{", "}}"):
+                        self.assertNotIn(leak, body, f"{leak} rendered as text on {url}")

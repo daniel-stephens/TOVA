@@ -9,12 +9,20 @@
 
 {% block content %}
   <div id="content-main">
+    {% comment %}
+      The tables below are the data model. Setting a study up is a task, so it
+      gets a door of its own rather than a link buried among eleven of them.
+      ({# #} is single-line only -- a multi-line one renders as visible text.)
+    {% endcomment %}
     <div class="tova-admin-console-card">
-      <h2>{% translate "TOVA console" %}</h2>
+      <h2><a href="{% url 'tova_admin_root' %}">{% translate "Run a study &rarr;" %}</a></h2>
+      <p style="margin: 0.35rem 0 0.9rem;">
+        {% translate "Train models, define conditions, create participants, check it will work, and collect the data. Shows you where you are and what to do next." %}
+      </p>
       <ul>
-          <li><a href="{% url 'tova_admin_preflight' %}">{% translate "Study pre-flight" %}</a></li>
+        <li><a href="{% url 'tova_admin_preflight' %}">{% translate "Study pre-flight" %}</a></li>
         <li><a href="{% url 'tova_admin_progress' %}">{% translate "Collection progress" %}</a></li>
-      <li><a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a></li>
+        <li><a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a></li>
         <li><a href="{% url 'tova_admin_dashboards' %}">{% translate "Dashboards (models)" %}</a></li>
       </ul>
     </div>

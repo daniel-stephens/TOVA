@@ -1,17 +1,215 @@
 {% extends "admin/base_site.html" %}
+{% load i18n %}
 
-{% block content %}
-  <h1>TOVA admin console</h1>
-  <div class="tova-admin-console-card">
-    <p class="tova-admin-page-intro tova-admin-console-intro">
-      Corpora and dashboards are managed through the TOVA backend, but surfaced here for convenience.
-    </p>
-    <ul>
-      <li><a href="{% url 'tova_admin_preflight' %}">Study pre-flight</a></li>
-      <li><a href="{% url 'tova_admin_progress' %}">Collection progress</a></li>
-      <li><a href="{% url 'tova_admin_corpora' %}">Corpora</a></li>
-      <li><a href="{% url 'tova_admin_dashboards' %}">Dashboards (models)</a></li>
-    </ul>
-  </div>
+{% comment %}
+The study console.
+
+Setting a study up meant knowing which of eight admin URLs to visit, in what
+order, with nothing reporting where you had got to. This is the same sequence
+with its real state attached, so the next thing to do is always the first step
+that is not done.
+
+The numbering is real: these steps genuinely have to happen in this order. You
+cannot define conditions before a model exists, or check a dashboard before
+anyone is assigned to it.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  .tsc { max-width: 60rem; }
+  .tsc-lede { color: var(--body-quiet-color); max-width: 46em; margin: 0 0 1.75rem; }
+
+  .tsc-next {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color); border-left: 4px solid var(--primary);
+    padding: 0.9rem 1.1rem; margin: 0 0 1.75rem; border-radius: 4px;
+  }
+  .tsc-next__label {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--body-quiet-color);
+  }
+  .tsc-next__what { font-weight: 700; font-size: 15px; }
+
+  .tsc-steps { display: grid; gap: 0; border: 1px solid var(--border-color); border-radius: 4px; }
+  .tsc-step {
+    display: grid; grid-template-columns: 2.4rem 1fr auto; gap: 0 1rem;
+    align-items: start; padding: 1.05rem 1.2rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .tsc-step:last-child { border-bottom: 0; }
+  .tsc-step.is-next { background: var(--darkened-bg, rgba(128,128,128,0.06)); }
+
+  .tsc-num {
+    font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px;
+    color: var(--body-quiet-color); padding-top: 0.15rem;
+  }
+  .tsc-step.is-done .tsc-num { color: #2A9D63; }
+
+  .tsc-body h3 { margin: 0 0 0.2rem; font-size: 15px; }
+  .tsc-detail { margin: 0; font-size: 13px; color: var(--body-quiet-color); }
+  .tsc-step.is-attention .tsc-detail { color: #B8860B; font-weight: 600; }
+
+  .tsc-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; }
+  .tsc-actions a { font-size: 13px; white-space: nowrap; }
+
+  .tsc-pill {
+    display: inline-block; font-size: 10px; letter-spacing: 0.07em;
+    text-transform: uppercase; font-weight: 700; padding: 0.15rem 0.45rem;
+    border-radius: 2px; white-space: nowrap;
+  }
+  .tsc-pill--done { background: rgba(42,157,99,0.14); color: #2A9D63; }
+  .tsc-pill--attention { background: rgba(184,134,11,0.16); color: #B8860B; }
+  .tsc-pill--todo { background: rgba(128,128,128,0.14); color: var(--body-quiet-color); }
+
+  .tsc-data { margin-top: 2rem; }
+  .tsc-data h2 { font-size: 14px; margin: 0 0 0.6rem; }
+  .tsc-data ul { margin: 0; padding-left: 1.1rem; font-size: 13px; }
+  .tsc-data li { margin-bottom: 0.3rem; }
+  .tsc-count { font-variant-numeric: tabular-nums; color: var(--body-quiet-color); }
+
+  .tsc-quiet { margin-top: 2rem; font-size: 12px; color: var(--body-quiet-color); }
+  .tsc-quiet a { margin-right: 1rem; }
+</style>
 {% endblock %}
 
+{% block content %}
+<div id="content-main" class="tsc">
+
+  <h1>{% translate "Run a study" %}</h1>
+  <p class="tsc-lede">
+    Six steps, in the order they have to happen. Each one shows where you actually
+    are, so the next thing to do is the first step that is not finished.
+  </p>
+
+  {% if next_key %}
+    <div class="tsc-next">
+      <span class="tsc-next__label">{% translate "Next" %}</span>
+      <span class="tsc-next__what">
+        {% if next_key == "models" %}Train a topic model
+        {% elif next_key == "conditions" %}Create your conditions
+        {% elif next_key == "people" %}Create participants
+        {% elif next_key == "check" %}Run the readiness check
+        {% elif next_key == "access" %}Set up payment and access
+        {% else %}Watch collection come in{% endif %}
+      </span>
+    </div>
+  {% else %}
+    <div class="tsc-next">
+      <span class="tsc-next__label">{% translate "Status" %}</span>
+      <span class="tsc-next__what">{% translate "Everything is set up and collection is complete." %}</span>
+    </div>
+  {% endif %}
+
+  <div class="tsc-steps">
+
+    <div class="tsc-step is-{{ steps.models.state }}{% if next_key == 'models' %} is-next{% endif %}">
+      <span class="tsc-num">1</span>
+      <div class="tsc-body">
+        <h3>{% translate "Train the models" %}</h3>
+        <p class="tsc-detail">{{ steps.models.detail }}</p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.models.state }}">{{ steps.models.state }}</span>
+        <a href="{% url 'web:training_page_get' %}">{% translate "Train a model" %}</a>
+        <a href="{% url 'tova_admin_dashboards' %}">{% translate "See all models" %}</a>
+      </div>
+    </div>
+
+    <div class="tsc-step is-{{ steps.conditions.state }}{% if next_key == 'conditions' %} is-next{% endif %}">
+      <span class="tsc-num">2</span>
+      <div class="tsc-body">
+        <h3>{% translate "Decide the conditions" %}</h3>
+        <p class="tsc-detail">{{ steps.conditions.detail }}</p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.conditions.state }}">{{ steps.conditions.state }}</span>
+        <a href="{% url 'admin:web_studygroup_changelist' %}">{% translate "See conditions" %}</a>
+      </div>
+    </div>
+
+    <div class="tsc-step is-{{ steps.people.state }}{% if next_key == 'people' %} is-next{% endif %}">
+      <span class="tsc-num">3</span>
+      <div class="tsc-body">
+        <h3>{% translate "Create the participants" %}</h3>
+        <p class="tsc-detail">{{ steps.people.detail }}</p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.people.state }}">{{ steps.people.state }}</span>
+        <a href="{% url 'admin:web_user_create_participants' %}">{% translate "Create participants" %}</a>
+        <a href="{% url 'admin:web_user_changelist' %}">{% translate "See participants" %}</a>
+      </div>
+    </div>
+
+    <div class="tsc-step is-{{ steps.check.state }}{% if next_key == 'check' %} is-next{% endif %}">
+      <span class="tsc-num">4</span>
+      <div class="tsc-body">
+        <h3>{% translate "Check it will work" %}</h3>
+        <p class="tsc-detail">{{ steps.check.detail }}</p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.check.state }}">{{ steps.check.state }}</span>
+        <a href="{% url 'tova_admin_preflight' %}">{% translate "Run pre-flight" %}</a>
+      </div>
+    </div>
+
+    <div class="tsc-step is-{{ steps.access.state }}{% if next_key == 'access' %} is-next{% endif %}">
+      <span class="tsc-num">5</span>
+      <div class="tsc-body">
+        <h3>{% translate "Payment and access" %}</h3>
+        <p class="tsc-detail">{{ steps.access.detail }}</p>
+        <p class="tsc-detail">
+          {% translate "Both are environment settings:" %}
+          <code>PROLIFIC_COMPLETION_CODE</code>, <code>TOVA_ALLOW_SIGNUP=false</code>.
+        </p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.access.state }}">{{ steps.access.state }}</span>
+      </div>
+    </div>
+
+    <div class="tsc-step is-{{ steps.collect.state }}{% if next_key == 'collect' %} is-next{% endif %}">
+      <span class="tsc-num">6</span>
+      <div class="tsc-body">
+        <h3>{% translate "Collect" %}</h3>
+        <p class="tsc-detail">{{ steps.collect.detail }}</p>
+      </div>
+      <div class="tsc-actions">
+        <span class="tsc-pill tsc-pill--{{ steps.collect.state }}">{{ steps.collect.state }}</span>
+        <a href="{% url 'tova_admin_progress' %}">{% translate "Collection progress" %}</a>
+      </div>
+    </div>
+
+  </div>
+
+  {% if has_data %}
+  <div class="tsc-data">
+    <h2>{% translate "Download the data" %}</h2>
+    <ul>
+      <li>
+        <a href="{% url 'admin:web_studyresponse_responses_csv' %}">{% translate "Responses" %}</a>
+        <span class="tsc-count">&middot; {{ responses }} {% translate "submitted" %}</span>
+      </li>
+      <li>
+        <a href="{% url 'admin:web_labelevent_labels_csv' %}">{% translate "Label events" %}</a>
+        <span class="tsc-count">&middot; {{ label_events }} {% translate "recorded" %}</span>
+      </li>
+      <li>
+        <a href="{% url 'admin:web_interactionevent_events_csv' %}">{% translate "Interaction events" %}</a>
+        <span class="tsc-count">&middot; {{ interaction_events }} {% translate "recorded" %}</span>
+      </li>
+      <li>
+        <a href="{% url 'admin:web_interactionevent_comparison' %}">{% translate "Keyboard vs mouse" %}</a>
+      </li>
+    </ul>
+  </div>
+  {% endif %}
+
+  <p class="tsc-quiet">
+    <a href="{% url 'tova_admin_corpora' %}">{% translate "Corpora" %}</a>
+    <a href="{% url 'admin:web_participantsession_changelist' %}">{% translate "Participant sessions" %}</a>
+    <a href="{% url 'admin:web_researchernote_changelist' %}">{% translate "Researcher notes" %}</a>
+    <a href="{% url 'admin:index' %}">{% translate "All admin tables" %}</a>
+  </p>
+
+</div>
+{% endblock %}
