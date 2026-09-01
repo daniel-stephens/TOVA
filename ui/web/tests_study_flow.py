@@ -3694,21 +3694,65 @@ class TutorialTests(StudyFlowTestCase):
                     f"{name} is referenced but not present",
                 )
 
-    def test_the_active_learning_section_follows_the_condition(self):
-        self.login_participant()
-        body = self.client.get(reverse("web:study_tutorial")).content.decode()
-        self.assertIn("Active learning", body)
+    #: Everything that only makes sense to someone who will see the active
+    #: learning page. None of it may appear for the arm that will not.
+    AL_ONLY = [
+        "Active learning",
+        "You can label documents one at a time",
+        "img/tutorial/al-queue.png",
+        "img/tutorial/al-label.png",
+        "Recommended",
+        "Save Label",
+        "suggestion",
+        "labelling",
+        "Labelling",
+    ]
 
+    def tutorial_body(self, user):
+        self.client.force_login(user)
+        consent_for(user)
+        return self.client.get(reverse("web:study_tutorial")).content.decode()
+
+    def test_the_arm_with_active_learning_is_told_about_it(self):
+        body = self.tutorial_body(self.participant)
+        self.assertIn("Active learning", body)
+        self.assertIn("img/tutorial/al-queue.png", body)
+        self.assertIn("img/tutorial/al-label.png", body)
+
+    def test_the_arm_without_it_is_told_none_of_it(self):
+        """They never reach that page, so describing it would only confuse."""
         self.group.enable_active_learning = False
         self.group.save()
         other = User.objects.create_user(
             email="p900@study.local", password="pw", study_group=self.group,
             participant_code="p900",
         )
-        self.client.force_login(other)
-        consent_for(other)
-        body = self.client.get(reverse("web:study_tutorial")).content.decode()
-        self.assertNotIn("You can label documents one at a time", body)
+        body = self.tutorial_body(other)
+        for fragment in self.AL_ONLY:
+            with self.subTest(fragment=fragment):
+                self.assertNotIn(fragment, body)
+
+    def test_the_two_arms_get_genuinely_different_pages(self):
+        with_al = self.tutorial_body(self.participant)
+
+        self.group.enable_active_learning = False
+        self.group.save()
+        other = User.objects.create_user(
+            email="p901@study.local", password="pw", study_group=self.group,
+            participant_code="p901",
+        )
+        without_al = self.tutorial_body(other)
+
+        self.assertNotEqual(with_al, without_al)
+        self.assertLess(len(without_al), len(with_al))
+        # Everything that is not about active learning is shared, so both arms
+        # get the same account of the parts of the tool they both use.
+        for shared in ("The circles are groups of related documents",
+                       "You have 30 minutes with the tool",
+                       "If you remember nothing else"):
+            with self.subTest(shared=shared):
+                self.assertIn(shared, with_al)
+                self.assertIn(shared, without_al)
 
     def test_it_does_not_claim_the_clock_is_running(self):
         self.login_participant()
