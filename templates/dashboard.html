@@ -1624,8 +1624,10 @@ footer {
                 <div id="changeDocThemeControls" class="mb-3 d-flex align-items-center gap-2 flex-wrap"
                      style="display: none !important;">
                   <select id="docThemeSelect" class="form-select form-select-sm" style="max-width: 220px;"></select>
+                  <input type="text" id="docThemeNewInput" class="form-control form-control-sm"
+                         style="max-width: 220px; display: none;" maxlength="255"
+                         placeholder="Name the new theme">
                   <button type="button" class="btn btn-sm btn-success" id="saveDocThemeBtn">Save</button>
-                  <button type="button" class="btn btn-sm btn-outline-secondary" id="clearDocThemeBtn">Use model's</button>
                   <button type="button" class="btn btn-sm btn-secondary" id="cancelDocThemeBtn">Cancel</button>
                   <span id="docThemeFeedback" class="small text-muted"></span>
                 </div>
@@ -2734,8 +2736,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const openBtn = document.getElementById("changeDocThemeBtn");
     const controls = document.getElementById("changeDocThemeControls");
     const select = document.getElementById("docThemeSelect");
+    const newInput = document.getElementById("docThemeNewInput");
     const saveBtn = document.getElementById("saveDocThemeBtn");
-    const clearBtn = document.getElementById("clearDocThemeBtn");
     const cancelBtn = document.getElementById("cancelDocThemeBtn");
     const feedback = document.getElementById("docThemeFeedback");
     const themeEl = document.getElementById("modalTheme");
@@ -2743,6 +2745,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!openBtn || !controls || !select) return;
 
     const show = (on) => { controls.style.setProperty("display", on ? "flex" : "none", "important"); };
+
+    const NEW_THEME = "__new__";
 
     openBtn.addEventListener("click", () => {
       select.innerHTML = "";
@@ -2753,10 +2757,28 @@ document.addEventListener("DOMContentLoaded", () => {
         if (t === themeEl.textContent.trim()) o.selected = true;
         select.appendChild(o);
       });
+      // A document may belong somewhere that does not exist yet.
+      const sep = document.createElement("option");
+      sep.value = NEW_THEME;
+      sep.textContent = "New theme\u2026";
+      select.appendChild(sep);
+
+      newInput.value = "";
+      newInput.style.display = "none";
       feedback.textContent = "";
       show(true);
     });
+
+    select.addEventListener("change", () => {
+      const creating = select.value === NEW_THEME;
+      newInput.style.display = creating ? "" : "none";
+      if (creating) newInput.focus();
+    });
+
     cancelBtn.addEventListener("click", () => show(false));
+    newInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveBtn.click(); }
+    });
 
     const save = async (theme) => {
       const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
@@ -2797,8 +2819,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    saveBtn.addEventListener("click", () => save(select.value));
-    clearBtn.addEventListener("click", () => save(""));
+    saveBtn.addEventListener("click", () => {
+      const creating = select.value === NEW_THEME;
+      const theme = creating ? newInput.value.trim() : select.value;
+      if (creating && !theme) {
+        feedback.textContent = "Name the new theme first";
+        newInput.focus();
+        return;
+      }
+      save(theme);
+    });
   }
 
   // Setup rename handlers once (using event delegation)

@@ -109,9 +109,14 @@ def set_document_theme(request: HttpRequest):
     if not R._verify_model_ownership(model_id, owner_id):
         return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
 
-    if not theme:
-        # Empty clears the override and returns the document to the model's own
-        # assignment, rather than storing a blank theme.
+    # Clearing happens two ways, and both mean "the model was right after all":
+    # an empty theme, or picking the model's own label out of the list. The UI
+    # only offers the second -- a separate "use the model's" button was
+    # redundant next to a dropdown that already contains it. Either way the
+    # override goes, rather than storing a correction that corrects nothing and
+    # showing this document as changed when it is not.
+    same_as_model = bool(previous) and theme.casefold() == previous.casefold()
+    if not theme or same_as_model:
         DocumentTheme.objects.filter(
             user=request.user, model_id=model_id, doc_id=doc_id
         ).delete()

@@ -3534,6 +3534,31 @@ class ThemeToolsTests(TestCase):
         self.assertTrue(resp.json()["cleared"])
         self.assertFalse(DocumentTheme.objects.exists())
 
+    def test_picking_the_models_own_label_clears_rather_than_records(self):
+        """Otherwise the document shows as "changed by you" having not changed."""
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1",
+                      theme="Mine", previous_theme="Routine ops")
+            resp = self.post(self.set_url, model_id="m1", doc_id="d1",
+                             theme="Routine ops", previous_theme="Routine ops")
+        self.assertTrue(resp.json()["cleared"])
+        self.assertFalse(DocumentTheme.objects.exists())
+
+    def test_matching_the_model_is_case_insensitive(self):
+        with self.owns():
+            resp = self.post(self.set_url, model_id="m1", doc_id="d1",
+                             theme="routine OPS", previous_theme="Routine ops")
+        self.assertTrue(resp.json()["cleared"])
+
+    def test_a_brand_new_theme_name_is_accepted(self):
+        """A document may belong somewhere the model never proposed."""
+        with self.owns():
+            resp = self.post(self.set_url, model_id="m1", doc_id="d1",
+                             theme="Reagent supplier switch",
+                             previous_theme="Routine ops")
+        self.assertFalse(resp.json()["cleared"])
+        self.assertEqual(DocumentTheme.objects.get().theme, "Reagent supplier switch")
+
     def test_overrides_are_private_to_each_user(self):
         other = User.objects.create_user(email="other@example.com", password="pw")
         DocumentTheme.objects.create(user=other, model_id="m1", doc_id="d1", theme="Theirs")
@@ -3568,6 +3593,14 @@ class DashboardChromeTests(TestCase):
         self.assertNotIn("setTimeout(openSaveSettingsModal", src)
         # ...but is still reachable deliberately.
         self.assertIn("window.openSaveSettingsModal", src)
+
+    def test_the_document_theme_control_allows_a_new_name(self):
+        src = self.source()
+        self.assertIn('docThemeNewInput', src)
+        self.assertIn('New theme', src)
+        # The separate "use the model's" button was redundant beside a dropdown
+        # that already lists the model's own labels.
+        self.assertNotIn('clearDocThemeBtn', src)
 
     def test_the_suggest_button_sends_only_the_theme_identity(self):
         src = self.source()
