@@ -3777,6 +3777,10 @@ class TutorialTests(StudyFlowTestCase):
         for body in (with_al, without_al):
             # Labelling a theme, and asking for a suggested name.
             self.assertIn("Labelling a theme", body)
+            # The pencil is small and grey; the walkthrough shows it before
+            # telling anyone to press it.
+            self.assertIn("img/tutorial/theme-pencil.png", body)
+            self.assertIn("easy to miss", body)
             self.assertIn("img/tutorial/rename-theme.png", body)
             self.assertIn("Press it again for a different one", body)
             self.assertIn("Nothing is saved until you press", body)
