@@ -71,53 +71,6 @@ def participant_code_for(email: str) -> str | None:
     return None if taken else local
 
 
-def condition_group(model_id: str, label: str, active_learning: bool) -> "StudyGroup":
-    """Get or create the StudyGroup standing for one (dashboard x AL) condition.
-
-    A condition in this study is a model backbone plus whether active learning
-    was switched on. Both halves used to be implicit -- everyone who happened to
-    share a ``study_model_id``, with AL set per user -- which meant a condition
-    was something you inferred rather than something you could name, filter or
-    count. This makes it an object.
-
-    The group carries the condition, and participants inherit from it: their own
-    ``enable_active_learning`` is left unset so there is exactly one place the
-    answer lives.
-    """
-    from django.utils.text import slugify
-
-    base = (label or model_id).split("  (")[0].strip() or model_id
-    suffix = "AL on" if active_learning else "AL off"
-    name = f"{base} \u00b7 {suffix}"
-    slug = (slugify(f"{base}-{suffix}") or slugify(f"{model_id}-{suffix}"))[:100]
-
-    group = StudyGroup.objects.filter(slug=slug).first()
-    if group is None:
-        # A different condition may already hold this display name (two models
-        # sharing a name, say). Keep names unique without failing the cohort.
-        unique_name, n = name, 2
-        while StudyGroup.objects.filter(name=unique_name).exists():
-            unique_name = f"{name} ({n})"
-            n += 1
-        group = StudyGroup.objects.create(
-            name=unique_name, slug=slug,
-            default_model_id=model_id, enable_active_learning=active_learning,
-        )
-        return group
-
-    # It already exists: keep it truthful about the condition it names.
-    fields = []
-    if group.default_model_id != model_id:
-        group.default_model_id = model_id
-        fields.append("default_model_id")
-    if group.enable_active_learning != active_learning:
-        group.enable_active_learning = active_learning
-        fields.append("enable_active_learning")
-    if fields:
-        group.save(update_fields=fields)
-    return group
-
-
 def _iso(value):
     """ISO-8601 for a datetime, empty string for None. Keeps CSV cells uniform."""
     return value.isoformat() if value else ""
@@ -215,8 +168,14 @@ class UserAdminForm(DashboardChoiceMixin, forms.ModelForm):
 
 
 class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
+    """A study group is a condition: one dashboard, one active-learning setting.
+
+    Both live here rather than on the participant, so a condition is defined
+    once and everyone in it inherits from the same place.
+    """
+
     dashboard_field = "default_model_id"
-    dashboard_blank_label = _("\u2014 no default dashboard \u2014")
+    dashboard_blank_label = _("\u2014 no dashboard yet \u2014")
 
     members = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
@@ -235,6 +194,20 @@ class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        dashboard = self.fields.get("default_model_id")
+        if dashboard is not None:
+            dashboard.label = _("Dashboard for this condition")
+            dashboard.help_text = _(
+                "The trained model everyone in this condition works with. "
+                "Participants inherit it, so this is the only place it is set."
+            )
+        al = self.fields.get("enable_active_learning")
+        if al is not None:
+            al.label = _("Active learning in this condition")
+            al.help_text = _(
+                "Whether participants in this condition get the active-learning "
+                "tab. Set it here, not when creating participants."
+            )
         # Staff accounts are never study participants, so keep them out of the picker.
         self.fields["members"].queryset = User.objects.filter(
             is_staff=False, is_superuser=False
@@ -243,14 +216,22 @@ class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
             self.fields["members"].initial = self.instance.users.values_list("pk", flat=True)
 
 
-class CreateParticipantsForm(forms.Form):
-    """Bulk-create participants and spread them across dashboards."""
+class ConditionChoiceField(forms.ModelMultipleChoiceField):
+    """Study groups, labelled with the condition they actually represent."""
 
-    ACTIVE_LEARNING_CHOICES = [
-        ("on", _("On for every condition")),
-        ("off", _("Off for every condition")),
-        ("split", _("Split each dashboard into two arms \u2014 one with, one without")),
-    ]
+    def label_from_instance(self, obj):
+        dashboard = (obj.default_model_id or "").strip()
+        if dashboard:
+            name = dict(available_dashboards()).get(dashboard, dashboard)
+            where = name.split("  (")[0]
+        else:
+            where = "no dashboard assigned"
+        al = "active learning ON" if obj.enable_active_learning else "active learning OFF"
+        return f"{obj.name} \u2014 {where}, {al}"
+
+
+class CreateParticipantsForm(forms.Form):
+    """Bulk-create participants and deal them into conditions you have defined."""
 
     count = forms.IntegerField(
         required=False,
@@ -273,24 +254,15 @@ class CreateParticipantsForm(forms.Form):
         label=_("Start numbering at"),
         help_text=_("Raise this for a second cohort so logins do not collide."),
     )
-    dashboards = forms.MultipleChoiceField(
+    groups = ConditionChoiceField(
+        queryset=StudyGroup.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        label=_("Split them across"),
+        label=_("Deal them into"),
         help_text=_(
-            "Each participant is assigned exactly ONE dashboard \u2014 nobody gets "
-            "more than one. Tick several here to divide the cohort evenly "
-            "between them, round-robin. Everyone who lands on the same dashboard "
-            "forms one condition, so this is how the study arms are built."
-        ),
-    )
-    active_learning = forms.ChoiceField(
-        choices=ACTIVE_LEARNING_CHOICES,
-        initial="on",
-        label=_("Active learning"),
-        help_text=_(
-            "Active learning is a condition of the study, not a property of the "
-            "model. Splitting doubles the number of arms: two dashboards become "
-            "four conditions, and the cohort is divided evenly between them."
+            "Each participant joins exactly ONE condition. Tick several to divide "
+            "the cohort evenly between them, round-robin. A condition carries its "
+            "own dashboard and its own active-learning setting \u2014 edit those on "
+            "the condition itself, not here."
         ),
     )
     skip_existing = forms.BooleanField(
@@ -306,13 +278,27 @@ class CreateParticipantsForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        choices = available_dashboards()
-        self.fields["dashboards"].choices = choices
-        self.fields["dashboards"].initial = [model_id for model_id, _label in choices]
-        self.dashboards_available = bool(choices)
+        conditions = StudyGroup.objects.order_by("name")
+        self.fields["groups"].queryset = conditions
+        self.fields["groups"].initial = list(conditions.values_list("pk", flat=True))
+        self.conditions_available = conditions.exists()
 
     def clean(self):
         cleaned = super().clean()
+
+        # A condition with no dashboard leaves its participants unable to start,
+        # and they would not find out until they signed in.
+        undashed = [
+            g.name for g in cleaned.get("groups") or []
+            if not (g.default_model_id or "").strip()
+        ]
+        if undashed:
+            raise forms.ValidationError(
+                _("These conditions have no dashboard, so participants in them "
+                  "could not start: %s. Assign one on the condition first.")
+                % ", ".join(undashed)
+            )
+
         count = cleaned.get("count")
         emails_raw = (cleaned.get("emails") or "").strip()
 
@@ -388,31 +374,47 @@ class AssignDashboardForm(forms.Form):
 @admin.register(StudyGroup)
 class StudyGroupAdmin(admin.ModelAdmin):
     form = StudyGroupAdminForm
-    list_display = ("name", "default_model_id", "enable_active_learning", "user_count")
+    list_display = ("name", "dashboard_name", "enable_active_learning", "user_count")
     list_filter = ("enable_active_learning",)
     search_fields = ("name", "slug", "default_model_id", "description")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("member_table",)
     fieldsets = (
         (
-            _("Study setup"),
+            _("The condition"),
             {
                 "fields": ("name", "slug", "description", "default_model_id"),
                 "description": _(
-                    "A group is a label for a condition. The dashboard set here applies "
-                    "to members who have no dashboard assigned to them directly."
+                    "A condition is one dashboard plus one active-learning setting. "
+                    "Everyone assigned here inherits both, so changing them moves the "
+                    "whole arm at once. Give it a name you will recognise in the data "
+                    "\u2014 it is what appears in the exports."
                 ),
             },
         ),
         (
-            _("Feature flags"),
-            {"fields": ("enable_active_learning",)},
+            _("Active learning"),
+            {
+                "fields": ("enable_active_learning",),
+                "description": _(
+                    "Define two conditions on the same dashboard, one with this on and "
+                    "one with it off, to compare the tool with and without it."
+                ),
+            },
         ),
         (
             _("Members"),
             {"fields": ("members", "member_table")},
         ),
     )
+
+    @admin.display(description=_("Dashboard"), ordering="default_model_id")
+    def dashboard_name(self, obj):
+        model_id = (obj.default_model_id or "").strip()
+        if not model_id:
+            return format_html('<span style="color:#b7791f">no dashboard yet</span>')
+        name = dict(available_dashboards()).get(model_id, model_id).split("  (")[0]
+        return format_html('<span title="{}">{}</span>', model_id, name)
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_n_users=Count("users"))
@@ -601,37 +603,24 @@ class UserAdmin(BaseUserAdmin):
 
         if request.method != "POST":
             form = CreateParticipantsForm()
-            context.update({"form": form, "dashboards_available": form.dashboards_available})
+            context.update({"form": form, "conditions_available": form.conditions_available})
             return render(request, "admin/create_participants.html", context)
 
         form = CreateParticipantsForm(request.POST)
         if not form.is_valid():
-            context.update({"form": form, "dashboards_available": form.dashboards_available})
+            context.update({"form": form, "conditions_available": form.conditions_available})
             return render(request, "admin/create_participants.html", context)
 
         emails = form.cleaned_data["resolved_emails"]
-        dashboards = form.cleaned_data["dashboards"]
-        al_choice = form.cleaned_data["active_learning"]
+        conditions = list(form.cleaned_data["groups"])
         skip_existing = form.cleaned_data["skip_existing"]
         labels = dict(available_dashboards())
-
-        # A condition is (dashboard x active learning). "split" doubles the arms
-        # so a dashboard can be compared with and without the feature; otherwise
-        # every arm shares one AL setting.
-        al_variants = [True, False] if al_choice == "split" else [al_choice == "on"]
-        conditions = [
-            (model_id, al) for model_id in dashboards for al in al_variants
-        ]
-        groups = {
-            (model_id, al): condition_group(model_id, labels.get(model_id, ""), al)
-            for model_id, al in conditions
-        }
 
         rows = []
         with transaction.atomic():
             for index, email in enumerate(emails):
-                model_id, al = conditions[index % len(conditions)]
-                group = groups[(model_id, al)]
+                group = conditions[index % len(conditions)]
+                model_id = (group.default_model_id or "").strip()
                 user = User.objects.filter(email=email).first()
 
                 if user is not None and skip_existing:
@@ -652,10 +641,12 @@ class UserAdmin(BaseUserAdmin):
                 if created:
                     user = User(email=email, name=email, auth_source="local")
 
-                user.study_model_id = model_id
+                # The condition is the single source of truth for both halves:
+                # the participant inherits the dashboard and the active-learning
+                # setting from their group rather than carrying copies that could
+                # drift out of step with it.
                 user.study_group = group
-                # Left unset on purpose: the group carries the condition, so
-                # there is exactly one place the answer to "was AL on?" lives.
+                user.study_model_id = ""
                 user.enable_active_learning = None
                 user.is_active = True
                 user.participant_code = participant_code_for(email)

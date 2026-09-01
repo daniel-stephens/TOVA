@@ -90,7 +90,8 @@ def tova_console_root(request: HttpRequest) -> HttpResponse:
 
     if not conditions_in_use:
         conditions_step = step("conditions", "todo",
-                               "No conditions yet. Creating participants defines them.")
+                               "No conditions defined yet. Each one is a dashboard "
+                               "plus an active-learning setting.")
     else:
         names = ", ".join(c.name for c in conditions_in_use[:4])
         more = "" if len(conditions_in_use) <= 4 else f" +{len(conditions_in_use) - 4} more"

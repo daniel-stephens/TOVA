@@ -120,9 +120,11 @@ anyone is assigned to it.
       <div class="tsc-body">
         <h3>{% translate "Decide the conditions" %}</h3>
         <p class="tsc-detail">{{ steps.conditions.detail }}</p>
+        <p class="tsc-detail">{% translate "A condition is one dashboard plus whether active learning is on." %}</p>
       </div>
       <div class="tsc-actions">
         <span class="tsc-pill tsc-pill--{{ steps.conditions.state }}">{{ steps.conditions.state }}</span>
+        <a href="{% url 'admin:web_studygroup_add' %}">{% translate "Add a condition" %}</a>
         <a href="{% url 'admin:web_studygroup_changelist' %}">{% translate "See conditions" %}</a>
       </div>
     </div>

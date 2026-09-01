@@ -23,7 +23,12 @@ from web.models import (
     User,
 )
 from web import study_flow
-from web.study_features import FEATURE_ACTIVE_LEARNING, user_has_feature
+from web.study_features import (
+    FEATURE_ACTIVE_LEARNING,
+    get_study_model_id,
+    is_study_participant,
+    user_has_feature,
+)
 from web.services import runtime as R
 
 
@@ -1193,6 +1198,13 @@ class AdminCreateParticipantsTests(TestCase):
         self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
         self.client.force_login(self.admin)
         self.url = reverse("admin:web_user_create_participants")
+        # Conditions are defined before participants exist.
+        self.alpha = StudyGroup.objects.create(
+            name="model1 arm", slug="model1-arm", default_model_id="m_alpha"
+        )
+        self.beta = StudyGroup.objects.create(
+            name="model2 arm", slug="model2-arm", default_model_id="m_beta"
+        )
 
     def patched(self):
         return mock.patch("web.admin.available_dashboards", return_value=self.DASHBOARDS)
@@ -1204,17 +1216,16 @@ class AdminCreateParticipantsTests(TestCase):
             "prefix": "p",
             "domain": "study.local",
             "start": "1",
-            "dashboards": ["m_alpha", "m_beta"],
-            "active_learning": "on",
+            "groups": [self.alpha.pk, self.beta.pk],
         }
         data.update(overrides)
         return data
 
-    def test_page_is_reachable_and_lists_dashboards(self):
+    def test_page_is_reachable_and_lists_conditions(self):
         with self.patched():
             resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "m_alpha")
+        self.assertContains(resp, "model1 arm")
         self.assertContains(resp, "Create participants")
 
     def test_link_appears_on_the_user_changelist(self):
@@ -1222,7 +1233,7 @@ class AdminCreateParticipantsTests(TestCase):
             resp = self.client.get(reverse("admin:web_user_changelist"))
         self.assertContains(resp, self.url)
 
-    def test_generates_accounts_spread_across_dashboards(self):
+    def test_generates_accounts_spread_across_conditions(self):
         with self.patched():
             resp = self.client.post(self.url, self.payload())
         self.assertEqual(resp.status_code, 200)
@@ -1233,8 +1244,13 @@ class AdminCreateParticipantsTests(TestCase):
             list(created.values_list("email", flat=True)),
             [f"p{n:03d}@study.local" for n in range(1, 7)],
         )
-        self.assertEqual(created.filter(study_model_id="m_alpha").count(), 3)
-        self.assertEqual(created.filter(study_model_id="m_beta").count(), 3)
+        # The dashboard is inherited from the condition, not copied onto the row.
+        self.assertEqual(created.filter(study_group=self.alpha).count(), 3)
+        self.assertEqual(created.filter(study_group=self.beta).count(), 3)
+        self.assertEqual(
+            sorted(get_study_model_id(u) for u in created),
+            ["m_alpha"] * 3 + ["m_beta"] * 3,
+        )
 
     def test_passwords_are_shown_once_and_actually_work(self):
         with self.patched():
@@ -1260,11 +1276,6 @@ class AdminCreateParticipantsTests(TestCase):
             {"ana@lab.gov", "ben@lab.gov", "cara@lab.gov"},
         )
 
-    def test_active_learning_can_be_switched_off(self):
-        with self.patched():
-            self.client.post(self.url, self.payload(count="2", active_learning="off"))
-        for u in User.objects.filter(email__endswith="@study.local"):
-            self.assertFalse(u.enable_active_learning)
 
     def test_count_and_emails_are_mutually_exclusive(self):
         with self.patched():
@@ -1295,7 +1306,7 @@ class AdminCreateParticipantsTests(TestCase):
         with self.patched():
             resp = self.client.post(self.url, self.payload(count="1"))
         existing.refresh_from_db()
-        self.assertEqual(existing.study_model_id, "m_alpha")
+        self.assertEqual(get_study_model_id(existing), "m_alpha")
         self.assertFalse(existing.check_password("original"))
         self.assertEqual(resp.context["updated"], 1)
 
@@ -3008,13 +3019,12 @@ class CorpusConsistencyTests(TestCase):
         self.assertEqual(rows["m_alpha"]["corpus_id"], "c_one")
 
 
-class OneDashboardPerParticipantTests(TestCase):
-    """The multi-select divides a cohort; it never gives anyone two dashboards.
+class OneConditionPerParticipantTests(TestCase):
+    """Ticking several conditions divides the cohort; it never gives anyone two.
 
-    The form lets an admin tick several dashboards, which reads as "each of
-    these people gets all of these". It does not: participants are dealt out
-    round-robin, one each. study_model_id is a single field, so the data model
-    could not express two even if the form tried.
+    The checkbox list reads as "each of these people gets all of these". It does
+    not: participants are dealt round-robin, one condition each, and study_group
+    is a single foreign key so two could not be held anyway.
     """
 
     def setUp(self):
@@ -3022,142 +3032,154 @@ class OneDashboardPerParticipantTests(TestCase):
         self.client.force_login(self.admin)
         self.url = reverse("admin:web_user_create_participants")
         self.dashboards = [("m_a", "A (m_a)"), ("m_b", "B (m_b)"), ("m_c", "C (m_c)")]
+        self.groups = [
+            StudyGroup.objects.create(name=f"Arm {n}", slug=f"arm-{n}",
+                                      default_model_id=m)
+            for n, m in enumerate(["m_a", "m_b", "m_c"], start=1)
+        ]
 
-    def create(self, count, picked):
+    def create(self, count, groups):
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             return self.client.post(self.url, {
                 "count": count, "emails": "", "prefix": "p",
                 "domain": "study.local", "start": 1,
-                "dashboards": picked, "active_learning": "on",
+                "groups": [g.pk for g in groups],
             })
 
     def participants(self):
         return User.objects.filter(is_staff=False).order_by("email")
 
-    def test_each_participant_holds_exactly_one_dashboard(self):
-        self.create(9, ["m_a", "m_b", "m_c"])
+    def test_each_participant_is_in_exactly_one_condition(self):
+        self.create(9, self.groups)
         for u in self.participants():
             with self.subTest(user=u.email):
-                self.assertIn(u.study_model_id, {"m_a", "m_b", "m_c"})
-                # A single CharField -- there is no second slot to fill.
-                self.assertNotIn(",", u.study_model_id)
+                self.assertIsNotNone(u.study_group_id)
+                self.assertIn(u.study_group, self.groups)
 
     def test_a_cohort_is_divided_evenly_not_duplicated(self):
-        self.create(9, ["m_a", "m_b", "m_c"])
+        self.create(9, self.groups)
         counts = {}
         for u in self.participants():
-            counts[u.study_model_id] = counts.get(u.study_model_id, 0) + 1
-        self.assertEqual(counts, {"m_a": 3, "m_b": 3, "m_c": 3})
+            counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
+        self.assertEqual(counts, {"Arm 1": 3, "Arm 2": 3, "Arm 3": 3})
         self.assertEqual(self.participants().count(), 9, "9 people, not 27")
 
     def test_an_uneven_split_deals_the_remainder_round_robin(self):
-        self.create(7, ["m_a", "m_b"])
+        self.create(7, self.groups[:2])
         counts = {}
         for u in self.participants():
-            counts[u.study_model_id] = counts.get(u.study_model_id, 0) + 1
+            counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
         self.assertEqual(sorted(counts.values()), [3, 4])
 
-    def test_ticking_one_dashboard_puts_everyone_in_one_condition(self):
-        self.create(5, ["m_b"])
+    def test_ticking_one_condition_puts_everyone_in_it(self):
+        self.create(5, [self.groups[1]])
         self.assertEqual(
-            set(self.participants().values_list("study_model_id", flat=True)), {"m_b"}
+            set(self.participants().values_list("study_group__name", flat=True)),
+            {"Arm 2"},
         )
 
     def test_the_form_says_so_in_words(self):
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             body = self.client.get(self.url).content.decode()
-        self.assertIn("exactly ONE dashboard", body)
-        self.assertIn("Split them across", body)
-        self.assertNotIn("What they get", body)
+        self.assertIn("exactly ONE condition", body)
+        self.assertIn("Deal them into", body)
 
 
-class ConditionGroupTests(TestCase):
-    """A condition is (dashboard x active learning), and it has a name."""
+class ConditionAssignmentTests(TestCase):
+    """Conditions are defined first; participants are dealt into them.
+
+    Active learning belongs to the condition, set when the group is created,
+    not chosen while making participants.
+    """
 
     def setUp(self):
         self.admin = User.objects.create_superuser(email="root@example.com", password="pw")
         self.client.force_login(self.admin)
         self.url = reverse("admin:web_user_create_participants")
         self.dashboards = [
-            ("m_a", "LDA baseline  (m_a · corpus c_1)"),
-            ("m_b", "CTM  (m_b · corpus c_1)"),
+            ("m_a", "LDA baseline  (m_a \u00b7 corpus c_1)"),
+            ("m_b", "CTM  (m_b \u00b7 corpus c_1)"),
         ]
+        self.with_al = StudyGroup.objects.create(
+            name="LDA + active learning", slug="lda-al",
+            default_model_id="m_a", enable_active_learning=True,
+        )
+        self.without_al = StudyGroup.objects.create(
+            name="LDA alone", slug="lda-plain",
+            default_model_id="m_a", enable_active_learning=False,
+        )
 
-    def create(self, count, picked, al):
+    def create(self, count, groups):
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             return self.client.post(self.url, {
                 "count": count, "emails": "", "prefix": "p",
                 "domain": "study.local", "start": 1,
-                "dashboards": picked, "active_learning": al,
+                "groups": [g.pk for g in groups],
             })
 
     def participants(self):
         return User.objects.filter(is_staff=False)
 
-    def test_splitting_doubles_the_arms(self):
-        self.create(8, ["m_a", "m_b"], "split")
-        self.assertEqual(StudyGroup.objects.count(), 4)
-        self.assertEqual(
-            set(StudyGroup.objects.values_list("name", flat=True)),
-            {"LDA baseline · AL on", "LDA baseline · AL off",
-             "CTM · AL on", "CTM · AL off"},
-        )
-
-    def test_the_cohort_divides_evenly_between_conditions(self):
-        self.create(8, ["m_a", "m_b"], "split")
+    def test_participants_are_dealt_into_the_chosen_conditions(self):
+        self.create(6, [self.with_al, self.without_al])
         counts = {}
         for u in self.participants():
             counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
-        self.assertEqual(sorted(counts.values()), [2, 2, 2, 2])
+        self.assertEqual(counts, {"LDA + active learning": 3, "LDA alone": 3})
 
-    def test_a_group_carries_its_condition(self):
-        self.create(4, ["m_a"], "split")
-        on = StudyGroup.objects.get(name="LDA baseline · AL on")
-        off = StudyGroup.objects.get(name="LDA baseline · AL off")
-        self.assertTrue(on.enable_active_learning)
-        self.assertFalse(off.enable_active_learning)
-        self.assertEqual(on.default_model_id, "m_a")
-        self.assertEqual(off.default_model_id, "m_a")
-
-    def test_participants_inherit_al_from_their_group(self):
-        """One place holds the answer to "was AL on for this person"."""
-        self.create(4, ["m_a"], "split")
+    def test_active_learning_comes_from_the_condition(self):
+        self.create(4, [self.with_al, self.without_al])
         for u in self.participants():
             with self.subTest(user=u.email):
-                self.assertIsNone(u.enable_active_learning, "must inherit, not duplicate")
-                expected = u.study_group.enable_active_learning
+                self.assertIsNone(u.enable_active_learning, "inherited, not copied")
                 self.assertEqual(
-                    user_has_feature(u, FEATURE_ACTIVE_LEARNING), expected
+                    user_has_feature(u, FEATURE_ACTIVE_LEARNING),
+                    u.study_group.enable_active_learning,
                 )
 
-    def test_on_for_everyone_makes_one_arm_per_dashboard(self):
-        self.create(4, ["m_a", "m_b"], "on")
-        self.assertEqual(StudyGroup.objects.count(), 2)
-        self.assertTrue(all(g.enable_active_learning for g in StudyGroup.objects.all()))
-
-    def test_off_for_everyone_makes_one_arm_per_dashboard(self):
-        self.create(4, ["m_a", "m_b"], "off")
-        self.assertEqual(StudyGroup.objects.count(), 2)
-        self.assertFalse(any(g.enable_active_learning for g in StudyGroup.objects.all()))
+    def test_the_dashboard_comes_from_the_condition(self):
+        self.create(2, [self.with_al])
         for u in self.participants():
-            self.assertFalse(user_has_feature(u, FEATURE_ACTIVE_LEARNING))
+            self.assertEqual(u.study_model_id, "", "not copied onto the participant")
+            self.assertEqual(get_study_model_id(u), "m_a")
+            self.assertTrue(is_study_participant(u))
 
-    def test_a_second_cohort_reuses_the_same_groups(self):
-        self.create(4, ["m_a"], "split")
+    def test_no_active_learning_choice_on_the_participant_form(self):
+        """It belongs to the condition, and must not be offered twice."""
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
-            self.client.post(self.url, {
-                "count": 4, "emails": "", "prefix": "q",
-                "domain": "study.local", "start": 1,
-                "dashboards": ["m_a"], "active_learning": "split",
-            })
-        self.assertEqual(StudyGroup.objects.count(), 2, "no duplicate conditions")
-        self.assertEqual(self.participants().count(), 8)
+            body = self.client.get(self.url).content.decode()
+        self.assertNotIn('name="active_learning"', body)
+        self.assertNotIn('name="dashboards"', body)
+        self.assertIn('name="groups"', body)
 
-    def test_each_participant_still_holds_exactly_one_dashboard(self):
-        self.create(8, ["m_a", "m_b"], "split")
+    def test_the_picker_shows_what_each_condition_actually_is(self):
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            body = self.client.get(self.url).content.decode()
+        self.assertIn("LDA baseline, active learning ON", body)
+        self.assertIn("LDA baseline, active learning OFF", body)
+
+    def test_a_condition_without_a_dashboard_is_refused(self):
+        orphan = StudyGroup.objects.create(name="No dashboard", slug="no-dash")
+        resp = self.create(2, [orphan])
+        self.assertEqual(resp.status_code, 200, "re-rendered with an error")
+        self.assertFalse(self.participants().exists())
+        self.assertContains(resp, "could not start")
+
+    def test_the_form_sends_you_to_define_a_condition_when_none_exist(self):
+        StudyGroup.objects.all().delete()
+        with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
+            resp = self.client.get(self.url)
+        self.assertContains(resp, "No conditions exist yet")
+        self.assertContains(resp, reverse("admin:web_studygroup_add"))
+
+    def test_changing_a_condition_moves_everyone_in_it(self):
+        """The point of inheriting: one edit, not N."""
+        self.create(2, [self.with_al])
+        self.with_al.enable_active_learning = False
+        self.with_al.save()
         for u in self.participants():
-            self.assertIn(u.study_model_id, {"m_a", "m_b"})
-            self.assertEqual(u.study_model_id, u.study_group.default_model_id)
+            u.refresh_from_db()
+            self.assertFalse(user_has_feature(u, FEATURE_ACTIVE_LEARNING))
 
 
 class ResumeAfterSignOutTests(StudyFlowTestCase):

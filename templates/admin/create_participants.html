@@ -13,16 +13,19 @@
 {% block content %}
 <div id="content-main">
 
-  {% if not dashboards_available %}
-    <p class="errornote">
-      No dashboards are available. Train a model first &mdash; models without a
-      corpus are excluded, because their dashboard cannot render.
+  {% if not conditions_available %}
+    <p class="errornote" style="max-width: 46em;">
+      No conditions exist yet. A condition is a study group with a dashboard and
+      an active-learning setting &mdash;
+      <a href="{% url 'admin:web_studygroup_add' %}">create one first</a>,
+      then come back here to deal participants into it.
     </p>
   {% else %}
 
   <p style="max-width: 46em;">
-    Accounts are spread evenly across the dashboards you tick. Everyone sharing a
-    dashboard forms one study condition, so this is how you build your groups.
+    Accounts are dealt evenly into the conditions you tick. Each condition already
+    carries its own dashboard and active-learning setting &mdash; change those on the
+    condition itself.
   </p>
 
   <form method="post">
@@ -53,9 +56,9 @@
     </fieldset>
 
     <fieldset class="module aligned">
-      <h2>{% translate "How they are split" %}</h2>
+      <h2>{% translate "Which conditions" %}</h2>
       {% for field in form %}
-        {% if field.name in "dashboards,active_learning,skip_existing" %}
+        {% if field.name in "groups,skip_existing" %}
           <div class="form-row{% if field.errors %} errors{% endif %}">
             {{ field.errors }}
             <div>
@@ -86,7 +89,7 @@
 (function () {
   var count = document.getElementById('id_count');
   var emails = document.getElementById('id_emails');
-  var boxes = document.querySelectorAll('input[name="dashboards"]');
+  var boxes = document.querySelectorAll('input[name="groups"]');
   if (!count || !boxes.length) { return; }
 
   var out = document.createElement('p');
@@ -112,9 +115,9 @@
     var base = Math.floor(n / ticked);
     var extra = n % ticked;
     out.textContent = extra
-      ? n + ' participants across ' + ticked + ' dashboards \u2014 ' + extra +
+      ? n + ' participants across ' + ticked + ' conditions \u2014 ' + extra +
         ' will get ' + (base + 1) + ', the rest ' + base + ' each.'
-      : n + ' participants across ' + ticked + ' dashboards \u2014 ' + base +
+      : n + ' participants across ' + ticked + ' conditions \u2014 ' + base +
         ' on each.';
   }
 
