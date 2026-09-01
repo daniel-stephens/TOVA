@@ -3321,21 +3321,41 @@ class StudyConsoleTests(TestCase):
         self.client.force_login(self.admin)
         self.url = reverse("tova_admin_root")
 
-    def load(self, dashboards=(), corpora=None, **settings_kwargs):
+    def load(self, dashboards=(), corpora=None, corpus_ids=("c_1",), **settings_kwargs):
         corpora = corpora or {}
         opts = {"PROLIFIC_COMPLETION_CODE": "", "TOVA_ALLOW_SIGNUP": True}
         opts.update(settings_kwargs)
         with mock.patch("web.admin.available_dashboards", return_value=list(dashboards)), \
+             mock.patch("web.admin.available_corpora", return_value=list(corpus_ids)), \
              mock.patch("web.admin.corpus_for_model", side_effect=lambda m: corpora.get(m, "c_1")), \
              mock.patch("web.views._study_corpus_size", return_value=600), \
              override_settings(**opts):
             return self.client.get(self.url)
 
-    def test_a_fresh_install_says_train_a_model_first(self):
-        resp = self.load()
+    def test_a_fresh_install_says_upload_data_first(self):
+        """A model needs a corpus, and a corpus needs data. Nothing to train yet."""
+        resp = self.load(corpus_ids=())
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["next_key"], "models")
         self.assertEqual(resp.context["steps"]["models"]["state"], "todo")
+        self.assertIn("No data uploaded", resp.context["steps"]["models"]["detail"])
+        self.assertContains(resp, reverse("web:load_data_page"))
+
+    def test_a_corpus_with_nothing_trained_on_it_is_flagged(self):
+        resp = self.load(corpus_ids=("c_1", "c_2"))
+        self.assertEqual(resp.context["steps"]["models"]["state"], "attention")
+        self.assertIn("2 corpora", resp.context["steps"]["models"]["detail"])
+
+    def test_step_one_links_follow_the_app_order(self):
+        """Upload, then corpus library, then training \u2014 as the main nav has it."""
+        body = self.load().content.decode()
+        for url in (reverse("web:load_data_page"),
+                    reverse("web:load_corpus_page"),
+                    reverse("web:loadModel")):
+            self.assertIn(url, body)
+        self.assertLess(body.index(reverse("web:load_data_page")),
+                        body.index(reverse("web:loadModel")),
+                        "upload comes before training")
 
     def test_with_models_but_no_people_the_next_step_is_conditions(self):
         resp = self.load(dashboards=[("m_a", "A  (m_a · corpus c_1)")])

@@ -80,13 +80,28 @@ def tova_console_root(request: HttpRequest) -> HttpResponse:
     def step(key, state_, detail, **extra):
         return {"key": key, "state": state_, "detail": detail, **extra}
 
-    if not state["dashboards_available"]:
+    # A model needs a corpus, and a corpus needs uploaded data, so this step
+    # reports which of the three you are actually missing rather than sending
+    # you to the training page with nothing to train on.
+    from web.admin import available_corpora
+
+    n_corpora = len(available_corpora())
+    n_models = state["dashboards_available"]
+    corpora_word = "corpus" if n_corpora == 1 else "corpora"
+    models_word = "model" if n_models == 1 else "models"
+
+    if not n_corpora and not n_models:
         models_step = step("models", "todo",
-                           "No trained models found. Train one before anything else.")
+                           "No data uploaded yet. A model needs a corpus, and a "
+                           "corpus needs data.")
+    elif not n_models:
+        models_step = step("models", "attention",
+                           f"{n_corpora} {corpora_word}, but nothing trained on "
+                           "them yet.")
     else:
         models_step = step("models", "done",
-                           f"{state['dashboards_available']} trained "
-                           f"model{'s' if state['dashboards_available'] != 1 else ''} available.")
+                           f"{n_models} trained {models_word} from "
+                           f"{n_corpora} {corpora_word}.")
 
     if not conditions_in_use:
         conditions_step = step("conditions", "todo", "No study groups yet.")

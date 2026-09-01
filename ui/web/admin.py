@@ -123,6 +123,19 @@ def available_dashboards() -> list[tuple[str, str]]:
     return out
 
 
+def available_corpora() -> list[str]:
+    """Corpus ids in the store. Empty when it is unreachable, like the models."""
+    try:
+        from tova.api.models.data_schemas import DraftType
+        from tova.core import drafts
+    except Exception:  # pragma: no cover - import guard for partial installs
+        return []
+    try:
+        return [d.id for d in drafts.list_drafts(type=DraftType.corpus)]
+    except Exception:
+        return []
+
+
 def _dashboard_choices(current: str = "", *, blank_label: str) -> list[tuple[str, str]]:
     choices = [("", blank_label)] + available_dashboards()
     known = {value for value, _label in choices}

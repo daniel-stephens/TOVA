@@ -10,8 +10,8 @@ with its real state attached, so the next thing to do is always the first step
 that is not done.
 
 The numbering is real: these steps genuinely have to happen in this order. You
-cannot set up a group's dashboard before a model exists, or check a dashboard
-before anyone is assigned to it.
+cannot set up a group's dashboard before a model exists, and a model needs a
+corpus, which needs uploaded data.
 {% endcomment %}
 
 {% block extrastyle %}{{ block.super }}
@@ -85,7 +85,7 @@ before anyone is assigned to it.
     <div class="tsc-next">
       <span class="tsc-next__label">{% translate "Next" %}</span>
       <span class="tsc-next__what">
-        {% if next_key == "models" %}Train a topic model
+        {% if next_key == "models" %}Upload data and train a model
         {% elif next_key == "conditions" %}Set up the study groups
         {% elif next_key == "people" %}Create participants
         {% elif next_key == "check" %}Run the readiness check
@@ -105,13 +105,18 @@ before anyone is assigned to it.
     <div class="tsc-step is-{{ steps.models.state }}{% if next_key == 'models' %} is-next{% endif %}">
       <span class="tsc-num">1</span>
       <div class="tsc-body">
-        <h3>{% translate "Train the models" %}</h3>
+        <h3>{% translate "Upload data and train a model" %}</h3>
         <p class="tsc-detail">{{ steps.models.detail }}</p>
+        <p class="tsc-detail">
+          {% translate "Upload data, build a corpus from it, then train. Each step is in the main app." %}
+        </p>
       </div>
       <div class="tsc-actions">
         <span class="tsc-pill tsc-pill--{{ steps.models.state }}">{{ steps.models.state }}</span>
-        <a href="{% url 'web:training_page_get' %}">{% translate "Train a model" %}</a>
-        <a href="{% url 'tova_admin_dashboards' %}">{% translate "See all models" %}</a>
+        <a href="{% url 'web:load_data_page' %}">{% translate "1 · Upload data" %}</a>
+        <a href="{% url 'web:load_corpus_page' %}">{% translate "2 · Corpus library" %}</a>
+        <a href="{% url 'web:loadModel' %}">{% translate "3 · Initiate training" %}</a>
+        <a href="{% url 'web:trained_models' %}">{% translate "Trained models" %}</a>
       </div>
     </div>
 
