@@ -55,6 +55,18 @@ answers one question they will actually have, in the order they will have it.
 
   main { max-width: 760px; margin: 0 auto; padding: 40px 24px 40px; }
 
+  /* When re-read mid-task the live clock comes with it, so nobody reads on
+     without noticing their time is going. */
+  .running-bar {
+    display: flex;
+    padding: 10px 24px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 11;
+  }
+
   h1 { font-size: 24px; font-weight: 600; margin: 0 0 10px; }
   .lede { color: var(--muted); font-size: 15px; margin: 0 0 36px; }
 
@@ -155,19 +167,31 @@ answers one question they will actually have, in the order they will have it.
 </head>
 <body>
 
+{% if task_running %}
+  <div class="running-bar" data-no-log>
+    {% include "study/_timer.html" %}
+  </div>
+{% endif %}
+
 <header data-no-log>
   <div class="brand">
     <span class="logo">TOVA</span>
     <span class="page">How to use the tool</span>
   </div>
-  <div class="status">Nothing has started yet</div>
+  <div class="status">{% if task_running %}Your time is running{% else %}Nothing has started yet{% endif %}</div>
 </header>
 
 <main>
+  {% if task_running %}
+  <h1>How to use the tool</h1>
+  <p class="lede">Your {{ task_minutes }} minutes are running while you read this, so
+    take what you need and go back.</p>
+  {% else %}
   <h1>A quick tour before you start</h1>
   <p class="lede">Two minutes of reading now will save you more than that later.
     The clock has not started &mdash; it starts when you press the button at the bottom
     of this page.</p>
+  {% endif %}
 
   <section class="step">
     <span class="step__n">1 &middot; The clock</span>
@@ -326,8 +350,13 @@ answers one question they will actually have, in the order they will have it.
 
   <form method="post" action="{% url 'web:study_begin' %}" class="footer-bar">
     {% csrf_token %}
-    <button type="submit" class="begin" data-log="begin_task">Start exploring</button>
-    <span class="note">The {{ task_minutes }}-minute clock starts when you press this.</span>
+    {% if task_running %}
+      <button type="submit" class="begin" data-log="back_to_tool">Back to the tool</button>
+      <span class="note">Your time has been running while you were here.</span>
+    {% else %}
+      <button type="submit" class="begin" data-log="begin_task">Start exploring</button>
+      <span class="note">The {{ task_minutes }}-minute clock starts when you press this.</span>
+    {% endif %}
   </form>
 </main>
 

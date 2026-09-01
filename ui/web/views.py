@@ -4097,11 +4097,16 @@ def study_tutorial(request):
     if session.stage == ParticipantSession.STAGE_INSTRUCTIONS:
         session.advance_to(ParticipantSession.STAGE_TUTORIAL)
         session.save(update_fields=["stage"])
+
+    # Reachable again while exploring, so the page must not keep insisting the
+    # clock has not started once it has.
+    task_running = session.stage == ParticipantSession.STAGE_TASK
     return render(
         request,
         "study/tutorial.html",
         {
             "session": session,
+            "task_running": task_running,
             "task_minutes": study_flow.task_minutes(request.user),
             "active_learning": user_has_feature(request.user, FEATURE_ACTIVE_LEARNING),
         },

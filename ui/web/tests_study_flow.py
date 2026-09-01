@@ -3992,3 +3992,77 @@ class ParticipantCanReachTheToolsTests(StudyFlowTestCase):
                 content_type="application/json",
             )
         self.assertEqual(resp.status_code, 409)
+
+
+class TutorialDuringTheTaskTests(StudyFlowTestCase):
+    """The walkthrough stays available while exploring and while labelling."""
+
+    def session(self):
+        return ParticipantSession.objects.get(pk=self.participant.pk)
+
+    def exploring(self):
+        self.login_participant()
+        begin_task(self.client)
+
+    def test_it_is_reachable_once_the_task_has_started(self):
+        self.exploring()
+        resp = self.client.get(reverse("web:study_tutorial"))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_reopening_it_does_not_move_the_participant_backwards(self):
+        self.exploring()
+        self.client.get(reverse("web:study_tutorial"))
+        self.assertEqual(self.session().stage, ParticipantSession.STAGE_TASK)
+
+    def test_reading_it_costs_time_like_anything_else(self):
+        """Deliberate: re-reading is part of the 30 minutes, not a pause."""
+        self.exploring()
+        s = self.session()
+        s.last_seen_at -= dt.timedelta(seconds=25)
+        s.save()
+        before = self.session().task_elapsed_s
+
+        self.client.get(reverse("web:study_tutorial"))
+        self.assertGreater(self.session().task_elapsed_s, before + 20)
+
+    def test_it_stops_saying_nothing_has_started(self):
+        self.exploring()
+        body = self.client.get(reverse("web:study_tutorial")).content.decode()
+        self.assertNotIn("Nothing has started yet", body)
+        self.assertNotIn("The clock has not started", body)
+        self.assertIn("Your time is running", body)
+
+    def test_the_button_offers_a_way_back_rather_than_a_fresh_start(self):
+        self.exploring()
+        body = self.client.get(reverse("web:study_tutorial")).content.decode()
+        self.assertIn("Back to the tool", body)
+        self.assertNotIn("Start exploring", body)
+
+    def test_going_back_returns_to_the_tool_without_restarting_the_clock(self):
+        self.exploring()
+        started = self.session().task_started_at
+        self.client.get(reverse("web:study_tutorial"))
+        resp = self.client.post(reverse("web:study_begin"))
+        self.assertRedirects(
+            resp, reverse("web:study_task"), fetch_redirect_response=False
+        )
+        self.assertEqual(self.session().task_started_at, started)
+
+    def test_the_clock_is_shown_while_reading_it(self):
+        """Nobody should read on unaware their time is going."""
+        self.exploring()
+        body = self.client.get(reverse("web:study_tutorial")).content.decode()
+        self.assertIn('id="studyTimer"', body)
+
+    def test_the_way_back_to_it_is_on_every_page_of_the_tool(self):
+        """Including the labelling page, which is where it was asked for."""
+        src = read_template_source("study/_timer.html")
+        self.assertIn("study_tutorial", src)
+        self.assertIn("How to use this", src)
+
+    def test_it_is_not_reachable_once_the_questions_begin(self):
+        self.exploring()
+        self.client.post(reverse("web:study_finish"))
+        resp = self.client.get(reverse("web:study_tutorial"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse("web:study_post"), resp["Location"])

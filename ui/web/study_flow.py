@@ -130,6 +130,9 @@ ALWAYS_ALLOWED = {
 #: Everything the dashboard needs in order to function during the task.
 _TASK_URL_NAMES = {
     "study_task",
+    # Re-readable while exploring. Time spent here is charged like any other
+    # request: it is part of the 30 minutes, not a way to pause them.
+    "study_tutorial",
     "study_timer",
     "study_finish",
     "study_events",

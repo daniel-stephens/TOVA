@@ -115,6 +115,20 @@
   @media (max-width: 991.98px) {
     .study-timer { margin: 8px 0; width: 100%; }
   }
+  .study-timer__help {
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .study-timer__help:hover { color: #16181d; background: rgba(0, 0, 0, 0.05); }
+
+  @media (max-width: 700px) {
+    .study-timer__help { display: none; }
+  }
   @media (max-width: 400px) {
     .study-timer__label { display: none; }
   }
@@ -132,6 +146,9 @@
   <span class="study-timer__meter" aria-hidden="true">
     <span class="study-timer__fill" id="studyTimerFill"></span>
   </span>
+  <a class="study-timer__help" data-log="reopen_tutorial"
+     href="{% url 'web:study_tutorial' %}"
+     title="How to use the tool">How to use this</a>
   <button type="button" class="study-timer__finish" data-log="finish_early" id="studyTimerFinish">Finish early</button>
   <a class="study-timer__logout" data-log="sign_out" href="{% url 'web:logout' %}" title="Sign out">Sign out</a>
 </div>
