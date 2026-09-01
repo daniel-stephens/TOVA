@@ -177,14 +177,14 @@
     consistent with that. This copy has to describe the same thing, or it reads
     as contradicting the document the participant consented to.
   {% endcomment %}
-  <p class="callout">The clock starts as soon as you begin, and the tool closes after {{ task_minutes }} minutes &mdash; but you can finish early whenever you're ready. Once it closes, you won't be able to reopen the emails: you'll answer from memory. You'll still see a list of document IDs and subject lines, so you can point to the emails that back up your answers.</p>
+  <p class="callout">The clock has not started yet &mdash; the next page shows you how the tool works, and you start from there. Once you begin, the tool closes after {{ task_minutes }} minutes &mdash; but you can finish early whenever you're ready. Once it closes, you won't be able to reopen the emails: you'll answer from memory. You'll still see a list of document IDs and subject lines, so you can point to the emails that back up your answers.</p>
 
   <p class="callout">While you're using the tool we record how you interact with it &mdash; things like which emails you open, what you search for, and the labels you change. We don't record what you type into the documents themselves.</p>
 
-  <form method="post" action="{% url 'web:study_begin' %}" class="footer-bar">
-    {% csrf_token %}
-    <button type="submit" class="begin">Begin exploration</button>
-  </form>
+  <div class="footer-bar">
+    <a href="{% url 'web:study_tutorial' %}" class="begin" data-log="to_tutorial"
+       style="text-decoration: none; display: inline-block;">Next: how to use the tool</a>
+  </div>
 </main>
 
 {% include "study/_telemetry.html" %}

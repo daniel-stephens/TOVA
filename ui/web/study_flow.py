@@ -2,7 +2,7 @@
 
 Participants move monotonically through:
 
-    consent -> instructions -> task -> post_study -> done
+    consent -> instructions -> tutorial -> task -> post_study -> done
 
 The tables below declare which named routes are reachable at each stage;
 ``StudyFlowMiddleware`` enforces them. Keeping the tables here (rather than
@@ -176,7 +176,10 @@ STAGE_URL_NAMES = {
         "study_consent_declined",
         "study_events",
     },
-    ParticipantSession.STAGE_INSTRUCTIONS: {"study_instructions", "study_begin", "study_events"},
+    ParticipantSession.STAGE_INSTRUCTIONS: {"study_instructions", "study_tutorial", "study_events"},
+    # The walkthrough is where the task is actually started, so study_begin
+    # lives here rather than on the instructions page.
+    ParticipantSession.STAGE_TUTORIAL: {"study_tutorial", "study_begin", "study_events"},
     ParticipantSession.STAGE_TASK: _TASK_URL_NAMES,
     # study_timer/study_finish stay reachable after the task so the countdown
     # widget gets a clean JSON hand-off when the deadline passes, rather than
@@ -315,6 +318,8 @@ def stage_redirect_url(session: ParticipantSession) -> str:
         return reverse("web:study_post")
     if session.stage == ParticipantSession.STAGE_DONE:
         return reverse("web:study_done")
+    if session.stage == ParticipantSession.STAGE_TUTORIAL:
+        return reverse("web:study_tutorial")
     if session.stage == ParticipantSession.STAGE_INSTRUCTIONS:
         return reverse("web:study_instructions")
     return reverse("web:study_consent")

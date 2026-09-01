@@ -1,0 +1,302 @@
+{% load static %}
+{% comment %}
+The tool walkthrough, shown between the instructions and the task.
+
+Every screenshot here is of the REAL interface, cropped to the part being
+described. If the dashboard changes, retake them (static/img/tutorial/) or this
+page starts telling participants something untrue, which is worse than having
+no walkthrough at all.
+
+Written for someone who has never seen the tool and has 30 minutes. Each section
+answers one question they will actually have, in the order they will have it.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOVA — How to use the tool</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --panel: #f7f8fa;
+    --blue: #2f6fed;
+    --blue-bg: #eaf0fe;
+    --green: #1a8f5f;
+    --green-bg: #eaf6ef;
+    --amber: #b7791f;
+    --amber-bg: #fbf3e6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #fff;
+    line-height: 1.65;
+  }
+  header {
+    background: #101114;
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand .logo { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
+  .brand .page { color: #9aa0aa; font-size: 14px; }
+  header .status { color: #9aa0aa; font-size: 13px; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 40px 24px 40px; }
+
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 10px; }
+  .lede { color: var(--muted); font-size: 15px; margin: 0 0 36px; }
+
+  .step { margin: 0 0 40px; }
+  .step__n {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+  h2 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+  p { margin: 0 0 14px; }
+  .step p:last-child { margin-bottom: 0; }
+
+  figure {
+    margin: 16px 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption {
+    padding: 9px 14px;
+    font-size: 12.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    background: #fff;
+  }
+
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 7px; }
+
+  .callout {
+    border-left: 3px solid var(--blue);
+    background: var(--blue-bg);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 14.5px;
+  }
+  .callout--warn { border-left-color: var(--amber); background: var(--amber-bg); }
+  .callout b { font-weight: 600; }
+
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  .recap {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin: 0 0 32px;
+    background: var(--panel);
+  }
+  .recap h2 { margin-bottom: 12px; }
+  .recap ul { margin: 0; }
+
+  .footer-bar {
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .begin {
+    appearance: none;
+    border: 0;
+    border-radius: 8px;
+    background: var(--green);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 13px 30px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .begin:hover { background: #16794f; }
+  .footer-bar .note { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<header data-no-log>
+  <div class="brand">
+    <span class="logo">TOVA</span>
+    <span class="page">How to use the tool</span>
+  </div>
+  <div class="status">Nothing has started yet</div>
+</header>
+
+<main>
+  <h1>A quick tour before you start</h1>
+  <p class="lede">Two minutes of reading now will save you more than that later.
+    The clock has not started &mdash; it starts when you press the button at the bottom
+    of this page.</p>
+
+  <section class="step">
+    <span class="step__n">1 &middot; The clock</span>
+    <h2>You have {{ task_minutes }} minutes with the tool</h2>
+    <figure>
+      <img src="{% static 'img/tutorial/timer.png' %}"
+           alt="A bar across the top of the screen reading 29:39 left, with a Finish early button.">
+      <figcaption>The bar sits across the top of every page in the tool.</figcaption>
+    </figure>
+    <p>When the time runs out the tool closes and the questions begin. You can also press
+      <b>Finish early</b> whenever you feel ready &mdash; there is no advantage to waiting
+      if you are done.</p>
+    <div class="callout">
+      <b>If you need to stop and come back</b>, the clock pauses. Sign out, close the laptop,
+      lose your connection &mdash; none of it costs you time. You get {{ task_minutes }} minutes
+      of actually using the tool.
+    </div>
+  </section>
+
+  <section class="step">
+    <span class="step__n">2 &middot; Themes</span>
+    <h2>The circles are groups of related documents</h2>
+    <figure>
+      <img src="{% static 'img/tutorial/themes.png' %}"
+           alt="A chart of coloured circles, each labelled Topic 0 through Topic 14, at different sizes and positions.">
+      <figcaption>Theme Overview. Bigger circle means more documents in that theme.</figcaption>
+    </figure>
+    <p>A computer read every document and sorted them into groups it thought belonged
+      together. Each circle is one group. Circles that sit close together hold documents
+      that resemble each other.</p>
+    <p><b>Click a circle</b> to see what is in that theme, the words that define it, and
+      how confident the computer is about it.</p>
+    <div class="callout callout--warn">
+      <b>The groupings are a guess, not the truth.</b> They were made by a computer that
+      has not read for meaning the way you will. Treat them as a starting point, and expect
+      to disagree with some of them.
+    </div>
+  </section>
+
+  <section class="step">
+    <span class="step__n">3 &middot; Documents</span>
+    <h2>Every document is in the list on the right</h2>
+    <figure>
+      <img src="{% static 'img/tutorial/documents.png' %}"
+           alt="A table of documents numbered 1 to 5, each with its text, a coloured theme name, and a score.">
+      <figcaption>The Documents panel. Numbers are just row positions, so you can say "number 4".</figcaption>
+    </figure>
+    <ul>
+      <li><b>Search</b> finds words anywhere in any document. This is usually the fastest
+        way to chase something specific &mdash; a name, a date, a phrase you half-remember.</li>
+      <li><b>Theme</b> filters the list down to one group.</li>
+      <li><b>Score</b> is how strongly a document belongs to its theme. A low score often
+        means the computer was unsure, which can be a document worth reading.</li>
+    </ul>
+    <p><b>Click any row</b> to read the whole document.</p>
+  </section>
+
+  <section class="step">
+    <span class="step__n">4 &middot; Reading</span>
+    <h2>Opening a document shows you why it was grouped that way</h2>
+    <figure>
+      <img src="{% static 'img/tutorial/doc-theme.png' %}"
+           alt="A panel reading Top Theme: Topic 3, with a Change link, and a list of theme keywords.">
+      <figcaption>Alongside the full text: the document's theme, and the words that define it.</figcaption>
+    </figure>
+    <p>The full text is on the left. On the right is the theme the computer put it in and
+      the keywords behind that decision, so you can see the reasoning rather than just the
+      result.</p>
+  </section>
+
+  <section class="step">
+    <span class="step__n">5 &middot; Disagreeing</span>
+    <h2>If a document is in the wrong theme, move it</h2>
+    <figure>
+      <img src="{% static 'img/tutorial/change-theme.png' %}"
+           alt="A dropdown showing Topic 3, with Save and Cancel buttons, under the Top Theme heading.">
+      <figcaption>Press <b>Change</b> next to the theme name to open this.</figcaption>
+    </figure>
+    <p>Pick a better theme from the list, or choose <b>New theme…</b> and type your own name
+      if nothing in the list fits. Press <b>Save</b>.</p>
+    <p>This changes what <em>you</em> see. It does not affect other participants, and you can
+      always put it back by picking the original theme again.</p>
+    <div class="callout">
+      Renaming and moving things is genuinely useful, not just permitted. If "Topic 7" is
+      really about safety complaints, calling it that will help you remember it later &mdash;
+      and you will be answering from memory.
+    </div>
+  </section>
+
+  {% if active_learning %}
+  <section class="step">
+    <span class="step__n">6 &middot; Active learning</span>
+    <h2>You can label documents one at a time</h2>
+    <p>Your version of the tool has an <b>Active learning</b> button in the top right. It
+      gives you a queue of documents and asks you to label each one, starting with the ones
+      the computer is least sure about.</p>
+    <figure>
+      <img src="{% static 'img/tutorial/al-queue.png' %}"
+           alt="A search box, three tabs reading Recommended, By model label and Similar, and two filter dropdowns.">
+      <figcaption>The queue. <b>Recommended</b> puts the most useful documents first.</figcaption>
+    </figure>
+    <figure>
+      <img src="{% static 'img/tutorial/al-label.png' %}"
+           alt="A label panel with three suggested labels numbered 1 to 3, a keyboard hint, a text box and a Save Label and Continue button.">
+      <figcaption>Pick one of the suggestions, or type your own label.</figcaption>
+    </figure>
+    <p>The keyboard is quicker than the mouse here: press <kbd>1</kbd>–<kbd>9</kbd> to pick a
+      suggestion, <kbd>Enter</kbd> to save and move on, <kbd>&larr;</kbd> and <kbd>&rarr;</kbd>
+      to go back or skip, and <kbd>/</kbd> to jump to the search box.</p>
+    <p>Labelling is optional. Use it if it helps you make sense of the collection; ignore it
+      if it does not.</p>
+  </section>
+  {% endif %}
+
+  <div class="recap">
+    <h2>If you remember nothing else</h2>
+    <ul>
+      <li><b>Search is your fastest tool.</b> Reading everything in {{ task_minutes }} minutes
+        is not possible, and is not the point.</li>
+      <li><b>Read the documents themselves</b>, not only the theme names. The questions
+        afterwards are about what the documents say.</li>
+      <li><b>Rename and move things</b> as you go. Your own labels are much easier to
+        remember than "Topic 7".</li>
+      <li><b>You answer from memory.</b> When the tool closes you cannot reopen the
+        documents &mdash; you will only see their numbers and subject lines to point at.</li>
+    </ul>
+  </div>
+
+  <form method="post" action="{% url 'web:study_begin' %}" class="footer-bar">
+    {% csrf_token %}
+    <button type="submit" class="begin" data-log="begin_task">Start exploring</button>
+    <span class="note">The {{ task_minutes }}-minute clock starts when you press this.</span>
+  </form>
+</main>
+
+{% include "study/_telemetry.html" %}
+
+</body>
+</html>

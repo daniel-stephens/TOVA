@@ -174,7 +174,7 @@ class ParticipantSession(models.Model):
     """Tracks a study participant's progress through the flow.
 
     Stages advance monotonically:
-    consent -> instructions -> task -> post_study -> done.
+    consent -> instructions -> tutorial -> task -> post_study -> done.
     ``study_group`` and ``model_id`` are snapshotted when the task begins so an
     admin retargeting a group mid-study cannot move a running participant onto a
     different model.
@@ -182,6 +182,7 @@ class ParticipantSession(models.Model):
 
     STAGE_CONSENT = "consent"
     STAGE_INSTRUCTIONS = "instructions"
+    STAGE_TUTORIAL = "tutorial"
     STAGE_TASK = "task"
     STAGE_POST = "post_study"
     STAGE_DONE = "done"
@@ -189,6 +190,7 @@ class ParticipantSession(models.Model):
     STAGE_CHOICES = [
         (STAGE_CONSENT, "Consent"),
         (STAGE_INSTRUCTIONS, "Instructions"),
+        (STAGE_TUTORIAL, "Tool walkthrough"),
         (STAGE_TASK, "Exploration task"),
         (STAGE_POST, "Post-study questions"),
         (STAGE_DONE, "Complete"),
@@ -196,6 +198,7 @@ class ParticipantSession(models.Model):
     STAGE_ORDER = [
         STAGE_CONSENT,
         STAGE_INSTRUCTIONS,
+        STAGE_TUTORIAL,
         STAGE_TASK,
         STAGE_POST,
         STAGE_DONE,

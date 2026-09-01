@@ -162,6 +162,7 @@ urlpatterns = [
     path("study/consent/accept", _x(views.study_consent_accept), name="study_consent_accept"),
     path("study/consent/declined", views.study_consent_declined, name="study_consent_declined"),
     path("study/instructions", views.study_instructions, name="study_instructions"),
+    path("study/tutorial", views.study_tutorial, name="study_tutorial"),
     path("study/begin", _x(views.study_begin), name="study_begin"),
     path("study/task", views.study_task, name="study_task"),
     path("study/timer", views.study_timer, name="study_timer"),

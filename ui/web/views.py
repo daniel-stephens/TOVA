@@ -4079,6 +4079,29 @@ def study_instructions(request):
 
 
 @login_required
+def study_tutorial(request):
+    """How to drive the tool, shown after the instructions and before the clock.
+
+    Last thing before the task starts, so it is fresh when they need it. The
+    screenshots are of the real interface; if the dashboard changes, they have
+    to be retaken or this page starts lying to participants.
+    """
+    session = _study_session(request)
+    if session.stage == ParticipantSession.STAGE_INSTRUCTIONS:
+        session.advance_to(ParticipantSession.STAGE_TUTORIAL)
+        session.save(update_fields=["stage"])
+    return render(
+        request,
+        "study/tutorial.html",
+        {
+            "session": session,
+            "task_minutes": study_flow.task_minutes(request.user),
+            "active_learning": user_has_feature(request.user, FEATURE_ACTIVE_LEARNING),
+        },
+    )
+
+
+@login_required
 def study_begin(request):
     """Start the exploration timer. Idempotent: re-POSTing never extends it."""
     if request.method != "POST":

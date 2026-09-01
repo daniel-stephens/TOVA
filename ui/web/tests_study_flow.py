@@ -33,6 +33,17 @@ from web.study_features import (
 from web.services import runtime as R
 
 
+def begin_task(client):
+    """Walk a participant into the task the way the flow does.
+
+    The tool walkthrough now sits between the instructions and the clock, and
+    study_begin is reachable from there rather than from the instructions, so
+    tests that just want to be *in* the task go through it.
+    """
+    client.get(reverse("web:study_tutorial"))
+    return client.post(reverse("web:study_begin"))
+
+
 def consent_for(user):
     """Put *user* past the consent gate, the way clicking through would.
 
@@ -220,7 +231,7 @@ class StageGatingTests(StudyFlowTestCase):
         self.group.enable_active_learning = False
         self.group.save()
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.get(reverse("web:active_learning_two"), {"model_id": "m_test"})
         self.assertEqual(resp.status_code, 302)
 
@@ -275,7 +286,7 @@ class DashboardOnlyGatingTests(TestCase):
 
     def test_the_flow_still_works_end_to_end(self):
         """Gating them must not mean trapping them."""
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         session = ParticipantSession.objects.get(pk=self.participant.pk)
         self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
         self.assertEqual(session.model_id, "m_solo")
@@ -301,7 +312,7 @@ class ConsentTests(StudyFlowTestCase):
 
     def test_cannot_begin_the_task_before_consenting(self):
         self.login_participant(consent=False)
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         session = ParticipantSession.objects.get(pk=self.participant.pk)
         self.assertEqual(session.stage, ParticipantSession.STAGE_CONSENT)
         self.assertIsNone(session.task_started_at)
@@ -383,7 +394,7 @@ class ConsentTests(StudyFlowTestCase):
         """Their record keeps the version they actually agreed to."""
         self.login_participant(consent=False)
         self.client.post(reverse("web:study_consent_accept"))
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
         stamped = ParticipantSession.objects.get(pk=self.participant.pk).consent_version
         self.assertEqual(stamped, study_flow.CONSENT_VERSION)
@@ -407,7 +418,7 @@ class ConsentTests(StudyFlowTestCase):
 class TimerTests(StudyFlowTestCase):
     def test_begin_starts_the_timer_and_advances_stage(self):
         self.login_participant()
-        resp = self.client.post(reverse("web:study_begin"))
+        resp = begin_task(self.client)
         self.assertRedirects(resp, reverse("web:study_task"), fetch_redirect_response=False)
 
         session = ParticipantSession.objects.get(pk=self.participant.pk)
@@ -418,16 +429,16 @@ class TimerTests(StudyFlowTestCase):
 
     def test_begin_is_idempotent(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         first = ParticipantSession.objects.get(pk=self.participant.pk).task_ends_at
 
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         second = ParticipantSession.objects.get(pk=self.participant.pk).task_ends_at
         self.assertEqual(first, second, "re-POSTing begin must not extend the deadline")
 
     def test_timer_endpoint_reports_remaining(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         data = self.client.get(reverse("web:study_timer")).json()
         self.assertFalse(data["expired"])
         self.assertGreater(data["remaining"], 0)
@@ -435,7 +446,7 @@ class TimerTests(StudyFlowTestCase):
     def test_expiry_is_enforced_server_side(self):
         """A participant with JS disabled still cannot keep exploring."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
         ParticipantSession.objects.filter(pk=self.participant.pk).update(
             task_elapsed_s=31 * 60, last_seen_at=timezone.now()
@@ -450,7 +461,7 @@ class TimerTests(StudyFlowTestCase):
 
     def test_finish_early(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.post(reverse("web:study_finish"))
         self.assertRedirects(resp, reverse("web:study_post"), fetch_redirect_response=False)
 
@@ -470,7 +481,7 @@ class TimerTests(StudyFlowTestCase):
 class PostStudyTests(StudyFlowTestCase):
     def advance_to_post(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
 
     def valid_payload(self, **overrides):
@@ -636,7 +647,7 @@ class CompletionCodeTests(StudyFlowTestCase):
 
     def finish(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.post(
             reverse("web:study_post"),
@@ -682,7 +693,7 @@ class TopicRenameTests(StudyFlowTestCase):
             study_flow, "task_minutes", return_value=30
         ), mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
             self.login_participant()
-            self.client.post(reverse("web:study_begin"))
+            begin_task(self.client)
             resp = self.client.post(
                 url, data={"new_label": "Approval oversight"}, content_type="application/json"
             )
@@ -695,7 +706,7 @@ class TopicRenameTests(StudyFlowTestCase):
 
             self.client.force_login(other)
             consent_for(other)
-            self.client.post(reverse("web:study_begin"))
+            begin_task(self.client)
             other_renames = self.client.get(
                 reverse("web:get_topic_renames", args=["m_test"])
             ).json()
@@ -723,8 +734,9 @@ class InstructionsTests(StudyFlowTestCase):
         body = resp.content.decode()
         self.assertIn("30 min", body)
         self.assertIn("612", body)
-        self.assertIn(reverse("web:study_begin"), body)
-        # The corrected copy: documents remain available, early finish allowed.
+        # The instructions now hand off to the walkthrough; the task is started
+        # from there, once they have seen how the tool works.
+        self.assertIn(reverse("web:study_tutorial"), body)
         self.assertNotIn("You won't be able to go back and reopen the documents", body)
         self.assertIn("finish early", body.lower())
 
@@ -761,7 +773,7 @@ class ParticipantCopyTests(StudyFlowTestCase):
     def test_not_sure_is_the_visible_label_for_unsure(self):
         """The approved instrument says "true/false/not-sure"."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         body = self.client.get(reverse("web:study_post")).content.decode()
         self.assertIn('value="unsure"', body)
@@ -772,7 +784,7 @@ class ParticipantCopyTests(StudyFlowTestCase):
 class TimerWidgetTests(StudyFlowTestCase):
     def test_timer_appears_on_the_dashboard_during_the_task(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         with mock.patch("web.views._model_nav_context", return_value={"model_id": "m_test"}):
             body = self.client.get(
                 reverse("web:dashboard"), {"model_id": "m_test"}
@@ -802,7 +814,7 @@ class StudyDocsTests(StudyFlowTestCase):
         subject = user or self.participant
         self.client.force_login(subject)
         consent_for(subject)
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
 
     def patch_base(self):
@@ -927,7 +939,7 @@ class TimerHandoffTests(StudyFlowTestCase):
     def test_timer_endpoint_hands_off_cleanly_after_expiry(self):
         """The countdown widget must get JSON, not an HTML redirect, at the boundary."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         ParticipantSession.objects.filter(pk=self.participant.pk).update(
             task_elapsed_s=31 * 60, last_seen_at=timezone.now()
         )
@@ -941,7 +953,7 @@ class TimerHandoffTests(StudyFlowTestCase):
 
     def test_finish_is_idempotent_after_the_stage_has_moved_on(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         completed = ParticipantSession.objects.get(pk=self.participant.pk).task_completed_at
 
@@ -1083,7 +1095,7 @@ class ConditionSnapshotTests(StudyFlowTestCase):
         self.participant.save()
 
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.assertTrue(ParticipantSession.objects.get(pk=self.participant.pk).active_learning)
         self.assertEqual(
             self.client.get(
@@ -1108,7 +1120,7 @@ class ConditionSnapshotTests(StudyFlowTestCase):
         self.participant.study_model_id = "m_first"
         self.participant.save()
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
         self.participant.study_model_id = "m_second"
         self.participant.save()
@@ -1547,7 +1559,7 @@ class NavbarTimerTests(StudyFlowTestCase):
 
     def test_timer_sits_inside_the_navbar(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         body = self.dashboard_body()
 
         self.assertIn('id="studyTimer"', body)
@@ -1567,7 +1579,7 @@ class NavbarTimerTests(StudyFlowTestCase):
 
     def test_timer_carries_the_totals_its_meter_needs(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         body = self.dashboard_body()
         self.assertIn('data-total="1800"', body)
         self.assertIn("studyTimerFill", body)
@@ -1575,7 +1587,7 @@ class NavbarTimerTests(StudyFlowTestCase):
 
     def test_trained_models_is_hidden_from_participants(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         body = self.dashboard_body()
         # Assert on the link, not the phrase: base.html also mentions it in an
         # orphaned help modal that has no trigger.
@@ -1596,7 +1608,7 @@ class NavbarTimerTests(StudyFlowTestCase):
 
     def test_timer_appears_on_base_template_pages_too(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         body = self.client.get(
             reverse("web:active_learning_two"), {"model_id": "m_test"}
         ).content.decode()
@@ -1605,13 +1617,13 @@ class NavbarTimerTests(StudyFlowTestCase):
 
     def test_timer_is_rendered_once_not_twice(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.assertEqual(self.dashboard_body().count('id="studyTimer"'), 1)
 
     def test_participants_cannot_reach_the_model_list_by_url(self):
         """Hiding the button is only half of it."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.get(reverse("web:trained_models"))
         self.assertEqual(resp.status_code, 302)
         self.assertNotIn("trained-models", resp["Location"])
@@ -1627,7 +1639,7 @@ class ParticipantAccountMenuTests(StudyFlowTestCase):
 
     def start_task(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
     def al_body(self):
         return self.client.get(
@@ -1693,7 +1705,7 @@ class ParticipantAccountMenuTests(StudyFlowTestCase):
 class ParticipantLogoutTests(StudyFlowTestCase):
     def test_sign_out_button_is_on_the_task_pages(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         with mock.patch("web.views._model_nav_context", return_value={"model_id": "m_test"}):
             body = self.client.get(
                 reverse("web:dashboard"), {"model_id": "m_test"}
@@ -1745,7 +1757,7 @@ class InteractionLoggingTests(StudyFlowTestCase):
 
     def test_events_are_stored_with_their_modality(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.post_events([
             {"action": "click", "modality": "mouse", "target": "#docTable", "t": 1200},
             {"action": "shortcut", "modality": "keyboard", "target": "#al2Doc",
@@ -1889,14 +1901,14 @@ class SignOutOnStudyPagesTests(StudyFlowTestCase):
 
     def test_post_study_has_sign_out(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         body = self.client.get(reverse("web:study_post")).content.decode()
         self.assertIn(self.LINK, body)
 
     def test_post_study_warns_before_discarding_typed_answers(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         body = self.client.get(reverse("web:study_post")).content.decode()
         self.assertIn("confirm(", body)
@@ -1904,7 +1916,7 @@ class SignOutOnStudyPagesTests(StudyFlowTestCase):
 
     def test_done_page_has_sign_out(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.post(
             reverse("web:study_post"),
@@ -2119,7 +2131,7 @@ class TaskMinutesTests(StudyFlowTestCase):
         self.participant.task_minutes = 12
         self.participant.save()
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         session = ParticipantSession.objects.get(pk=self.participant.pk)
         self.assertEqual(session.task_minutes, 12)
         span = (session.task_ends_at - session.task_started_at).total_seconds()
@@ -2127,7 +2139,7 @@ class TaskMinutesTests(StudyFlowTestCase):
 
     def test_changing_it_mid_run_does_not_move_a_running_clock(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         before = ParticipantSession.objects.get(pk=self.participant.pk).task_ends_at
 
         self.participant.task_minutes = 90
@@ -2144,7 +2156,7 @@ class InstrumentVersionTests(StudyFlowTestCase):
 
     def submit(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.post(
             reverse("web:study_post"),
@@ -2327,7 +2339,7 @@ class StudyEdgeCaseTests(StudyFlowTestCase):
 
     def test_finishing_twice_does_not_move_the_stage_on_again(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.post(reverse("web:study_finish"))
         session = ParticipantSession.objects.get(pk=self.participant.pk)
@@ -2341,7 +2353,7 @@ class StudyEdgeCaseTests(StudyFlowTestCase):
     def test_deleting_a_participant_removes_their_research_data(self):
         """Withdrawal has to actually remove things."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         ResearcherNote.objects.create(user=self.participant, text="note")
         InteractionEvent.objects.create(
             user=self.participant, action="click", modality="mouse"
@@ -2538,7 +2550,7 @@ class LogSuppressionTests(StudyFlowTestCase):
 
     def test_navbar_brand_is_muted_but_nav_is_not(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         with mock.patch("web.views._model_nav_context", return_value={"model_id": "m_test"}):
             body = self.client.get(
                 reverse("web:dashboard"), {"model_id": "m_test"}
@@ -2549,7 +2561,7 @@ class LogSuppressionTests(StudyFlowTestCase):
 
     def test_timer_controls_carry_their_own_log_hooks(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         with mock.patch("web.views._model_nav_context", return_value={"model_id": "m_test"}):
             body = self.client.get(
                 reverse("web:dashboard"), {"model_id": "m_test"}
@@ -2559,7 +2571,7 @@ class LogSuppressionTests(StudyFlowTestCase):
 
     def test_post_study_header_is_muted(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         body = self.client.get(reverse("web:study_post")).content.decode()
         self.assertIn("<header data-no-log>", body)
@@ -2593,7 +2605,7 @@ class FlashMessageHygieneTests(StudyFlowTestCase):
             reverse("web:study_login"),
             {"email": self.participant.email, "password": "pw"},
         )
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.get(reverse("web:logout"), follow=True)
         self.assertEqual(self.shown(resp), ["You have been signed out."])
 
@@ -2736,14 +2748,14 @@ class ActiveLearningPrototypeTests(StudyFlowTestCase):
 
     def test_404s_when_the_flag_is_off(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.get(self.url, {"model_id": "m_test"})
         self.assertEqual(resp.status_code, 404)
 
     @override_settings(TOVA_ENABLE_AL3=True)
     def test_renders_when_enabled(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
             resp = self.client.get(self.url, {"model_id": "m_test"})
         self.assertEqual(resp.status_code, 200)
@@ -2764,7 +2776,7 @@ class ActiveLearningPrototypeTests(StudyFlowTestCase):
         self.group.enable_active_learning = False
         self.group.save()
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         resp = self.client.get(self.url, {"model_id": "m_test"})
         self.assertEqual(resp.status_code, 302)
 
@@ -2791,7 +2803,7 @@ class LabelEventTests(StudyFlowTestCase):
         self.participant.study_model_id = "m_test"
         self.participant.save()
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
     def label(self, **payload):
         body = {"model_id": "m_test", "doc_id": "d1", "label": "Approval oversight"}
@@ -2922,7 +2934,7 @@ class LabelEventTests(StudyFlowTestCase):
         self.label(doc_id="shared", label="Approval oversight")
         self.client.force_login(other)
         consent_for(other)
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.label(doc_id="shared", label="Assay anomalies")
 
         rows = LabelEvent.objects.filter(doc_id="shared")
@@ -3229,7 +3241,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
         self.client.get(reverse("web:logout"))
 
         self.assertEqual(self.sign_in(), reverse("web:study_instructions"))
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         s = self.session()
         self.assertEqual(s.stage, ParticipantSession.STAGE_TASK)
         self.assertGreater(s.seconds_remaining, 29 * 60, "full time still ahead")
@@ -3237,7 +3249,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
     def test_time_signed_out_is_not_charged(self):
         """The clock pauses: an absence costs no exploration time."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
         # Five minutes of actual exploring.
         s = self.session()
@@ -3261,7 +3273,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
     def test_the_allowance_still_runs_out_once_it_is_spent(self):
         """Pausing is not unlimited time: presence is what is budgeted."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.get(reverse("web:logout"))
 
         s = self.session()
@@ -3274,7 +3286,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
 
     def test_presence_accrues_only_while_they_are_actually_there(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
 
         # A request 20s later: within the tolerance, so it is charged.
         s = self.session()
@@ -3293,7 +3305,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
 
     def test_returning_after_submitting_lands_on_the_thank_you_page(self):
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.post(reverse("web:study_post"), {
             "tf1": "true", "tf2": "false", "tf3": "true", "tf4": "false",
@@ -3305,7 +3317,7 @@ class ResumeAfterSignOutTests(StudyFlowTestCase):
     def test_answers_typed_but_not_submitted_are_lost(self):
         """Documents a real risk: the questionnaire is not saved as you type."""
         self.login_participant()
-        self.client.post(reverse("web:study_begin"))
+        begin_task(self.client)
         self.client.post(reverse("web:study_finish"))
         self.client.get(reverse("web:study_post"))   # opens the form, types nothing
         self.client.get(reverse("web:logout"))
@@ -3594,6 +3606,12 @@ class DashboardChromeTests(TestCase):
         # ...but is still reachable deliberately.
         self.assertIn("window.openSaveSettingsModal", src)
 
+    def test_the_change_theme_handler_is_wired_where_documents_open(self):
+        """It was attached in openThemeModal, so Change did nothing on a document."""
+        src = self.source()
+        head = src[src.index("async function showDocumentInfoModal"):][:400]
+        self.assertIn("setupDocThemeHandlers()", head)
+
     def test_the_document_theme_control_allows_a_new_name(self):
         src = self.source()
         self.assertIn('docThemeNewInput', src)
@@ -3612,3 +3630,89 @@ class DashboardChromeTests(TestCase):
         self.assertIn('["num", "text", "theme", "score"]', src)
         self.assertIn('const baseColumns = ["num", "text", "score"];', src)
         self.assertNotIn('["id", "text", "theme", "score"]', src)
+
+
+class TutorialTests(StudyFlowTestCase):
+    """The tool walkthrough, between the instructions and the clock starting."""
+
+    def test_it_comes_after_the_instructions(self):
+        self.login_participant()
+        self.assertEqual(
+            self.client.get(reverse("web:study_tutorial")).status_code, 200
+        )
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_TUTORIAL)
+
+    def test_the_clock_has_not_started_when_it_is_shown(self):
+        """The whole promise of the page: nothing is running yet."""
+        self.login_participant()
+        self.client.get(reverse("web:study_tutorial"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertIsNone(session.task_started_at)
+
+    def test_the_task_starts_from_the_walkthrough(self):
+        self.login_participant()
+        self.client.get(reverse("web:study_tutorial"))
+        self.client.post(reverse("web:study_begin"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_TASK)
+        self.assertIsNotNone(session.task_started_at)
+
+    def test_the_task_cannot_be_started_before_seeing_it(self):
+        self.login_participant()
+        self.client.post(reverse("web:study_begin"))
+        session = ParticipantSession.objects.get(pk=self.participant.pk)
+        self.assertEqual(session.stage, ParticipantSession.STAGE_INSTRUCTIONS)
+        self.assertIsNone(session.task_started_at)
+
+    def test_signing_back_in_returns_to_the_walkthrough(self):
+        self.login_participant()
+        self.client.get(reverse("web:study_tutorial"))
+        self.client.get(reverse("web:logout"))
+        resp = self.client.post(
+            reverse("web:study_login"),
+            {"email": self.participant.email, "password": "pw"},
+        )
+        self.assertEqual(resp["Location"], reverse("web:study_tutorial"))
+
+    def test_every_screenshot_it_references_exists(self):
+        """A broken image here is worse than no walkthrough."""
+        import re
+        from pathlib import Path
+
+        from django.conf import settings
+
+        src = read_template_source("study/tutorial.html")
+        names = re.findall(r"img/tutorial/([\w.-]+)", src)
+        self.assertGreaterEqual(len(names), 5, "expected several screenshots")
+
+        roots = [Path(d) for d in settings.STATICFILES_DIRS]
+        for name in set(names):
+            with self.subTest(image=name):
+                self.assertTrue(
+                    any((root / "img" / "tutorial" / name).is_file() for root in roots),
+                    f"{name} is referenced but not present",
+                )
+
+    def test_the_active_learning_section_follows_the_condition(self):
+        self.login_participant()
+        body = self.client.get(reverse("web:study_tutorial")).content.decode()
+        self.assertIn("Active learning", body)
+
+        self.group.enable_active_learning = False
+        self.group.save()
+        other = User.objects.create_user(
+            email="p900@study.local", password="pw", study_group=self.group,
+            participant_code="p900",
+        )
+        self.client.force_login(other)
+        consent_for(other)
+        body = self.client.get(reverse("web:study_tutorial")).content.decode()
+        self.assertNotIn("You can label documents one at a time", body)
+
+    def test_it_does_not_claim_the_clock_is_running(self):
+        self.login_participant()
+        rendered = visible_text(
+            self.client.get(reverse("web:study_tutorial")).content.decode()
+        )
+        self.assertIn("has not started", rendered)

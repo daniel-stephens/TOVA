@@ -2732,7 +2732,9 @@ document.addEventListener("DOMContentLoaded", () => {
   /* Move one document to a different theme, for this user only. */
   let currentDocContext = { docId: null, modelLabel: null };
 
+  let docThemeHandlersSetup = false;
   function setupDocThemeHandlers() {
+    if (docThemeHandlersSetup) return;
     const openBtn = document.getElementById("changeDocThemeBtn");
     const controls = document.getElementById("changeDocThemeControls");
     const select = document.getElementById("docThemeSelect");
@@ -2744,6 +2746,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const badge = document.getElementById("modalThemeOverridden");
     if (!openBtn || !controls || !select) return;
 
+    docThemeHandlersSetup = true;
     const show = (on) => { controls.style.setProperty("display", on ? "flex" : "none", "important"); };
 
     const NEW_THEME = "__new__";
@@ -2912,7 +2915,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const els = getModalElements();
     setupRenameHandlers();
-    setupDocThemeHandlers();
     
     const currentLabel = getThemeLabel(themeId);
     
@@ -3087,6 +3089,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   async function showDocumentInfoModal(doc) {
+    // Wired here rather than in openThemeModal: that only runs when a theme
+    // bubble is clicked, so opening a document left "Change" inert.
+    setupDocThemeHandlers();
     const docId = doc.id;
     const modelId   = document.getElementById("model_id")?.textContent?.trim() || "";
 
