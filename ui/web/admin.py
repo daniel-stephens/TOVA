@@ -852,6 +852,7 @@ class ParticipantSessionAdmin(_ReadOnlyStudyAdmin):
         "stage",
         "moderated",
         "task_started_at",
+        "tool_ready_at",
         "task_ends_at",
         "task_completed_at",
         "finished_early",
@@ -951,7 +952,7 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
         cols = [
             "participant", "dashboard", "study_group", "active_learning",
             "task_minutes", "consent_version", "consented_at", "instrument_version",
-            "task_started_at", "task_completed_at",
+            "task_started_at", "tool_ready_at", "task_completed_at",
             "task_duration_s", "task_wallclock_s", "seconds_away",
             "finished_early", "moderated",
         ]
@@ -1000,6 +1001,7 @@ class StudyResponseAdmin(_ReadOnlyStudyAdmin):
                     _iso(getattr(session, "consented_at", None)),
                     r.instrument_version,
                     _iso(getattr(session, "task_started_at", None)),
+                    _iso(getattr(session, "tool_ready_at", None)),
                     _iso(getattr(session, "task_completed_at", None)),
                     # Time actually in the app, then start-to-finish, then the
                     # difference -- how long they were away mid-task.

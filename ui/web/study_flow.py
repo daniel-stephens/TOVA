@@ -287,6 +287,41 @@ def touch_task(session: ParticipantSession) -> ParticipantSession:
     return session
 
 
+def start_charging_now(session: ParticipantSession) -> ParticipantSession:
+    """Begin charging presence from this moment, discarding the wait before it.
+
+    The clock starts when the participant presses "Start exploring", but the
+    tool is not usable until the dashboard has its data, several seconds later.
+    Charging that wait would be unfair, and worse, it would not be constant:
+    different model backbones return data at different speeds, so the loss
+    would line up exactly with the study's condition and nothing in the data
+    would show it.
+
+    Called once, when the dashboard's data first arrives. ``task_started_at``
+    is left alone, so the record still says when they pressed the button.
+    """
+    if session.stage != ParticipantSession.STAGE_TASK:
+        return session
+    if not session.task_started_at or session.tool_ready_at:
+        # Not running, or the tool has already been ready once. Guarded on its
+        # own timestamp rather than on elapsed time: the flow middleware charges
+        # every request, including the ones the page load itself makes, so by
+        # the time this runs the wait has already been counted. Checking
+        # "elapsed is still zero" would therefore never be true and this would
+        # silently do nothing.
+        return session
+
+    now = timezone.now()
+    session.tool_ready_at = now
+    session.task_elapsed_s = 0          # refund what the load already cost
+    session.last_seen_at = now
+    session.task_ends_at = now + _dt.timedelta(seconds=session.task_total_seconds)
+    session.save(update_fields=[
+        "tool_ready_at", "task_elapsed_s", "last_seen_at", "task_ends_at",
+    ])
+    return session
+
+
 def finish_task(session: ParticipantSession, *, early: bool) -> ParticipantSession:
     """Close the exploration task and move the participant to the questions."""
     if session.stage != ParticipantSession.STAGE_TASK:

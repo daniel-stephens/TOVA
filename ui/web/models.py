@@ -252,6 +252,11 @@ class ParticipantSession(models.Model):
     task_elapsed_s = models.PositiveIntegerField(default=0)
     #: When this participant was last seen making a request during the task.
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    #: When the dashboard first had its data, i.e. when the tool became usable.
+    #: The allowance is counted from here rather than from the button press, so
+    #: the wait for the first load is not taken out of anyone's 30 minutes.
+    #: Also the marker that this has already happened -- it is done once.
+    tool_ready_at = models.DateTimeField(null=True, blank=True)
     task_completed_at = models.DateTimeField(null=True, blank=True)
     finished_early = models.BooleanField(default=False)
 

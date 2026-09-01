@@ -3760,3 +3760,125 @@ class TutorialTests(StudyFlowTestCase):
             self.client.get(reverse("web:study_tutorial")).content.decode()
         )
         self.assertIn("has not started", rendered)
+
+
+class ClockStartsWhenTheToolIsReadyTests(StudyFlowTestCase):
+    """The 30 minutes should not be spent waiting for the dashboard to load.
+
+    The clock starts on the button press, but the tool is only usable once the
+    dashboard's data arrives. Charging that wait would take time from every
+    participant -- and unequally, since different model backbones return data at
+    different speeds, which is exactly the study's condition.
+    """
+
+    def session(self):
+        return ParticipantSession.objects.get(pk=self.participant.pk)
+
+    def start(self):
+        self.login_participant()
+        begin_task(self.client)
+
+    def age(self, seconds):
+        """Pretend the participant has been waiting this long."""
+        s = self.session()
+        s.last_seen_at -= dt.timedelta(seconds=seconds)
+        s.save()
+
+    def load_dashboard_data(self, ok=True):
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True), \
+             mock.patch("web.views.study_flow.start_charging_now") as spy:
+            if not ok:
+                self.client.post(
+                    reverse("web:get_dashboard_data"),
+                    data=json.dumps({"model_id": ""}),
+                    content_type="application/json",
+                )
+            return spy
+
+    def test_the_wait_before_the_data_arrives_is_not_charged(self):
+        self.start()
+        self.age(12)                       # twelve seconds of loading
+
+        study_flow.start_charging_now(self.session())
+        self.assertEqual(self.session().task_elapsed_s, 0)
+        self.assertGreater(self.session().seconds_remaining, 29 * 60 + 55)
+
+    def test_the_load_is_refunded_even_though_requests_already_charged_it(self):
+        """The bug this exists to prevent.
+
+        The flow middleware charges every request, including the ones the page
+        load itself makes, so by the time the data arrives the wait has already
+        been counted. Guarding on "no time elapsed yet" would therefore never
+        fire and the refund would silently never happen.
+        """
+        self.start()
+        self.age(12)
+        study_flow.touch_task(self.session())          # what the middleware does
+        self.assertGreater(self.session().task_elapsed_s, 10, "the wait was charged")
+
+        study_flow.start_charging_now(self.session())
+        self.assertEqual(self.session().task_elapsed_s, 0, "and then refunded")
+
+    def test_it_only_applies_to_the_first_load(self):
+        """Reloading the dashboard mid-task must not hand back time."""
+        self.start()
+        study_flow.start_charging_now(self.session())  # first load
+
+        s = self.session()
+        s.task_elapsed_s = 10 * 60          # ten minutes of real exploring
+        s.save()
+        self.age(30)
+
+        study_flow.start_charging_now(self.session())  # a reload
+        self.assertEqual(self.session().task_elapsed_s, 10 * 60, "time already spent stands")
+
+    def test_it_does_nothing_before_the_task_starts(self):
+        self.login_participant()
+        session = study_flow.get_or_create_session(self.participant)
+        study_flow.start_charging_now(session)
+        self.assertIsNone(self.session().task_started_at)
+
+    def test_it_does_nothing_after_the_task_is_over(self):
+        self.start()
+        self.client.post(reverse("web:study_finish"))
+        before = self.session().task_elapsed_s
+        study_flow.start_charging_now(self.session())
+        self.assertEqual(self.session().task_elapsed_s, before)
+
+    def test_the_record_of_when_they_pressed_start_is_untouched(self):
+        """Two facts worth keeping apart: when they began, when it was ready."""
+        self.start()
+        pressed = self.session().task_started_at
+        self.age(12)
+        study_flow.start_charging_now(self.session())
+        self.assertEqual(self.session().task_started_at, pressed)
+
+    def test_the_full_allowance_is_available_once_it_is_ready(self):
+        self.start()
+        self.age(20)
+        study_flow.start_charging_now(self.session())
+        session = self.session()
+        span = (session.task_ends_at - timezone.now()).total_seconds()
+        self.assertAlmostEqual(span, 30 * 60, delta=3)
+
+    def test_a_failed_data_load_does_not_mark_the_tool_ready(self):
+        """Only a response the participant can actually use counts."""
+        self.start()
+        self.age(15)
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=True):
+            self.client.post(
+                reverse("web:get_dashboard_data"),
+                data=json.dumps({"model_id": ""}),      # rejected: no model_id
+                content_type="application/json",
+            )
+        self.assertIsNone(self.session().tool_ready_at)
+        # The wait still counts as presence, as any other request would.
+        self.assertGreater(self.session().task_elapsed_s, 10)
+
+    def test_when_the_tool_became_ready_is_recorded(self):
+        self.start()
+        self.age(9)
+        study_flow.start_charging_now(self.session())
+        session = self.session()
+        self.assertIsNotNone(session.tool_ready_at)
+        self.assertGreater(session.tool_ready_at, session.task_started_at)

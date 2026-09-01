@@ -3281,6 +3281,13 @@ def proxy_dashboard_data(request):
             logger=logger,
         )
         logger.info("get-dashboard done dt=%.3fs", time() - t0)
+        # The tool is usable from here, so this is where the 30 minutes should
+        # start counting -- not from the button press, several seconds and one
+        # backend round-trip earlier. Server-side on purpose: a participant
+        # cannot delay it by breaking their JavaScript, because the tool needs
+        # this response to work at all.
+        if is_study_participant(request.user):
+            study_flow.start_charging_now(study_flow.get_or_create_session(request.user))
         return JsonResponse(bundle, status=200)
     except Exception as e:
         logger.exception("get-dashboard bundling error: %s", e)
