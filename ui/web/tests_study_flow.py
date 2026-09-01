@@ -3463,82 +3463,52 @@ class ThemeToolsTests(TestCase):
         return self.client.post(url, data=json.dumps(payload),
                                 content_type="application/json")
 
-    # -- suggestion ----------------------------------------------------
-    def test_a_label_is_suggested_from_the_documents(self):
-        with self.owns(), mock.patch(
-            "web.endpoints.theme_tools.chat_llm", return_value=("Approval oversight", None)
-        ):
-            resp = self.post(self.suggest_url, model_id="m1",
-                             documents=["a", "b", "c"], keywords="approval, sign-off")
+    # -- suggestion (stub for the backend team) ------------------------
+    def test_a_suggestion_comes_back_for_a_theme_id(self):
+        with self.owns():
+            resp = self.post(self.suggest_url, model_id="m1", theme_id="3")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["label"], "Approval oversight")
+        self.assertTrue(resp.json()["label"])
 
-    def test_the_sample_is_drawn_at_random_and_capped(self):
-        """Pressing it twice should be able to give a second opinion."""
-        docs = [f"doc {i}" for i in range(50)]
-        seen = []
+    def test_only_the_theme_identity_is_needed(self):
+        """No documents, no keywords -- the backend has those already."""
+        with self.owns():
+            resp = self.post(self.suggest_url, model_id="m1", theme_id=7)
+        self.assertEqual(resp.status_code, 200)
 
-        def capture(*, system_content, user_content, **kwargs):
-            seen.append(user_content)
-            return ("Label", None)
-
-        with self.owns(), mock.patch(
-            "web.endpoints.theme_tools.chat_llm", side_effect=capture
-        ):
-            for _ in range(6):
-                self.post(self.suggest_url, model_id="m1", documents=docs)
-
-        import re
-
-        from web.endpoints.theme_tools import SAMPLE_SIZE
-
-        for prompt in seen:
-            # Count the numbered example lines, not substring hits -- "doc 1"
-            # also appears inside "doc 10".
-            listed = re.findall(r"^\d+\. ", prompt, re.M)
-            self.assertEqual(len(listed), SAMPLE_SIZE)
-        self.assertGreater(len(set(seen)), 1, "the sample should vary between calls")
-
-    def test_decoration_is_stripped_from_the_reply(self):
-        for raw, want in [
-            ('"Approval oversight"', "Approval oversight"),
-            ("Label: Approval oversight", "Approval oversight"),
-            ("Approval oversight.", "Approval oversight"),
-            ("Approval oversight\nbecause the documents...", "Approval oversight"),
-        ]:
-            with self.subTest(raw=raw):
-                with self.owns(), mock.patch(
-                    "web.endpoints.theme_tools.chat_llm", return_value=(raw, None)
-                ):
-                    resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
-                self.assertEqual(resp.json()["label"], want)
-
-    def test_an_empty_theme_is_refused_before_calling_the_model(self):
-        with self.owns(), mock.patch("web.endpoints.theme_tools.chat_llm") as llm:
-            resp = self.post(self.suggest_url, model_id="m1", documents=[])
+    def test_a_missing_theme_id_is_refused(self):
+        with self.owns():
+            resp = self.post(self.suggest_url, model_id="m1")
         self.assertEqual(resp.status_code, 400)
-        llm.assert_not_called()
+        self.assertIn("theme_id", resp.json()["error"])
 
-    def test_an_llm_failure_is_reported_not_swallowed(self):
-        with self.owns(), mock.patch(
-            "web.endpoints.theme_tools.chat_llm", return_value=(None, "Ollama is down")
-        ):
-            resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
-        self.assertEqual(resp.status_code, 502)
-        self.assertIn("Ollama is down", resp.json()["error"])
+    def test_asking_again_can_return_something_different(self):
+        """The frontend's "suggest again" loop needs the answer to vary."""
+        with self.owns():
+            labels = {
+                self.post(self.suggest_url, model_id="m1", theme_id="3").json()["label"]
+                for _ in range(30)
+            }
+        self.assertGreater(len(labels), 1)
 
-    def test_suggesting_does_not_apply_anything(self):
-        """It fills the box; saving stays a separate act."""
-        with self.owns(), mock.patch(
-            "web.endpoints.theme_tools.chat_llm", return_value=("New name", None)
-        ):
-            self.post(self.suggest_url, model_id="m1", documents=["a"])
+    def test_nothing_is_stored_by_suggesting(self):
+        """Change your mind, close the dialog, and no trace is left."""
+        with self.owns():
+            self.post(self.suggest_url, model_id="m1", theme_id="3")
         self.assertFalse(TopicRename.objects.exists())
+        self.assertFalse(DocumentTheme.objects.exists())
 
     def test_suggestion_requires_owning_the_model(self):
         with mock.patch("web.services.runtime._verify_model_ownership", return_value=False):
-            resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
+            resp = self.post(self.suggest_url, model_id="m1", theme_id="3")
         self.assertEqual(resp.status_code, 403)
+
+    def test_the_response_shape_the_frontend_relies_on(self):
+        """Pinned so replacing the stub cannot silently change the contract."""
+        with self.owns():
+            body = self.post(self.suggest_url, model_id="m1", theme_id="3").json()
+        self.assertIn("label", body)
+        self.assertIsInstance(body["label"], str)
 
     # -- document theme override ---------------------------------------
     def test_a_document_can_be_moved_to_another_theme(self):
@@ -3598,6 +3568,11 @@ class DashboardChromeTests(TestCase):
         self.assertNotIn("setTimeout(openSaveSettingsModal", src)
         # ...but is still reachable deliberately.
         self.assertIn("window.openSaveSettingsModal", src)
+
+    def test_the_suggest_button_sends_only_the_theme_identity(self):
+        src = self.source()
+        self.assertIn('JSON.stringify({ model_id: modelId, theme_id: String(themeId) })', src)
+        self.assertIn('"Suggest again"', src)
 
     def test_document_tables_are_numbered_rather_than_showing_ids(self):
         src = self.source()

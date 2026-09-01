@@ -1,73 +1,66 @@
-"""Dashboard tools for working with themes: LLM label suggestions and overrides.
+"""Dashboard theme tools.
 
-Both are per-user overlays on top of the model. Neither writes to the backend:
-the model keeps its own labels and assignments, and these sit on top of them
-when the dashboard renders.
+``suggest_theme_label`` is a **stub for the backend team**. The suggestion
+itself will be generated upstream; this exists so the frontend has something to
+call while that is built, and so the request and response shapes are settled.
+See the note on the function for what to replace.
+
+``set_document_theme`` and ``get_document_themes`` are real: they store a
+per-user correction to one document's theme as an overlay, without touching the
+model.
 """
 
 from __future__ import annotations
 
 import logging
-import random
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, JsonResponse
 
 from web.models import DocumentTheme
 from web.services import runtime as R
-from web.services.llm_client import chat_llm, get_chat_llm_defaults
 
 logger = logging.getLogger(__name__)
 
-#: How many of a theme's documents to show the model. Enough to characterise the
-#: theme, few enough to keep the prompt small and the call quick.
-SAMPLE_SIZE = 8
-
-#: Characters of each sampled document to include. Topic-bearing words cluster
-#: early in a document, and whole documents would blow the context for no gain.
-SNIPPET_CHARS = 400
-
-SYSTEM_PROMPT = (
-    "You name themes in a collection of documents. Given some example documents "
-    "and keywords from one theme, reply with a single short label for that "
-    "theme: two to four words, plain language, no quotes, no trailing period, "
-    "no explanation. Reply with the label and nothing else."
-)
-
-
-def _clean_label(text: str) -> str:
-    """First line, stripped of the decoration models like to add."""
-    label = (text or "").strip().splitlines()[0] if (text or "").strip() else ""
-    label = label.strip().strip('"').strip("'").strip()
-    for prefix in ("label:", "theme:", "topic:"):
-        if label.lower().startswith(prefix):
-            label = label[len(prefix):].strip()
-    return label.rstrip(".").strip()[:120]
+#: Placeholder labels, cycled so pressing "Suggest again" visibly returns
+#: something different and the frontend loop can be exercised end to end.
+#: Delete these with the stub.
+_STUB_LABELS = [
+    "Approval oversight",
+    "Assay anomalies",
+    "Regulatory correspondence",
+    "Supplier change",
+    "Settlement discussions",
+    "Routine operations",
+]
 
 
 @login_required
 def suggest_theme_label(request: HttpRequest):
-    """Ask the configured LLM for a label for one theme.
+    """Return a suggested label for one theme.
 
-    The sample is drawn at random each time rather than always taking the
-    highest-scoring documents, so pressing the button again gives a genuinely
-    different view of the theme instead of the same answer. Suggests only --
-    applying the label is a separate, deliberate act.
+    **STUB.** Replace the body below with a call to the backend's suggestion
+    endpoint. The contract the frontend relies on, and which should not change:
+
+    Request  (POST, JSON):  ``{"model_id": str, "theme_id": str|int}``
+    Response (200, JSON):   ``{"label": str}``
+    Errors:                 any non-200 with ``{"error": str}``; the frontend
+                            surfaces the message and leaves the field untouched.
+
+    Nothing is stored here. The label is shown to the user, who may ask for
+    another, apply it through the existing rename endpoint, or close the dialog
+    and leave no trace.
     """
     from web import views as V
 
     payload = V._get_json(request) or {}
     model_id = str(payload.get("model_id") or "").strip()
-    documents = payload.get("documents")
-    keywords = str(payload.get("keywords") or "").strip()
-    current = str(payload.get("current_label") or "").strip()
+    theme_id = str(payload.get("theme_id") or "").strip()
 
     if not model_id:
         return JsonResponse({"error": "model_id is required"}, status=400)
-    if not isinstance(documents, list) or not documents:
-        return JsonResponse(
-            {"error": "No documents in this theme to describe."}, status=400
-        )
+    if not theme_id:
+        return JsonResponse({"error": "theme_id is required"}, status=400)
 
     owner_id = V._request_user_id(request)
     if not owner_id:
@@ -75,41 +68,18 @@ def suggest_theme_label(request: HttpRequest):
     if not R._verify_model_ownership(model_id, owner_id):
         return JsonResponse({"error": "Access denied: You do not own this model"}, status=403)
 
-    texts = [str(d or "").strip() for d in documents if str(d or "").strip()]
-    if not texts:
-        return JsonResponse(
-            {"error": "No documents in this theme to describe."}, status=400
-        )
-    sample = random.sample(texts, min(SAMPLE_SIZE, len(texts)))
+    # --- replace from here -------------------------------------------------
+    # e.g.
+    #   up = requests.post(f"{R.API}/queries/suggest-theme-label",
+    #                      json={"model_id": model_id, "theme_id": theme_id},
+    #                      timeout=(5, 120))
+    #   return JsonResponse(up.json(), status=up.status_code)
+    import random
 
-    parts = []
-    if keywords:
-        parts.append(f"Keywords for this theme: {keywords}")
-    if current:
-        parts.append(f"Its current label is \"{current}\". Suggest a better one.")
-    parts.append("Example documents:")
-    parts.extend(
-        f"{i}. {t[:SNIPPET_CHARS]}" for i, t in enumerate(sample, start=1)
-    )
-
-    # get_chat_llm_defaults returns a tuple, not a mapping:
-    # (provider, model, host, ollama_models, gpt_models, ollama_host)
-    provider, model, host = get_chat_llm_defaults()[:3]
-    reply, error = chat_llm(
-        provider=str(payload.get("provider") or provider or ""),
-        model=str(payload.get("model") or model or ""),
-        system_content=SYSTEM_PROMPT,
-        user_content="\n\n".join(parts),
-        host=host,
-    )
-    if error:
-        return JsonResponse({"error": error}, status=502)
-
-    label = _clean_label(reply or "")
-    if not label:
-        return JsonResponse({"error": "The model returned an empty label."}, status=502)
-
-    return JsonResponse({"label": label, "sampled": len(sample), "of": len(texts)})
+    label = random.choice(_STUB_LABELS)
+    logger.info("suggest_theme_label stub: model=%s theme=%s", model_id, theme_id)
+    return JsonResponse({"label": label, "stub": True})
+    # --- to here -----------------------------------------------------------
 
 
 @login_required

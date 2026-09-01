@@ -2687,56 +2687,43 @@ document.addEventListener("DOMContentLoaded", () => {
     return modalElementsCache;
   }
 
-  /* Ask the LLM to name the current theme.
-     Fills the rename box rather than applying anything: the suggestion is a
-     starting point, and saving it stays a deliberate act through the existing
-     rename path. The sample is drawn fresh server-side each press, so asking
-     twice gives a second opinion rather than the same answer. */
+  /* Ask the backend for a suggested label for the current theme.
+
+     Sends only the theme's identity -- the suggestion is generated upstream.
+     Shows the result in the rename box: pressing the button again asks for a
+     different one, and closing the dialog leaves nothing behind, because
+     nothing is saved until Save is pressed. */
   async function suggestThemeLabel() {
     const els = getModalElements();
     const btn = document.getElementById("suggestThemeLabelBtn");
-    const { themeId, currentLabel } = currentThemeContext;
+    const { themeId } = currentThemeContext;
     const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
-    if (!btn || themeId === null || !modelId) return;
+    if (!btn || themeId === null || themeId === undefined || !modelId) return;
 
-    const documents = docsArray
-      .filter(d => String(d.theme_id) === String(themeId))
-      .map(d => d.text)
-      .filter(Boolean);
-
-    if (!documents.length) {
-      els.renameInput.placeholder = "No documents in this theme to describe";
-      return;
-    }
-
-    const original = btn.textContent;
+    const original = btn.dataset.label || btn.textContent;
+    btn.dataset.label = original;
     btn.disabled = true;
     btn.textContent = "Asking\u2026";
     try {
-      const theme = themeById(themeId);
       const r = await fetch("/api/themes/suggest-label", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model_id: modelId,
-          documents,
-          keywords: (theme?.keywords || ""),
-          current_label: currentLabel || ""
-        })
+        body: JSON.stringify({ model_id: modelId, theme_id: String(themeId) })
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
 
-      els.renameInput.value = data.label;
+      els.renameInput.value = data.label || "";
       els.renameInput.focus();
       els.renameInput.select();
-      btn.title = `From ${data.sampled} of ${data.of} documents in this theme`;
+      // Make the "give me another" affordance explicit once one has arrived.
+      btn.dataset.label = "Suggest again";
     } catch (e) {
       els.renameInput.placeholder = e.message || "Could not get a suggestion";
       console.error("Theme label suggestion failed:", e);
     } finally {
       btn.disabled = false;
-      btn.textContent = original;
+      btn.textContent = btn.dataset.label;
     }
   }
 
@@ -2829,6 +2816,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (suggestBtn) suggestBtn.addEventListener("click", suggestThemeLabel);
 
     els.renameBtn.addEventListener("click", () => {
+      if (suggestBtn) { suggestBtn.dataset.label = "Suggest"; suggestBtn.textContent = "Suggest"; }
       els.renameBtn.style.display = "none";
       els.renameControls.style.display = "flex";
       els.renameInput.value = currentThemeContext.currentLabel;
