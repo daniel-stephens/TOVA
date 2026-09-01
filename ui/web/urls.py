@@ -12,6 +12,11 @@ from web.endpoints.chat import (
     get_chat_messages,
 )
 from web.endpoints.doc_topics import suggest_doc_topics
+from web.endpoints.theme_tools import (
+    get_document_themes,
+    set_document_theme,
+    suggest_theme_label,
+)
 
 app_name = "web"
 
@@ -138,6 +143,9 @@ urlpatterns = [
     path("api/chat", _x(chat), name="chat"),
     path("api/chat/stream", _x(chat_stream), name="chat_stream"),
     path("api/doc-topics", _x(suggest_doc_topics), name="suggest_doc_topics"),
+    path("api/themes/suggest-label", _x(suggest_theme_label), name="suggest_theme_label"),
+    path("api/documents/theme", _x(set_document_theme), name="set_document_theme"),
+    path("api/documents/themes", get_document_themes, name="get_document_themes"),
     path(
         "api/models/<str:model_id>/topics/<int:topic_id>/rename",
         _x(views.rename_topic),

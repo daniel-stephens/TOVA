@@ -439,6 +439,44 @@ class ResearcherNote(models.Model):
         return f"{self.user.export_id}: {self.text[:60]}"
 
 
+class DocumentTheme(models.Model):
+    """A user's own theme for one document of one model.
+
+    The model assigns every document a dominant topic. Sometimes it is wrong,
+    and a person reading the document knows better. This records that
+    correction without touching the model: it is an overlay, applied on read,
+    private to whoever made it.
+
+    Kept separate from TopicRename, which renames a topic for every document in
+    it. This moves one document to a different theme.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(User, models.CASCADE, related_name="document_themes")
+    model_id = models.CharField(max_length=255)
+    doc_id = models.CharField(max_length=255)
+    theme = models.CharField(max_length=255)
+    #: The theme the model had assigned, kept so a correction can be read as a
+    #: disagreement rather than just a value.
+    previous_theme = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "web_document_themes"
+        ordering = ["user", "model_id", "doc_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "model_id", "doc_id"], name="uq_document_theme"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "model_id"], name="ix_doctheme_user_model"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.doc_id} -> {self.theme}"
+
+
 class InteractionEventModality:
     """Modality choices shared by InteractionEvent and LabelEvent.
 

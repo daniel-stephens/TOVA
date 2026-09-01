@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from web.models import (
+    DocumentTheme,
     InteractionEvent,
     LabelEvent,
     ResearcherNote,
@@ -3443,3 +3444,163 @@ class AdminTemplateRenderTests(TestCase):
                     body = self.client.get(url).content.decode()
                     for leak in ("{#", "#}", "{%", "%}", "{{", "}}"):
                         self.assertNotIn(leak, body, f"{leak} rendered as text on {url}")
+
+
+class ThemeToolsTests(TestCase):
+    """Suggesting a theme label, and correcting one document's theme."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="r@example.com", password="pw")
+        self.client.force_login(self.user)
+        self.suggest_url = reverse("web:suggest_theme_label")
+        self.set_url = reverse("web:set_document_theme")
+        self.list_url = reverse("web:get_document_themes")
+
+    def owns(self):
+        return mock.patch("web.services.runtime._verify_model_ownership", return_value=True)
+
+    def post(self, url, **payload):
+        return self.client.post(url, data=json.dumps(payload),
+                                content_type="application/json")
+
+    # -- suggestion ----------------------------------------------------
+    def test_a_label_is_suggested_from_the_documents(self):
+        with self.owns(), mock.patch(
+            "web.endpoints.theme_tools.chat_llm", return_value=("Approval oversight", None)
+        ):
+            resp = self.post(self.suggest_url, model_id="m1",
+                             documents=["a", "b", "c"], keywords="approval, sign-off")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["label"], "Approval oversight")
+
+    def test_the_sample_is_drawn_at_random_and_capped(self):
+        """Pressing it twice should be able to give a second opinion."""
+        docs = [f"doc {i}" for i in range(50)]
+        seen = []
+
+        def capture(*, system_content, user_content, **kwargs):
+            seen.append(user_content)
+            return ("Label", None)
+
+        with self.owns(), mock.patch(
+            "web.endpoints.theme_tools.chat_llm", side_effect=capture
+        ):
+            for _ in range(6):
+                self.post(self.suggest_url, model_id="m1", documents=docs)
+
+        import re
+
+        from web.endpoints.theme_tools import SAMPLE_SIZE
+
+        for prompt in seen:
+            # Count the numbered example lines, not substring hits -- "doc 1"
+            # also appears inside "doc 10".
+            listed = re.findall(r"^\d+\. ", prompt, re.M)
+            self.assertEqual(len(listed), SAMPLE_SIZE)
+        self.assertGreater(len(set(seen)), 1, "the sample should vary between calls")
+
+    def test_decoration_is_stripped_from_the_reply(self):
+        for raw, want in [
+            ('"Approval oversight"', "Approval oversight"),
+            ("Label: Approval oversight", "Approval oversight"),
+            ("Approval oversight.", "Approval oversight"),
+            ("Approval oversight\nbecause the documents...", "Approval oversight"),
+        ]:
+            with self.subTest(raw=raw):
+                with self.owns(), mock.patch(
+                    "web.endpoints.theme_tools.chat_llm", return_value=(raw, None)
+                ):
+                    resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
+                self.assertEqual(resp.json()["label"], want)
+
+    def test_an_empty_theme_is_refused_before_calling_the_model(self):
+        with self.owns(), mock.patch("web.endpoints.theme_tools.chat_llm") as llm:
+            resp = self.post(self.suggest_url, model_id="m1", documents=[])
+        self.assertEqual(resp.status_code, 400)
+        llm.assert_not_called()
+
+    def test_an_llm_failure_is_reported_not_swallowed(self):
+        with self.owns(), mock.patch(
+            "web.endpoints.theme_tools.chat_llm", return_value=(None, "Ollama is down")
+        ):
+            resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
+        self.assertEqual(resp.status_code, 502)
+        self.assertIn("Ollama is down", resp.json()["error"])
+
+    def test_suggesting_does_not_apply_anything(self):
+        """It fills the box; saving stays a separate act."""
+        with self.owns(), mock.patch(
+            "web.endpoints.theme_tools.chat_llm", return_value=("New name", None)
+        ):
+            self.post(self.suggest_url, model_id="m1", documents=["a"])
+        self.assertFalse(TopicRename.objects.exists())
+
+    def test_suggestion_requires_owning_the_model(self):
+        with mock.patch("web.services.runtime._verify_model_ownership", return_value=False):
+            resp = self.post(self.suggest_url, model_id="m1", documents=["a"])
+        self.assertEqual(resp.status_code, 403)
+
+    # -- document theme override ---------------------------------------
+    def test_a_document_can_be_moved_to_another_theme(self):
+        with self.owns():
+            resp = self.post(self.set_url, model_id="m1", doc_id="d1",
+                             theme="Assay anomalies", previous_theme="Routine ops")
+        self.assertEqual(resp.status_code, 200)
+        row = DocumentTheme.objects.get()
+        self.assertEqual(row.theme, "Assay anomalies")
+        self.assertEqual(row.previous_theme, "Routine ops")
+
+    def test_moving_it_again_updates_rather_than_duplicating(self):
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="First")
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="Second")
+        self.assertEqual(DocumentTheme.objects.count(), 1)
+        self.assertEqual(DocumentTheme.objects.get().theme, "Second")
+
+    def test_an_empty_theme_clears_the_override(self):
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="Mine")
+            resp = self.post(self.set_url, model_id="m1", doc_id="d1", theme="")
+        self.assertTrue(resp.json()["cleared"])
+        self.assertFalse(DocumentTheme.objects.exists())
+
+    def test_overrides_are_private_to_each_user(self):
+        other = User.objects.create_user(email="other@example.com", password="pw")
+        DocumentTheme.objects.create(user=other, model_id="m1", doc_id="d1", theme="Theirs")
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="Mine")
+            body = self.client.get(self.list_url, {"model_id": "m1"}).json()
+        self.assertEqual(body["themes"], {"d1": "Mine"})
+
+    def test_listing_returns_a_doc_to_theme_map(self):
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="A")
+            self.post(self.set_url, model_id="m1", doc_id="d2", theme="B")
+            body = self.client.get(self.list_url, {"model_id": "m1"}).json()
+        self.assertEqual(body["themes"], {"d1": "A", "d2": "B"})
+
+    def test_overrides_do_not_leak_between_models(self):
+        with self.owns():
+            self.post(self.set_url, model_id="m1", doc_id="d1", theme="A")
+            body = self.client.get(self.list_url, {"model_id": "m2"}).json()
+        self.assertEqual(body["themes"], {})
+
+
+class DashboardChromeTests(TestCase):
+    """Things the dashboard template must and must not do."""
+
+    def source(self):
+        return read_template_source("dashboard.html")
+
+    def test_the_save_dialog_no_longer_opens_itself(self):
+        src = self.source()
+        self.assertNotIn("SAVE_DELAY_MS", src)
+        self.assertNotIn("setTimeout(openSaveSettingsModal", src)
+        # ...but is still reachable deliberately.
+        self.assertIn("window.openSaveSettingsModal", src)
+
+    def test_document_tables_are_numbered_rather_than_showing_ids(self):
+        src = self.source()
+        self.assertIn('["num", "text", "theme", "score"]', src)
+        self.assertIn('const baseColumns = ["num", "text", "score"];', src)
+        self.assertNotIn('["id", "text", "theme", "score"]', src)

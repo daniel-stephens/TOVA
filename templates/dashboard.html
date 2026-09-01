@@ -1611,11 +1611,23 @@ footer {
               <!-- Right Column: Theme, Rationale, Chart -->
               <div  class="col-md-6">
                 <!-- Top Theme -->
-                <div class="mb-3 mt-1 d-flex align-items-center">
+                <div class="mb-1 mt-1 d-flex align-items-center gap-2 flex-wrap">
                   <strong>Top Theme:</strong>
-                  <!-- <p id="modalTheme" class="fw-semibold text-primary mb-0">-</p> -->
                   <p id="modalTheme" class="fw-semibold mb-0">-</p>
+                  <span id="modalThemeOverridden" class="badge bg-secondary" style="display:none;">changed by you</span>
+                  <button type="button" class="btn btn-link btn-sm p-0 ms-1" id="changeDocThemeBtn">Change</button>
+                </div>
 
+                <!-- Reassigns this one document. The model keeps its own
+                     assignment; this is an overlay, and clearing it restores
+                     what the model said. -->
+                <div id="changeDocThemeControls" class="mb-3 d-flex align-items-center gap-2 flex-wrap"
+                     style="display: none !important;">
+                  <select id="docThemeSelect" class="form-select form-select-sm" style="max-width: 220px;"></select>
+                  <button type="button" class="btn btn-sm btn-success" id="saveDocThemeBtn">Save</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="clearDocThemeBtn">Use model's</button>
+                  <button type="button" class="btn btn-sm btn-secondary" id="cancelDocThemeBtn">Cancel</button>
+                  <span id="docThemeFeedback" class="small text-muted"></span>
                 </div>
 
                 <div>
@@ -1672,12 +1684,18 @@ footer {
                 </svg>
               </button>
             </h5>
-            <div id="renameControls" style="display: none; align-items: center; gap: 0.5rem;">
+            <div id="renameControls" style="display: none; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
               <input type="text" 
                      class="form-control form-control-sm" 
                      id="renameThemeInput" 
                      style="max-width: 250px;"
                      placeholder="Enter new topic name...">
+              <button type="button"
+                      class="btn btn-sm btn-outline-primary"
+                      id="suggestThemeLabelBtn"
+                      title="Ask the language model for a label, from a random sample of this theme's documents">
+                Suggest
+              </button>
               <button type="button" 
                       class="btn btn-sm btn-success" 
                       id="saveRenameBtn">
@@ -1960,17 +1978,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }).sort((a, b) => (b.document_count || 0) - (a.document_count || 0));
   }
 
+  /* This user's per-document theme corrections, applied on read. The model's
+     own assignment is never changed; clearing a correction restores it. */
+  let documentThemes = {};   // { docId: theme }
+
+  async function loadDocumentThemes(modelId) {
+    documentThemes = {};
+    if (!modelId) return;
+    try {
+      const r = await fetch(`/api/documents/themes?model_id=${encodeURIComponent(modelId)}`);
+      if (r.ok) documentThemes = (await r.json()).themes || {};
+    } catch (e) {
+      console.error("Failed to load document theme overrides:", e);
+    }
+  }
+
   function docsForTable() {
     const out = [];
     for (const id of dashboardV2.documents.allIds) {
       const d = dashboardV2.documents.byId[id];
       const t = themeById(d.themeId);
       const r = (typeof d.rationale === "string" && d.rationale.trim()) ? d.rationale.trim() : undefined;
+      const override = documentThemes[String(d.id)];
       const row = {
         id: d.id,
         text: d.text,
-        theme: t ? getThemeLabel(t.id) : "—",
-        theme_id: t?.id ?? null,
+        theme: override || (t ? getThemeLabel(t.id) : "—"),
+        // Colour follows the model's theme; an override has no colour of its own.
+        theme_id: override ? null : (t?.id ?? null),
+        overridden: Boolean(override),
         score: d.score
       };
       if (r) row.rationale = r;
@@ -2334,26 +2370,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const hasRationale = docs.some(doc => "rationale" in doc);
-    const columns = hasRationale ? ["id", "text", "theme", "rationale", "score"] : ["id", "text", "theme", "score"];
+    /* "num" is the row's position in the table, not a property of the document.
+       Identifiers are long and unmemorable; a number is what people refer to.
+       The id stays searchable and is still shown in the document modal. */
+    const columns = hasRationale ? ["num", "text", "theme", "rationale", "score"] : ["num", "text", "theme", "score"];
 
     const columnWidths = hasRationale ? {
-      id: "12%", text: "38%", theme: "20%", rationale: "20%", score: "3%"
+      num: "4%", text: "46%", theme: "20%", rationale: "20%", score: "3%"
     } : {
-      id: "10%", text: "70%", theme: "10%", score: "3%"
+      num: "4%", text: "76%", theme: "10%", score: "3%"
     };
 
     const headerRow = document.createElement("tr");
     columns.forEach(col => {
       const th = document.createElement("th");
-      th.textContent = col.charAt(0).toUpperCase() + col.slice(1).replace(/_/g, " ");
+      th.textContent = col === "num" ? "#" : col.charAt(0).toUpperCase() + col.slice(1).replace(/_/g, " ");
       th.classList.add("small-text", "align-middle", "text-nowrap");
       th.style.width = columnWidths[col] || "auto";
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
 
-    docs.forEach(doc => {
+    docs.forEach((doc, rowIndex) => {
       const row = document.createElement("tr");
+      // The id stays searchable even though it is no longer displayed.
       const searchBlob = [doc.id, doc.text, doc.theme, doc.rationale ?? "", String(doc.score ?? "")]
         .join(" ").toLowerCase();
       row.dataset.search = searchBlob;
@@ -2364,7 +2404,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const td = document.createElement("td");
         let value = doc[col];
 
-        if (col === "score" && typeof value === "number") {
+        if (col === "num") {
+          td.textContent = String(rowIndex + 1);
+          td.title = `Document ${doc.id}`;
+          td.classList.add("text-muted");
+          td.style.fontVariantNumeric = "tabular-nums";
+        } else if (col === "score" && typeof value === "number") {
           td.textContent = value.toFixed(3);
           td.title = td.textContent;
         } else {
@@ -2642,6 +2687,133 @@ document.addEventListener("DOMContentLoaded", () => {
     return modalElementsCache;
   }
 
+  /* Ask the LLM to name the current theme.
+     Fills the rename box rather than applying anything: the suggestion is a
+     starting point, and saving it stays a deliberate act through the existing
+     rename path. The sample is drawn fresh server-side each press, so asking
+     twice gives a second opinion rather than the same answer. */
+  async function suggestThemeLabel() {
+    const els = getModalElements();
+    const btn = document.getElementById("suggestThemeLabelBtn");
+    const { themeId, currentLabel } = currentThemeContext;
+    const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+    if (!btn || themeId === null || !modelId) return;
+
+    const documents = docsArray
+      .filter(d => String(d.theme_id) === String(themeId))
+      .map(d => d.text)
+      .filter(Boolean);
+
+    if (!documents.length) {
+      els.renameInput.placeholder = "No documents in this theme to describe";
+      return;
+    }
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Asking\u2026";
+    try {
+      const theme = themeById(themeId);
+      const r = await fetch("/api/themes/suggest-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model_id: modelId,
+          documents,
+          keywords: (theme?.keywords || ""),
+          current_label: currentLabel || ""
+        })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+
+      els.renameInput.value = data.label;
+      els.renameInput.focus();
+      els.renameInput.select();
+      btn.title = `From ${data.sampled} of ${data.of} documents in this theme`;
+    } catch (e) {
+      els.renameInput.placeholder = e.message || "Could not get a suggestion";
+      console.error("Theme label suggestion failed:", e);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  /* Move one document to a different theme, for this user only. */
+  let currentDocContext = { docId: null, modelLabel: null };
+
+  function setupDocThemeHandlers() {
+    const openBtn = document.getElementById("changeDocThemeBtn");
+    const controls = document.getElementById("changeDocThemeControls");
+    const select = document.getElementById("docThemeSelect");
+    const saveBtn = document.getElementById("saveDocThemeBtn");
+    const clearBtn = document.getElementById("clearDocThemeBtn");
+    const cancelBtn = document.getElementById("cancelDocThemeBtn");
+    const feedback = document.getElementById("docThemeFeedback");
+    const themeEl = document.getElementById("modalTheme");
+    const badge = document.getElementById("modalThemeOverridden");
+    if (!openBtn || !controls || !select) return;
+
+    const show = (on) => { controls.style.setProperty("display", on ? "flex" : "none", "important"); };
+
+    openBtn.addEventListener("click", () => {
+      select.innerHTML = "";
+      const themes = [...new Set(docsArray.map(d => d.theme).filter(t => t && t !== "\u2014"))].sort();
+      themes.forEach(t => {
+        const o = document.createElement("option");
+        o.value = t; o.textContent = t;
+        if (t === themeEl.textContent.trim()) o.selected = true;
+        select.appendChild(o);
+      });
+      feedback.textContent = "";
+      show(true);
+    });
+    cancelBtn.addEventListener("click", () => show(false));
+
+    const save = async (theme) => {
+      const modelId = document.getElementById("model_id")?.textContent?.trim() || "";
+      const docId = currentDocContext.docId;
+      if (!modelId || docId == null) return;
+      feedback.textContent = "Saving\u2026";
+      try {
+        const r = await fetch("/api/documents/theme", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model_id: modelId, doc_id: String(docId), theme,
+            previous_theme: currentDocContext.modelLabel || ""
+          })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+
+        if (data.cleared) {
+          delete documentThemes[String(docId)];
+          themeEl.textContent = currentDocContext.modelLabel || "\u2014";
+          badge.style.display = "none";
+        } else {
+          documentThemes[String(docId)] = data.theme;
+          themeEl.textContent = data.theme;
+          themeEl.style.color = "";
+          badge.style.display = "";
+        }
+        docsArray = docsForTable();
+        renderDocumentTable(docsArray);
+        populateThemeFilter(docsArray);
+        themeDocsCache.clear();
+        feedback.textContent = "";
+        show(false);
+      } catch (e) {
+        feedback.textContent = e.message || "Could not save";
+        console.error("Document theme change failed:", e);
+      }
+    };
+
+    saveBtn.addEventListener("click", () => save(select.value));
+    clearBtn.addEventListener("click", () => save(""));
+  }
+
   // Setup rename handlers once (using event delegation)
   let renameHandlersSetup = false;
   let currentThemeContext = { themeId: null, currentLabel: null };
@@ -2653,6 +2825,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const els = getModalElements();
     if (!els.renameBtn || !els.renameInput || !els.saveBtn || !els.cancelBtn) return;
     
+    const suggestBtn = document.getElementById("suggestThemeLabelBtn");
+    if (suggestBtn) suggestBtn.addEventListener("click", suggestThemeLabel);
+
     els.renameBtn.addEventListener("click", () => {
       els.renameBtn.style.display = "none";
       els.renameControls.style.display = "flex";
@@ -2719,6 +2894,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const els = getModalElements();
     setupRenameHandlers();
+    setupDocThemeHandlers();
     
     const currentLabel = getThemeLabel(themeId);
     
@@ -2842,7 +3018,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const baseColumns = ["id", "text", "score"];
+    const baseColumns = ["num", "text", "score"];
     const hasRationale = filters.some(f => f.hasOwnProperty("rationale"));
     const columns = hasRationale ? [...baseColumns, "rationale"] : baseColumns;
 
@@ -2852,7 +3028,7 @@ document.addEventListener("DOMContentLoaded", () => {
     columns.forEach(col => {
       const th = document.createElement("th");
       th.classList.add("small");
-      th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
+      th.textContent = col === "num" ? "#" : col.charAt(0).toUpperCase() + col.slice(1);
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
@@ -2863,7 +3039,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Use DocumentFragment for batch DOM operations
     const fragment = document.createDocumentFragment();
     
-    sortedFilters.forEach(filter => {
+    sortedFilters.forEach((filter, rowIndex) => {
       const row = document.createElement("tr");
       row.classList.add("small");
       row.dataset.search = [filter.id, filter.text, String(filter.score ?? ""), filter.rationale ?? ""].join(" ").toLowerCase();
@@ -2873,6 +3049,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const td = document.createElement("td");
         td.classList.add("small", "truncate-cell");
         let value = filter[col];
+        if (col === "num") {
+          value = rowIndex + 1;
+          td.title = `Document ${filter.id}`;
+          td.classList.add("text-muted");
+        }
         if (col === "score" && typeof value === "number") value = value.toFixed(3);
         td.textContent = value ?? "—";
         td.title = td.textContent;
@@ -2911,7 +3092,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const fullTextEl = document.getElementById("modalFullText");
     const themeEl    = document.getElementById("modalTheme");
     if (fullTextEl) fullTextEl.textContent = result.text || doc.text || "—";
-    if (themeEl)    themeEl.textContent    = result.theme || "—";
+
+    // The model's own answer, kept so "Use model's" can restore it.
+    const modelLabel = result.theme || "—";
+    currentDocContext = { docId: doc.id, modelLabel };
+
+    const override = documentThemes[String(doc.id)];
+    const overrideBadge = document.getElementById("modalThemeOverridden");
+    if (themeEl) themeEl.textContent = override || modelLabel;
+    if (overrideBadge) overrideBadge.style.display = override ? "" : "none";
+    const docThemeControls = document.getElementById("changeDocThemeControls");
+    if (docThemeControls) docThemeControls.style.setProperty("display", "none", "important");
 
     // theme color
     const top = result?.top_themes?.[0];
@@ -2919,8 +3110,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const inferredThemeColor = resolvedThemeId != null ? (themeColorMap[resolvedThemeId] || null) : null;
 
     if (themeEl) {
-      themeEl.style.color = inferredThemeColor || "";       
-      themeEl.style.fontWeight = inferredThemeColor ? "600" : "";
+      // An override is the person's own label and has no model colour.
+      const overridden = Boolean(documentThemes[String(doc.id)]);
+      themeEl.style.color = overridden ? "" : (inferredThemeColor || "");
+      themeEl.style.fontWeight = (!overridden && inferredThemeColor) ? "600" : "";
     }
 
     const topTheme = result.top_themes?.[0];
@@ -3117,8 +3310,10 @@ document.addEventListener("DOMContentLoaded", () => {
       
       console.log("Loading dashboard for model:", modelId);
       
-      // Load renames from backend (will reset to backend state on each reload)
+      // Load renames and per-document theme corrections before rendering, so
+      // the first paint already reflects them.
       await loadThemeRenames();
+      await loadDocumentThemes(modelId);
       
       dashboardV2 = await fetchDashboard(modelId);
 
@@ -3560,11 +3755,10 @@ document.addEventListener("DOMContentLoaded", () => {
   })();
 
   // ---------------------------
-  // Save preferences modal (autoshow after 5 minutes)
+  // Save preferences modal (opened from the model menu, never on its own)
   // ---------------------------
   (function savePrefs() {
-    const SAVE_DELAY_MS = 5 * 60 * 1000;     // 5 minutes
-    const SESSION_KEY   = "savePrefsDismissed";
+    const SESSION_KEY = "savePrefsDismissed";
 
     function ensureSaveSettingsModal() {
       if (document.getElementById("saveSettingsModal")) return;
@@ -3654,16 +3848,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.openSaveSettingsModal = openSaveSettingsModal;
 
-    // Auto-show after delay unless dismissed
-    try {
-      if (!sessionStorage.getItem(SESSION_KEY)) {
-        setTimeout(() => {
-          if (!sessionStorage.getItem(SESSION_KEY)) openSaveSettingsModal();
-        }, SAVE_DELAY_MS);
-      }
-    } catch {
-      setTimeout(openSaveSettingsModal, SAVE_DELAY_MS);
-    }
+    /* No auto-show. This used to open itself after five minutes, which
+       interrupted whatever the person was reading to ask a question they had
+       not asked. It is still available on demand from "Save layout" in the
+       model menu. */
   })();
 
   // ---------------------------
