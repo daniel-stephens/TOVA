@@ -89,14 +89,13 @@ def tova_console_root(request: HttpRequest) -> HttpResponse:
                            f"model{'s' if state['dashboards_available'] != 1 else ''} available.")
 
     if not conditions_in_use:
-        conditions_step = step("conditions", "todo",
-                               "No conditions defined yet. Each one is a dashboard "
-                               "plus an active-learning setting.")
+        conditions_step = step("conditions", "todo", "No study groups yet.")
     else:
         names = ", ".join(c.name for c in conditions_in_use[:4])
         more = "" if len(conditions_in_use) <= 4 else f" +{len(conditions_in_use) - 4} more"
+        n = len(conditions_in_use)
         conditions_step = step("conditions", "done",
-                               f"{len(conditions_in_use)} conditions: {names}{more}")
+                               f"{n} group{'s' if n != 1 else ''} with members: {names}{more}")
 
     if not enrolled_n:
         people_step = step("people", "todo", "No participants yet.")
@@ -111,16 +110,17 @@ def tova_console_root(request: HttpRequest) -> HttpResponse:
         check_step = step("check", "todo", "Nothing assigned to check yet.")
     elif state["mixed_corpora"]:
         check_step = step("check", "attention",
-                          "Conditions are on different corpora \u2014 the comparison would be "
-                          "model and corpus, not model alone.")
+                          "Participants are spread across more than one corpus.")
     elif state["problems"]:
         n = len(state["problems"])
         check_step = step("check", "attention",
                           f"{n} dashboard{'s' if n != 1 else ''} would not work for the "
                           "participants assigned to it.")
     else:
+        n = len(state["in_use"])
         check_step = step("check", "done",
-                          f"All {len(state['in_use'])} conditions ready, one corpus.")
+                          f"{n} dashboard{'s' if n != 1 else ''} in use, all ready, "
+                          "one corpus.")
 
     # Sentence-cased by construction rather than with .capitalize(), which would
     # lowercase "Prolific".
@@ -335,9 +335,8 @@ def preflight_state() -> dict:
     ).count()
     started = ParticipantSession.objects.exclude(task_started_at=None).count()
 
-    # The study varies the model backbone over ONE corpus. If two conditions are
-    # built on different corpora, the comparison is between corpora as well as
-    # between models, and the result means nothing.
+    # Reported, not judged: whether spreading participants across corpora is a
+    # problem depends on the study design, which is not this code's business.
     corpora_in_use = {
         r["corpus_id"] for r in rows if r["participants"] and r["corpus_id"]
     }

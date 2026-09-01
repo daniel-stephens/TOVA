@@ -168,11 +168,7 @@ class UserAdminForm(DashboardChoiceMixin, forms.ModelForm):
 
 
 class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
-    """A study group is a condition: one dashboard, one active-learning setting.
-
-    Both live here rather than on the participant, so a condition is defined
-    once and everyone in it inherits from the same place.
-    """
+    """Editor for a study group and the defaults its members inherit."""
 
     dashboard_field = "default_model_id"
     dashboard_blank_label = _("\u2014 no dashboard yet \u2014")
@@ -196,17 +192,14 @@ class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         dashboard = self.fields.get("default_model_id")
         if dashboard is not None:
-            dashboard.label = _("Dashboard for this condition")
             dashboard.help_text = _(
-                "The trained model everyone in this condition works with. "
-                "Participants inherit it, so this is the only place it is set."
+                "Members who have no dashboard of their own use this one."
             )
         al = self.fields.get("enable_active_learning")
         if al is not None:
-            al.label = _("Active learning in this condition")
             al.help_text = _(
-                "Whether participants in this condition get the active-learning "
-                "tab. Set it here, not when creating participants."
+                "Whether members get the active-learning tab. A member can "
+                "override this on their own record."
             )
         # Staff accounts are never study participants, so keep them out of the picker.
         self.fields["members"].queryset = User.objects.filter(
@@ -216,22 +209,21 @@ class StudyGroupAdminForm(DashboardChoiceMixin, forms.ModelForm):
             self.fields["members"].initial = self.instance.users.values_list("pk", flat=True)
 
 
-class ConditionChoiceField(forms.ModelMultipleChoiceField):
-    """Study groups, labelled with the condition they actually represent."""
+class StudyGroupChoiceField(forms.ModelMultipleChoiceField):
+    """Study groups, showing the settings members would inherit."""
 
     def label_from_instance(self, obj):
         dashboard = (obj.default_model_id or "").strip()
         if dashboard:
-            name = dict(available_dashboards()).get(dashboard, dashboard)
-            where = name.split("  (")[0]
+            where = dict(available_dashboards()).get(dashboard, dashboard).split("  (")[0]
         else:
-            where = "no dashboard assigned"
-        al = "active learning ON" if obj.enable_active_learning else "active learning OFF"
+            where = "no dashboard"
+        al = "active learning on" if obj.enable_active_learning else "active learning off"
         return f"{obj.name} \u2014 {where}, {al}"
 
 
 class CreateParticipantsForm(forms.Form):
-    """Bulk-create participants and deal them into conditions you have defined."""
+    """Bulk-create participant accounts and divide them between study groups."""
 
     count = forms.IntegerField(
         required=False,
@@ -254,15 +246,14 @@ class CreateParticipantsForm(forms.Form):
         label=_("Start numbering at"),
         help_text=_("Raise this for a second cohort so logins do not collide."),
     )
-    groups = ConditionChoiceField(
+    groups = StudyGroupChoiceField(
         queryset=StudyGroup.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        label=_("Deal them into"),
+        label=_("Study groups"),
         help_text=_(
-            "Each participant joins exactly ONE condition. Tick several to divide "
-            "the cohort evenly between them, round-robin. A condition carries its "
-            "own dashboard and its own active-learning setting \u2014 edit those on "
-            "the condition itself, not here."
+            "Each participant joins exactly one group. Tick several to divide them "
+            "evenly between those groups, in turn. Dashboard and active learning "
+            "come from the group itself."
         ),
     )
     skip_existing = forms.BooleanField(
@@ -275,6 +266,8 @@ class CreateParticipantsForm(forms.Form):
     #: Set during clean() when real email addresses were pasted. Surfaced on the
     #: form rather than raised, because inviting named people is legitimate.
     uncoded_warning = None
+    #: Set during clean() when a chosen group has no dashboard.
+    undashed_warning = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -286,18 +279,17 @@ class CreateParticipantsForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
 
-        # A condition with no dashboard leaves its participants unable to start,
-        # and they would not find out until they signed in.
+        # Flagged, not refused: assigning dashboards to participants individually
+        # afterwards is a perfectly reasonable way to work.
         undashed = [
             g.name for g in cleaned.get("groups") or []
             if not (g.default_model_id or "").strip()
         ]
         if undashed:
-            raise forms.ValidationError(
-                _("These conditions have no dashboard, so participants in them "
-                  "could not start: %s. Assign one on the condition first.")
-                % ", ".join(undashed)
-            )
+            self.undashed_warning = _(
+                "%s has no dashboard. Members will not be able to start until "
+                "one is set on the group, or on them individually."
+            ) % ", ".join(undashed)
 
         count = cleaned.get("count")
         emails_raw = (cleaned.get("emails") or "").strip()
@@ -381,26 +373,18 @@ class StudyGroupAdmin(admin.ModelAdmin):
     readonly_fields = ("member_table",)
     fieldsets = (
         (
-            _("The condition"),
+            _("Study group"),
             {
                 "fields": ("name", "slug", "description", "default_model_id"),
                 "description": _(
-                    "A condition is one dashboard plus one active-learning setting. "
-                    "Everyone assigned here inherits both, so changing them moves the "
-                    "whole arm at once. Give it a name you will recognise in the data "
-                    "\u2014 it is what appears in the exports."
+                    "Members inherit the settings below unless they have their own. "
+                    "The name is what identifies this group in the exports."
                 ),
             },
         ),
         (
             _("Active learning"),
-            {
-                "fields": ("enable_active_learning",),
-                "description": _(
-                    "Define two conditions on the same dashboard, one with this on and "
-                    "one with it off, to compare the tool with and without it."
-                ),
-            },
+            {"fields": ("enable_active_learning",)},
         ),
         (
             _("Members"),
@@ -679,6 +663,9 @@ class UserAdmin(BaseUserAdmin):
         context.update(
             {
                 "rows": rows,
+                # Carried onto the result page: the accounts exist, and this is
+                # where the person finds out something still needs doing.
+                "undashed_warning": form.undashed_warning,
                 "created": sum(1 for r in rows if r["status"] == "created"),
                 "updated": sum(1 for r in rows if r["status"] == "updated"),
                 "skipped": sum(1 for r in rows if r["status"] == "skipped"),

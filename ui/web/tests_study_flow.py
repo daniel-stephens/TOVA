@@ -3006,7 +3006,7 @@ class CorpusConsistencyTests(TestCase):
     def test_different_corpora_are_flagged_loudly(self):
         resp = self.render({"m_alpha": "c_one", "m_beta": "c_two"})
         self.assertEqual(resp.context["mixed_corpora"], ["c_one", "c_two"])
-        self.assertContains(resp, "not on the same corpus")
+        self.assertContains(resp, "more than one corpus")
 
     def test_an_unassigned_dashboard_does_not_trigger_the_warning(self):
         """Only conditions people are actually in can confound the comparison."""
@@ -3019,12 +3019,12 @@ class CorpusConsistencyTests(TestCase):
         self.assertEqual(rows["m_alpha"]["corpus_id"], "c_one")
 
 
-class OneConditionPerParticipantTests(TestCase):
-    """Ticking several conditions divides the cohort; it never gives anyone two.
+class OneGroupPerParticipantTests(TestCase):
+    """Ticking several groups divides the cohort; it never gives anyone two.
 
     The checkbox list reads as "each of these people gets all of these". It does
-    not: participants are dealt round-robin, one condition each, and study_group
-    is a single foreign key so two could not be held anyway.
+    not: participants are divided in turn, one group each, and study_group is a
+    single foreign key so two could not be held anyway.
     """
 
     def setUp(self):
@@ -3049,7 +3049,7 @@ class OneConditionPerParticipantTests(TestCase):
     def participants(self):
         return User.objects.filter(is_staff=False).order_by("email")
 
-    def test_each_participant_is_in_exactly_one_condition(self):
+    def test_each_participant_is_in_exactly_one_group(self):
         self.create(9, self.groups)
         for u in self.participants():
             with self.subTest(user=u.email):
@@ -3071,7 +3071,7 @@ class OneConditionPerParticipantTests(TestCase):
             counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
         self.assertEqual(sorted(counts.values()), [3, 4])
 
-    def test_ticking_one_condition_puts_everyone_in_it(self):
+    def test_ticking_one_group_puts_everyone_in_it(self):
         self.create(5, [self.groups[1]])
         self.assertEqual(
             set(self.participants().values_list("study_group__name", flat=True)),
@@ -3081,15 +3081,15 @@ class OneConditionPerParticipantTests(TestCase):
     def test_the_form_says_so_in_words(self):
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             body = self.client.get(self.url).content.decode()
-        self.assertIn("exactly ONE condition", body)
-        self.assertIn("Deal them into", body)
+        self.assertIn("exactly one group", body)
+        self.assertIn("Study groups", body)
 
 
-class ConditionAssignmentTests(TestCase):
-    """Conditions are defined first; participants are dealt into them.
+class StudyGroupAssignmentTests(TestCase):
+    """Groups are set up first; participants are divided between them.
 
-    Active learning belongs to the condition, set when the group is created,
-    not chosen while making participants.
+    Dashboard and active learning belong to the group, so the participant form
+    offers neither.
     """
 
     def setUp(self):
@@ -3120,14 +3120,14 @@ class ConditionAssignmentTests(TestCase):
     def participants(self):
         return User.objects.filter(is_staff=False)
 
-    def test_participants_are_dealt_into_the_chosen_conditions(self):
+    def test_participants_are_divided_between_the_chosen_groups(self):
         self.create(6, [self.with_al, self.without_al])
         counts = {}
         for u in self.participants():
             counts[u.study_group.name] = counts.get(u.study_group.name, 0) + 1
         self.assertEqual(counts, {"LDA + active learning": 3, "LDA alone": 3})
 
-    def test_active_learning_comes_from_the_condition(self):
+    def test_active_learning_comes_from_the_group(self):
         self.create(4, [self.with_al, self.without_al])
         for u in self.participants():
             with self.subTest(user=u.email):
@@ -3137,42 +3137,43 @@ class ConditionAssignmentTests(TestCase):
                     u.study_group.enable_active_learning,
                 )
 
-    def test_the_dashboard_comes_from_the_condition(self):
+    def test_the_dashboard_comes_from_the_group(self):
         self.create(2, [self.with_al])
         for u in self.participants():
             self.assertEqual(u.study_model_id, "", "not copied onto the participant")
             self.assertEqual(get_study_model_id(u), "m_a")
             self.assertTrue(is_study_participant(u))
 
-    def test_no_active_learning_choice_on_the_participant_form(self):
-        """It belongs to the condition, and must not be offered twice."""
+    def test_no_dashboard_or_active_learning_choice_on_the_participant_form(self):
+        """Both belong to the group; offering them here would be a second answer."""
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             body = self.client.get(self.url).content.decode()
         self.assertNotIn('name="active_learning"', body)
         self.assertNotIn('name="dashboards"', body)
         self.assertIn('name="groups"', body)
 
-    def test_the_picker_shows_what_each_condition_actually_is(self):
+    def test_the_picker_shows_the_settings_members_would_inherit(self):
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             body = self.client.get(self.url).content.decode()
-        self.assertIn("LDA baseline, active learning ON", body)
-        self.assertIn("LDA baseline, active learning OFF", body)
+        self.assertIn("LDA baseline, active learning on", body)
+        self.assertIn("LDA baseline, active learning off", body)
 
-    def test_a_condition_without_a_dashboard_is_refused(self):
+    def test_a_group_without_a_dashboard_warns_but_does_not_block(self):
+        """Assigning dashboards per participant afterwards is a valid way to work."""
         orphan = StudyGroup.objects.create(name="No dashboard", slug="no-dash")
         resp = self.create(2, [orphan])
-        self.assertEqual(resp.status_code, 200, "re-rendered with an error")
-        self.assertFalse(self.participants().exists())
-        self.assertContains(resp, "could not start")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.participants().count(), 2, "created anyway")
+        self.assertContains(resp, "has no dashboard")
 
-    def test_the_form_sends_you_to_define_a_condition_when_none_exist(self):
+    def test_the_form_sends_you_to_make_a_group_when_none_exist(self):
         StudyGroup.objects.all().delete()
         with mock.patch("web.admin.available_dashboards", return_value=self.dashboards):
             resp = self.client.get(self.url)
-        self.assertContains(resp, "No conditions exist yet")
+        self.assertContains(resp, "No study groups exist yet")
         self.assertContains(resp, reverse("admin:web_studygroup_add"))
 
-    def test_changing_a_condition_moves_everyone_in_it(self):
+    def test_changing_a_group_moves_everyone_in_it(self):
         """The point of inheriting: one edit, not N."""
         self.create(2, [self.with_al])
         self.with_al.enable_active_learning = False
@@ -3360,7 +3361,7 @@ class StudyConsoleTests(TestCase):
             corpora={"m_a": "c_1", "m_b": "c_2"},
         )
         self.assertEqual(resp.context["steps"]["check"]["state"], "attention")
-        self.assertIn("different corpora", resp.context["steps"]["check"]["detail"])
+        self.assertIn("more than one corpus", resp.context["steps"]["check"]["detail"])
 
     def test_access_step_flags_missing_payment_and_open_signup(self):
         resp = self.load()

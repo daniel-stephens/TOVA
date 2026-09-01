@@ -14,13 +14,11 @@
 
   {% if mixed_corpora %}
     <p class="errornote" style="max-width: 52em;">
-      <strong>Conditions are not on the same corpus.</strong>
-      Participants are assigned to dashboards built on
+      <strong>Participants are spread across more than one corpus.</strong>
+      The dashboards in use were built on
       {{ mixed_corpora|length }} different corpora:
       {% for c in mixed_corpora %}<code>{{ c }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
-      This study varies the model backbone over one corpus &mdash; if the corpus
-      varies too, a difference between conditions cannot be attributed to the
-      model. Fix this before recruiting.
+      Flagged in case that is not what you intended.
     </p>
   {% endif %}
 

@@ -10,8 +10,8 @@ with its real state attached, so the next thing to do is always the first step
 that is not done.
 
 The numbering is real: these steps genuinely have to happen in this order. You
-cannot define conditions before a model exists, or check a dashboard before
-anyone is assigned to it.
+cannot set up a group's dashboard before a model exists, or check a dashboard
+before anyone is assigned to it.
 {% endcomment %}
 
 {% block extrastyle %}{{ block.super }}
@@ -86,7 +86,7 @@ anyone is assigned to it.
       <span class="tsc-next__label">{% translate "Next" %}</span>
       <span class="tsc-next__what">
         {% if next_key == "models" %}Train a topic model
-        {% elif next_key == "conditions" %}Create your conditions
+        {% elif next_key == "conditions" %}Set up the study groups
         {% elif next_key == "people" %}Create participants
         {% elif next_key == "check" %}Run the readiness check
         {% elif next_key == "access" %}Set up payment and access
@@ -118,14 +118,13 @@ anyone is assigned to it.
     <div class="tsc-step is-{{ steps.conditions.state }}{% if next_key == 'conditions' %} is-next{% endif %}">
       <span class="tsc-num">2</span>
       <div class="tsc-body">
-        <h3>{% translate "Decide the conditions" %}</h3>
+        <h3>{% translate "Set up the study groups" %}</h3>
         <p class="tsc-detail">{{ steps.conditions.detail }}</p>
-        <p class="tsc-detail">{% translate "A condition is one dashboard plus whether active learning is on." %}</p>
       </div>
       <div class="tsc-actions">
         <span class="tsc-pill tsc-pill--{{ steps.conditions.state }}">{{ steps.conditions.state }}</span>
-        <a href="{% url 'admin:web_studygroup_add' %}">{% translate "Add a condition" %}</a>
-        <a href="{% url 'admin:web_studygroup_changelist' %}">{% translate "See conditions" %}</a>
+        <a href="{% url 'admin:web_studygroup_add' %}">{% translate "Add a group" %}</a>
+        <a href="{% url 'admin:web_studygroup_changelist' %}">{% translate "See groups" %}</a>
       </div>
     </div>
 

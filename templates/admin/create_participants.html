@@ -15,17 +15,15 @@
 
   {% if not conditions_available %}
     <p class="errornote" style="max-width: 46em;">
-      No conditions exist yet. A condition is a study group with a dashboard and
-      an active-learning setting &mdash;
-      <a href="{% url 'admin:web_studygroup_add' %}">create one first</a>,
-      then come back here to deal participants into it.
+      No study groups exist yet.
+      <a href="{% url 'admin:web_studygroup_add' %}">Create one</a>
+      and then come back here.
     </p>
   {% else %}
 
   <p style="max-width: 46em;">
-    Accounts are dealt evenly into the conditions you tick. Each condition already
-    carries its own dashboard and active-learning setting &mdash; change those on the
-    condition itself.
+    Accounts are created and divided evenly between the study groups you tick.
+    Dashboard and active-learning settings come from the group.
   </p>
 
   <form method="post">
@@ -37,6 +35,10 @@
 
     {% if form.uncoded_warning %}
       <p class="warning" style="max-width: 46em;">{{ form.uncoded_warning }}</p>
+    {% endif %}
+
+    {% if form.undashed_warning %}
+      <p class="warning" style="max-width: 46em;">{{ form.undashed_warning }}</p>
     {% endif %}
 
     <fieldset class="module aligned">
@@ -56,7 +58,7 @@
     </fieldset>
 
     <fieldset class="module aligned">
-      <h2>{% translate "Which conditions" %}</h2>
+      <h2>{% translate "Where they go" %}</h2>
       {% for field in form %}
         {% if field.name in "groups,skip_existing" %}
           <div class="form-row{% if field.errors %} errors{% endif %}">
@@ -115,9 +117,9 @@
     var base = Math.floor(n / ticked);
     var extra = n % ticked;
     out.textContent = extra
-      ? n + ' participants across ' + ticked + ' conditions \u2014 ' + extra +
+      ? n + ' participants across ' + ticked + ' groups \u2014 ' + extra +
         ' will get ' + (base + 1) + ', the rest ' + base + ' each.'
-      : n + ' participants across ' + ticked + ' conditions \u2014 ' + base +
+      : n + ' participants across ' + ticked + ' groups \u2014 ' + base +
         ' on each.';
   }
 

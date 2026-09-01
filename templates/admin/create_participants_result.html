@@ -25,6 +25,10 @@
   </ul>
   {% endif %}
 
+  {% if undashed_warning %}
+    <p class="warning" style="max-width: 52em;">{{ undashed_warning }}</p>
+  {% endif %}
+
   <p class="errornote" style="max-width: 52em;">
     These passwords are shown once and cannot be recovered &mdash; they are stored
     hashed. Download or copy them before leaving this page.
