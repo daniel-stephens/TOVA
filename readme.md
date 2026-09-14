@@ -66,7 +66,7 @@ TOVA is a topic modeling platform with a plug-in architecture, supporting traini
 git clone https://github.com/daniel-stephens/TOVA.git && cd TOVA
 
 # 2. Create your environment file (edit ports, credentials, API keys as needed)
-cp .env.example .env   # or create it manually (see the next section)
+cp sample.env .env   # then fill in the values marked REQUIRED
 
 # 3. Build images and start the stack
 make smart-up
