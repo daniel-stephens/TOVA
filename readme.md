@@ -2,6 +2,15 @@
 
 TOVA is a topic modeling platform with a plug-in architecture, supporting training and inference via CLI and web interface.
 
+For a fresh installation of the `unix` branch, follow
+[Deploy the user study with Ollama](DEPLOY_USER_STUDY.md), including environment
+setup, model generation, participant access, HTTPS hosting, and backups.
+
+For the complete researcher and participant workflow, start with the
+[end-to-end study guide](docs/user-study/end-to-end.md): import the email corpus,
+train a local LDA model, create a study group and participant, then follow
+consent → instructions → tutorial → labeling → post-study questions → completion.
+
 ## Table of contents
 
 - [TOVA: Topic Visualization \& Analysis](#tova-topic-visualization--analysis)

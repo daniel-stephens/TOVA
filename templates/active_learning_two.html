@@ -1278,8 +1278,33 @@
   <div class="container-fluid">
     <div class="al2-page-wrap">
 
+      {% if is_study_participant and study_stage == 'task' %}
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-3 mb-2"
+           aria-label="Study progress">
+        <div>
+          <strong>Explore and label documents</strong>
+          <p class="mb-0 text-muted">When you are ready, finish exploring and answer the questionnaire.
+            You do not need to label every document.</p>
+        </div>
+        <form method="post" action="{% url 'web:study_finish' %}" data-study-finish>
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary" data-log="finish_early">
+            Finish labeling
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
       <div id="al2CompleteBanner" class="al2-complete-banner is-hidden" role="status" aria-live="polite">
         <span>All documents in this model are labeled.</span>
+        {% if is_study_participant and study_stage == 'task' %}
+        <form method="post" action="{% url 'web:study_finish' %}" data-study-finish>
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm" data-log="finish_early">
+            Finish labeling
+          </button>
+        </form>
+        {% endif %}
         <a id="al2CompleteDashboardLink"
           href="{% url_for 'dashboard' %}{% if model_id %}?model_id={{ model_id|urlencode }}{% endif %}"
           class="btn btn-success btn-sm">Return to dashboard</a>
@@ -3209,7 +3234,10 @@
         document.getElementById("al2SearchInput")?.focus();
         return;
       }
-      if (inTextField) return;
+      // Keep native keyboard activation for buttons, links and dropdowns,
+      // including the study finish form. Enter must not label a document when
+      // the participant has focused "Finish labeling".
+      if (inTextField || el.closest('button, a, select, [role="button"]')) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         goBack();

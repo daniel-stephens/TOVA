@@ -1,3 +1,4 @@
+import json
 import logging
 import pathlib
 import time
@@ -46,7 +47,11 @@ class TomotopyLDATMmodel(TradTMmodel):
 
         model_name = model_name if model_name else f"{self.__class__.__name__}_{int(time.time())}"
         
-        super().__init__(model_name, corpus_id, id, model_path, logger, config_path, load_model)
+        preprocess_text = kwargs.pop("preprocess_text", True)
+        do_embeddings = kwargs.pop("do_embeddings", False)
+        super().__init__(model_name, corpus_id, id, model_path, logger, config_path,
+                         load_model, preprocess_text=preprocess_text,
+                         do_embeddings=do_embeddings)
 
         # Load parameters from config
         tomotopy_config = self.config.get("tomotopy", {})
@@ -211,7 +216,16 @@ class TomotopyLDATMmodel(TradTMmodel):
         TomotopyLDATMmodel
             An instance with the model loaded in `.model`.
         """
-        obj = cls(model_path=model_path, load_model=True)
+        model_path = pathlib.Path(model_path)
+        with model_path.joinpath('metadata.json').open(encoding='utf8') as handle:
+            metadata = json.load(handle)
+        params = dict(metadata.get("tr_params") or {})
+        params.pop("model_path", None)
+        params.pop("config_path", None)
+        obj = cls(model_path=model_path, load_model=True,
+                  config_path=metadata.get("config_path", "static/config/config.yaml"),
+                  **params)
+        obj.model_path = model_path
         load_path = pathlib.Path(model_path).joinpath('model.bin').as_posix()
         obj._logger.info(f"Loading Tomotopy model from {load_path}")
         obj._model = tp.LDAModel.load(load_path)

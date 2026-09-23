@@ -29,6 +29,9 @@ def list_drafts(type: Optional[DraftType] = None) -> List[Draft]:
     """
     drafts = []
 
+    if not DRAFTS_SAVE.is_dir():
+        return drafts
+
     for dir in DRAFTS_SAVE.iterdir():
         if not dir.is_dir():
             continue
@@ -96,6 +99,7 @@ def get_draft(draft_id: str, kind: Optional[DraftType] = None) -> Optional[Draft
     return Draft(
         id=draft_id,
         type=draft_type,
+        owner_id=metadata.get("owner_id"),
         path=str(draft_dir),
         metadata=metadata,
         data=data,
@@ -160,7 +164,7 @@ def draft_to_model(draft: Draft) -> Model:
     return Model(
         id=draft.id,
         owner_id=draft.owner_id,
-        name=draft.metadata.get("name"),
+        name=draft.metadata.get("name") or draft.metadata.get("tr_params", {}).get("model_name"),
         corpus_id=draft.metadata.get("corpus_id"),
         created_at=draft.metadata.get("created_at"),
         location=StorageType.temporal,
@@ -236,4 +240,4 @@ def modify_draft_metadata(draft_id: str, kind: DraftType, new_metadata: dict) ->
     return DraftCreatedResponse(
         draft_id=draft.id,
         status_code=202  # Modified
-    ) 
+    )

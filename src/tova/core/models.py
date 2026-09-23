@@ -19,7 +19,8 @@ def list_models(corpus_id: str) -> List[Model]:
     # TODO: the association between models and corpora needs to be implemented in drafts
     # list drafts and transform to Model objects
     models_drafts = drafts.list_drafts(type=DraftType.model)
-    models_lst = [drafts.draft_to_model(draft) for draft in models_drafts]
+    models_lst = [drafts.draft_to_model(draft) for draft in models_drafts
+                  if draft.metadata.get("corpus_id") == corpus_id]
 
     # TODO: Implement actual database query and merge with drafts
     return models_lst

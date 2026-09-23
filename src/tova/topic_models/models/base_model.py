@@ -166,8 +166,11 @@ class BaseTMModel(ABC):
         json_path = path or (self.model_path / 'metadata.json')
 
         model_info = {
+            "id": self.id,
+            "name": self.model_name,
             "corpus_id": self.corpus_id,
             "path": self.model_path.as_posix(),
+            "config_path": str(self._config_path),
             "type": f"{self.__class__.__module__}.{self.__class__.__name__}",
             "location": "temporal",
             "created_at": pd.Timestamp.now().isoformat(),

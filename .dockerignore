@@ -1,0 +1,19 @@
+# Keep local study data, credentials, and generated artifacts out of images.
+.git
+.env
+.env.*
+data
+data_test
+database
+myData
+cache
+.venv
+.venv_kumo
+venv
+environ
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+static/config/users
+ui/db.sqlite3
+ui/staticfiles

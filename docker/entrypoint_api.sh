@@ -15,7 +15,7 @@ except Exception:
     print(False)
 ")
 
-if [ "$PRELOAD" = "True" ]; then
+if [ "$PRELOAD" = "True" ] && [ "${TOVA_PRELOAD_EMBEDDINGS:-true}" != "false" ]; then
     MODEL=$(python -c "
 import sys, yaml
 try:

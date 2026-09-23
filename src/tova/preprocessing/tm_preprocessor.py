@@ -151,13 +151,7 @@ class TMPreprocessor:
 
         # ---------- EMBEDDINGS ----------
         self._st = None
-        if embeddings_model:
-            if SentenceTransformer is None:
-                raise RuntimeError(
-                    "sentence-transformers not installed, but embeddings_model was provided."
-                )
-            self._logger.info("Initializing SentenceTransformer(%r)", embeddings_model)
-            self._st = SentenceTransformer(embeddings_model)
+        self._embeddings_model = embeddings_model
 
         self._logger.info("TMPreprocessor initialized successfully.")
     @staticmethod
@@ -276,8 +270,10 @@ class TMPreprocessor:
         # Embeddings
         if compute_embeddings:
             if self._st is None:
-                raise RuntimeError("Embeddings model not initialized.")
-            texts = [" ".join(toks) for toks in out["text"]]
+                if not self._embeddings_model:
+                    raise RuntimeError("No embeddings model configured.")
+                self._st = SentenceTransformer(self._embeddings_model)
+            texts = out["text"].tolist()
             embs = self._st.encode(
                 texts, show_progress_bar=False,
                 normalize_embeddings=True, convert_to_numpy=True

@@ -267,7 +267,9 @@ def add_model_to_corpus(corpus_id: str, model_id: str) -> DraftCreatedResponse:
         raise HTTPException(404, "Corpus not found")
     current_models = corpus.models or []
     if model_id in current_models:
-        raise HTTPException(400, "Model already associated with corpus")
+        # Training now registers completed models. Older UI clients still
+        # send this request after polling the successful job.
+        return DraftCreatedResponse(draft_id=corpus.id, status_code=201)
     current_models.append(model_id)
 
     sc = drafts.modify_draft_metadata(corpus_id, DraftType.corpus, {"models": current_models})
@@ -321,4 +323,3 @@ def delete_model(model_id: str):
     if not ok:
         raise HTTPException(404, "Model not found")
     return
-    

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Request, status  # type: ignore
@@ -72,6 +73,10 @@ async def _background_preload() -> None:
 
 @app.on_event("startup")
 async def preload_models() -> None:
+    global _app_ready
+    if os.getenv("TOVA_PRELOAD_EMBEDDINGS", "true").lower() in {"0", "false", "no"}:
+        _app_ready = True
+        return
     asyncio.create_task(_background_preload())
 
 ################################################################################

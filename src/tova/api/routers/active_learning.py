@@ -1,9 +1,11 @@
 """Active-learning API router.
 
-Provides endpoints to initialise per-model active-learning sessions,
+Provides endpoints to initialise per-model, optionally per-participant sessions,
 submit / remove human labels, and receive document recommendations based
 on classifier uncertainty (entropy sampling).
 """
+
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -23,9 +25,9 @@ router = APIRouter(tags=["Active Learning"])
     response_model=ALRecommendation,
     summary="Get the next recommended document to label",
 )
-def recommend(model_id: str):
+def recommend(model_id: str, user_id: Optional[str] = None):
     try:
-        session = al.get_session(model_id)
+        session = al.get_session(model_id, user_id=user_id)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -49,7 +51,7 @@ def recommend(model_id: str):
 )
 def add_label(model_id: str, req: ALLabelRequest):
     try:
-        session = al.get_session(model_id)
+        session = al.get_session(model_id, user_id=req.user_id)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -81,9 +83,9 @@ def add_label(model_id: str, req: ALLabelRequest):
     response_model=ALRecommendation,
     summary="Remove a label and get an updated recommendation",
 )
-def remove_label(model_id: str, doc_id: str):
+def remove_label(model_id: str, doc_id: str, user_id: Optional[str] = None):
     try:
-        session = al.get_session(model_id)
+        session = al.get_session(model_id, user_id=user_id)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -115,9 +117,9 @@ def remove_label(model_id: str, doc_id: str):
     response_model=ALStatusResponse,
     summary="Get active-learning session status",
 )
-def get_status(model_id: str):
+def get_status(model_id: str, user_id: Optional[str] = None):
     try:
-        session = al.get_session(model_id)
+        session = al.get_session(model_id, user_id=user_id)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     return ALStatusResponse(**session.get_status())
@@ -128,9 +130,9 @@ def get_status(model_id: str):
     response_model=ALLabelListResponse,
     summary="Get all current human labels",
 )
-def get_labels(model_id: str):
+def get_labels(model_id: str, user_id: Optional[str] = None):
     try:
-        session = al.get_session(model_id)
+        session = al.get_session(model_id, user_id=user_id)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     return ALLabelListResponse(labels=session.get_labels())

@@ -38,6 +38,8 @@ class TradTMmodel(BaseTMModel, ABC):
         super().__init__(model_name, corpus_id, id,
                          model_path, logger, config_path, load_model)
 
+        self.preprocess_text = preprocess_text
+        self.do_embeddings = do_embeddings
         if preprocess_text:
             self._logger.info("Text preprocessing is enabled.")
             self.do_embeddings = do_embeddings
@@ -85,12 +87,14 @@ class TradTMmodel(BaseTMModel, ABC):
             self._df = df_processed
             self._logger.info("Training data preprocessing completed.")
         else:
-            # if already preprocessed, lemmas should be present
+            # API corpora already contain preprocessed, whitespace-separated
+            # text. A separate lemmas column is optional for Python callers.
             if "lemmas" not in df.columns:
-                raise ValueError(
-                    "Preprocessing is disabled, but 'lemmas' column is missing in the data.")
+                df["lemmas"] = df["text"].fillna("").astype(str).str.split()
             self._df = df
-        self._train_data = [row["lemmas"] for _, row in df_processed.iterrows()]
+        self._train_data = self._df["lemmas"].tolist()
+        if not self._train_data or any(not tokens for tokens in self._train_data):
+            raise ValueError("Every training document must contain at least one token.")
         if "embeddings" in self._df.columns:
             self._embeddings = np.array(self._df["embeddings"].tolist())
             self._logger.info(

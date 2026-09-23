@@ -198,11 +198,11 @@ answers one question they will actually have, in the order they will have it.
     <h2>You have {{ task_minutes }} minutes with the tool</h2>
     <figure>
       <img src="{% static 'img/tutorial/timer.png' %}"
-           alt="A bar across the top of the screen reading 29:39 left, with a Finish early button.">
+           alt="A bar across the top of the screen reading 29:39 left, with a button to finish.">
       <figcaption>The bar sits across the top of every page in the tool.</figcaption>
     </figure>
     <p>When the time runs out the tool closes and the questions begin. You can also press
-      <b>Finish early</b> whenever you feel ready &mdash; there is no advantage to waiting
+      <b>Finish labeling</b> whenever you feel ready &mdash; there is no advantage to waiting
       if you are done.</p>
     <div class="callout">
       <b>If you need to stop and come back</b>, the clock pauses. Sign out, close the laptop,
@@ -331,6 +331,10 @@ answers one question they will actually have, in the order they will have it.
       to go back or skip, and <kbd>/</kbd> to jump to the search box.</p>
     <p>Labelling is optional. Use it if it helps you make sense of the collection; ignore it
       if it does not.</p>
+    <p>When you are ready to move on, choose <b>Finish labeling</b> on the
+      labelling page or beside the clock. You do not need to label
+      every document. You will confirm before the questionnaire opens; after that,
+      you cannot return to exploring.</p>
   </section>
   {% endif %}
 
@@ -348,16 +352,18 @@ answers one question they will actually have, in the order they will have it.
     </ul>
   </div>
 
-  <form method="post" action="{% url 'web:study_begin' %}" class="footer-bar">
-    {% csrf_token %}
     {% if task_running %}
-      <button type="submit" class="begin" data-log="back_to_tool">Back to the tool</button>
+    <div class="footer-bar">
+      <a href="{% url 'web:study_task' %}" class="begin" data-log="back_to_tool">Back to the tool</a>
       <span class="note">Your time has been running while you were here.</span>
+    </div>
     {% else %}
+    <form method="post" action="{% url 'web:study_begin' %}" class="footer-bar">
+      {% csrf_token %}
       <button type="submit" class="begin" data-log="begin_task">Start exploring</button>
       <span class="note">The {{ task_minutes }}-minute clock starts when you press this.</span>
+    </form>
     {% endif %}
-  </form>
 </main>
 
 {% include "study/_telemetry.html" %}

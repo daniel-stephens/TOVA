@@ -1,10 +1,11 @@
 """Active learning module for TOVA.
 
-Provides per-model active learning sessions that combine topic model
+Provides per-model, optionally per-participant active learning sessions that combine topic model
 representations (thetas) with TF-IDF features to recommend the most
 informative document for a human to label next.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -37,10 +38,17 @@ class ActiveLearningSession:
     prediction entropy.
     """
 
-    def __init__(self, model_id: str, model_path: Path, corpus_id: str):
+    def __init__(
+        self,
+        model_id: str,
+        model_path: Path,
+        corpus_id: str,
+        user_id: Optional[str] = None,
+    ):
         self.model_id = model_id
         self.model_path = Path(model_path)
         self.corpus_id = corpus_id
+        self.user_id = user_id
 
         self._labels: Dict[str, str] = {}
         self._classifier: Optional[LogisticRegression] = None
@@ -50,6 +58,12 @@ class ActiveLearningSession:
         self._feature_matrix: Optional[sparse.csr_matrix] = None
 
         self._al_dir = self.model_path / "active_learning"
+        if user_id is not None:
+            # Hash the complete identity so it is never interpreted as a path.
+            # Keep legacy, unscoped labels in their existing location; a new
+            # participant must start without another participant's labels.
+            namespace = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
+            self._al_dir = self._al_dir / "participants" / namespace
         self._al_dir.mkdir(parents=True, exist_ok=True)
 
         self._build_features()
@@ -148,6 +162,8 @@ class ActiveLearningSession:
         self._save_state()
         if self._has_enough_labels():
             self._retrain()
+        else:
+            self._classifier = None
 
     def remove_label(self, doc_id: str) -> None:
         if doc_id not in self._labels:
@@ -256,13 +272,20 @@ class ActiveLearningSession:
 # ActiveLearningManager  (module-level singleton cache)
 # ---------------------------------------------------------------------------
 
-_sessions: Dict[str, ActiveLearningSession] = {}
+_sessions: Dict[Tuple[str, Optional[str]], ActiveLearningSession] = {}
 
 
-def get_session(model_id: str) -> ActiveLearningSession:
-    """Return cached session or create a new one for *model_id*."""
-    if model_id in _sessions:
-        return _sessions[model_id]
+def get_session(model_id: str, user_id: Optional[str] = None) -> ActiveLearningSession:
+    """Return a session scoped to a model and optional participant identity.
+
+    Callers that omit ``user_id`` retain the legacy, shared model session.
+    The UI supplies the authenticated user's ID for participant sessions.
+    This namespace is isolation, not authentication: backend callers must
+    only supply identities they are authorized to access.
+    """
+    session_key = (model_id, user_id)
+    if session_key in _sessions:
+        return _sessions[session_key]
 
     model_dir = DRAFTS_SAVE / model_id
     if not model_dir.exists():
@@ -286,11 +309,20 @@ def get_session(model_id: str) -> ActiveLearningSession:
         model_id=model_id,
         model_path=model_dir,
         corpus_id=corpus_id,
+        user_id=user_id,
     )
-    _sessions[model_id] = session
+    _sessions[session_key] = session
     return session
 
 
-def clear_session(model_id: str) -> None:
-    """Remove a cached session (e.g. when a model is deleted)."""
-    _sessions.pop(model_id, None)
+def clear_session(model_id: str, user_id: Optional[str] = None) -> None:
+    """Clear one participant's cache, or all model sessions when unscoped.
+
+    Clearing the cache does not remove persisted labels.
+    """
+    if user_id is not None:
+        _sessions.pop((model_id, user_id), None)
+        return
+    for session_key in list(_sessions):
+        if session_key[0] == model_id:
+            _sessions.pop(session_key, None)

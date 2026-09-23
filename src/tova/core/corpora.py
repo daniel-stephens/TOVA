@@ -127,7 +127,7 @@ def create_corpus(corpus: Corpus) -> DraftCreatedResponse:
                 raw_text=doc.raw_text or doc.text,
                 sourcefile=doc.sourcefile or "api_upload",
                 label=doc.label,
-                original_id=doc.id
+                original_id=doc.original_id or doc.id
             ))
 
     draft = Draft(

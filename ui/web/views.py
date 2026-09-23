@@ -2318,6 +2318,7 @@ def active_learning_two_recommend(request):
     try:
         up = requests.get(
             f"{R.API}/active-learning/{model_id}/recommend",
+            params={"user_id": user_id},
             timeout=(3.05, 30),
         )
         return HttpResponse(
@@ -2345,6 +2346,7 @@ def active_learning_two_status(request):
     try:
         up = requests.get(
             f"{R.API}/active-learning/{model_id}/status",
+            params={"user_id": user_id},
             timeout=(3.05, 20),
         )
         return HttpResponse(
@@ -2474,7 +2476,7 @@ def active_learning_two_label(request):
     try:
         up = requests.post(
             f"{R.API}/active-learning/{model_id}/label",
-            json={"doc_id": doc_id, "label": label},
+            json={"doc_id": doc_id, "label": label, "user_id": user_id},
             timeout=(3.05, 30),
         )
         # Only record what upstream accepted, so the study data cannot claim a
@@ -2516,6 +2518,7 @@ def active_learning_two_unlabel(request):
     try:
         up = requests.delete(
             f"{R.API}/active-learning/{model_id}/label/{doc_id}",
+            params={"user_id": user_id},
             timeout=(3.05, 30),
         )
         # An undo is part of the annotation record: without it a revision looks
@@ -2697,6 +2700,7 @@ def active_learning_two_labels(request):
     try:
         up = requests.get(
             f"{R.API}/active-learning/{model_id}/labels",
+            params={"user_id": user_id},
             timeout=(3.05, 20),
         )
         return HttpResponse(
@@ -2955,6 +2959,7 @@ def active_learning_two_bootstrap(request):
     try:
         lr = requests.get(
             f"{R.API}/active-learning/{model_id}/labels",
+            params={"user_id": user_id},
             timeout=(3.05, 20),
         )
         lr.raise_for_status()
@@ -4031,7 +4036,7 @@ def study_consent(request):
         "study/consent.html",
         {
             "session": session,
-            "task_minutes": study_flow.task_minutes(),
+            "task_minutes": study_flow.task_minutes(request.user),
             "consent_version": study_flow.CONSENT_VERSION,
             "irb_package": study_flow.IRB_PACKAGE_NUMBER,
             "irb_email": study_flow.IRB_CONTACT_EMAIL,
@@ -4078,7 +4083,7 @@ def study_instructions(request):
         request,
         "instructions.html",
         {
-            "task_minutes": study_flow.task_minutes(),
+            "task_minutes": study_flow.task_minutes(request.user),
             "corpus_size": corpus_size,
             "session": session,
         },

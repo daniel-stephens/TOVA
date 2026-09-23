@@ -202,6 +202,7 @@ class TMmodel(object):
             except Exception as e:
                 self._logger.warning(
                     f"Error in labeller: {e}")
+                self._training_warnings.append(f"Topic labels could not be generated: {e}")
                 self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
         elif not self._do_labeller and (self._tpc_labels is None):
             self._tpc_labels = ["Topic " + str(i) for i in range(self._ntopics)]
@@ -213,6 +214,7 @@ class TMmodel(object):
             except Exception as e:
                 self._logger.warning(
                     f"Error in summarizer: {e}")
+                self._training_warnings.append(f"Topic summaries could not be generated: {e}")
                 self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
         elif not self._do_summarizer and (self._tpc_summaries is None):
             self._tpc_summaries = ["Placeholder for summary from Topic " + str(i) for i in range(self._ntopics)]
@@ -315,7 +317,7 @@ class TMmodel(object):
                 vocabfreq,
                 lambda_step=0.05,
                 sort_topics=False,
-                n_jobs=-1)
+                n_jobs=1)
 
             # Save html
             with self._TMfolder.joinpath("pyLDAvis.html").open("w") as f:
@@ -576,10 +578,10 @@ class TMmodel(object):
             if dictionary is None:
                 dictionary = Dictionary(corpus)
 
-        if n_words > len(tpc_descriptions_[0]):
-            self._logger.error(
-                '-- -- -- Coherence calculation failed: The number of words per topic must be equal to n_words.')
-            return None
+        n_words = min(n_words, *(len(topic) for topic in tpc_descriptions_))
+        if n_words < 2:
+            self._topic_coherence = np.zeros(len(tpc_descriptions_))
+            return self._topic_coherence
         else:
             if only_one:
                 metric = metrics[0]
@@ -587,8 +589,9 @@ class TMmodel(object):
                     f"Calculating just coherence {metric}.")
                 if metric in ["c_npmi", "u_mass", "c_v", "c_uci"]:
                     cm = CoherenceModel(topics=tpc_descriptions_, texts=corpus,
-                                        dictionary=dictionary, coherence=metric, topn=n_words)
-                    self._topic_coherence = cm.get_coherence_per_topic()
+                                        dictionary=dictionary, coherence=metric, topn=n_words,
+                                        processes=1)
+                    self._topic_coherence = np.nan_to_num(cm.get_coherence_per_topic()).tolist()
 
                     if aggregated:
                         mean = cm.aggregate_measures(self._topic_coherence)
@@ -605,7 +608,8 @@ class TMmodel(object):
                         f"Calculating coherence {metric}.")
                     if metric in ["c_npmi", "u_mass", "c_v", "c_uci"]:
                         cm = CoherenceModel(topics=tpc_descriptions_, texts=corpus,
-                                            dictionary=dictionary, coherence=metric, topn=n_words)
+                                            dictionary=dictionary, coherence=metric, topn=n_words,
+                                            processes=1)
                         aux = cm.get_coherence_per_topic()
                         cohrs_aux.extend(aux)
                         self._logger.info(cohrs_aux)
@@ -987,6 +991,7 @@ class TMmodel(object):
 
         outputs = []
         for tpc_id, most_repr in enumerate(self._most_representative_docs):
+            self._logger.info("Generating topic %s/%s %s", tpc_id + 1, self._ntopics, task)
             docs = "\n- " + "\n- ".join([doc_tuple[1] for doc_tuple in most_repr])
             prompt_filled = template_str.format(
                 keywords=self._tpc_descriptions[tpc_id],
@@ -1000,11 +1005,11 @@ class TMmodel(object):
             outputs.append((tpc_id, output_text))
         return outputs
     
-    def get_tpc_labels(self, topn=3, max_tokens=7):
+    def get_tpc_labels(self, topn=3, max_tokens=32):
         return self.generate_topic_outputs(task="label", topn=topn, max_tokens=max_tokens)
 
     def get_tpc_summaries(self, topn=3):
-        return self.generate_topic_outputs(task="summary", topn=topn)
+        return self.generate_topic_outputs(task="summary", topn=topn, max_tokens=256)
 
     def load_tpc_labels(self):
         if self._tpc_labels is None:
@@ -1135,13 +1140,13 @@ class TMmodel(object):
         thetas2 = self._thetas.multiply(self._thetas)
         med2 = np.asarray(np.mean(thetas2, axis=0)).ravel()
         # Topic stds
-        stds = np.sqrt(med2 - med ** 2)
+        stds = np.sqrt(np.maximum(med2 - med ** 2, 0))
         # Topic correlation
         num = self._thetas.T.dot(
             self._thetas).toarray() / self._thetas.shape[0]
         num = num - med[..., np.newaxis].dot(med[np.newaxis, ...])
         deno = stds[..., np.newaxis].dot(stds[np.newaxis, ...])
-        corrcoef = num / deno
+        corrcoef = np.divide(num, deno, out=np.zeros_like(num), where=deno > 0)
         selected_coocur = self._largest_indices(
             corrcoef, self._ntopics + 2 * npairs)
         selected_coocur = [(el[0], el[1], el[2].astype(float))  for el in selected_coocur]
@@ -1205,18 +1210,19 @@ class TMmodel(object):
         med = np.asarray(np.mean(self._thetas, axis=0)).ravel()
         thetas2 = self._thetas.multiply(self._thetas)
         med2 = np.asarray(np.mean(thetas2, axis=0)).ravel()
-        stds = np.sqrt(med2 - med ** 2)
+        stds = np.sqrt(np.maximum(med2 - med ** 2, 0))
 
         num = self._thetas.T.dot(self._thetas).toarray() / self._thetas.shape[0]
         num -= med[..., np.newaxis].dot(med[np.newaxis, ...])
         deno = stds[..., np.newaxis].dot(stds[np.newaxis, ...])
-        corrcoef = num / deno
+        corrcoef = np.divide(num, deno, out=np.zeros_like(num), where=deno > 0)
+        neighbor_count = min(max(nsimilar, 0), max(self._ntopics - 1, 0))
 
         coocur_sim = {}
         for i in range(self._ntopics):
             sim_row = corrcoef[i].copy()
             sim_row[i] = -np.inf
-            top_indices = np.argsort(sim_row)[-nsimilar:][::-1]
+            top_indices = np.argsort(sim_row)[::-1][:neighbor_count]
             coocur_sim[i] = [(int(j), float(sim_row[j])) for j in top_indices]
 
         # Part 2 - Topics with similar word composition
@@ -1240,7 +1246,7 @@ class TMmodel(object):
             for i in range(self._ntopics):
                 sim_row = JSsim[i].copy()
                 sim_row[i] = -np.inf
-                top_indices = np.argsort(sim_row)[-nsimilar:][::-1]
+                top_indices = np.argsort(sim_row)[::-1][:neighbor_count]
                 worddesc_sim[i] = [(int(j), float(sim_row[j])) for j in top_indices]
 
         return {

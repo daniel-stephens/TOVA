@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 class ALLabelRequest(BaseModel):
     doc_id: str = Field(..., description="Document ID to label")
     label: str = Field(..., description="Human-assigned label for the document")
+    user_id: Optional[str] = Field(
+        None,
+        description="Participant namespace supplied by the authenticated UI; omit for the legacy shared session",
+    )
 
 
 class ALRecommendation(BaseModel):

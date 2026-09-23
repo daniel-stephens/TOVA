@@ -1,0 +1,19 @@
+# Run the current checkout using the existing runtime images.
+# docker compose -f docker-compose.yaml -f docker-compose.dev.yml up -d api web postgres
+services:
+  api:
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      PYTHONPATH: /app/src
+      TOVA_PRELOAD_EMBEDDINGS: "false"
+    volumes:
+      - ./src:/app/src:ro
+      - ./docker/entrypoint_api.sh:/entrypoint.sh:ro
+  web:
+    environment:
+      DRAFTS_SAVE: /data/drafts
+    volumes:
+      - ./ui:/app
+      - ./templates:/app/templates:ro
+      - ./src:/app/src:ro
+      - ./static:/app/static:ro

@@ -217,7 +217,7 @@ def allowed_url_names(session: ParticipantSession, user=None) -> set:
 
 
 def get_or_create_session(user) -> ParticipantSession:
-    """Return the participant's session, creating it at the instructions stage."""
+    """Return the participant's session, creating it at the consent stage."""
     session = ParticipantSession.objects.filter(pk=user.pk).select_related("study_group").first()
     if session is not None:
         return session
@@ -279,6 +279,7 @@ def touch_task(session: ParticipantSession) -> ParticipantSession:
 
     now = timezone.now()
     charged = 0
+    gap = None
     if session.last_seen_at:
         gap = (now - session.last_seen_at).total_seconds()
         if 0 < gap <= ParticipantSession.PRESENCE_MAX_GAP_S:
@@ -286,7 +287,7 @@ def touch_task(session: ParticipantSession) -> ParticipantSession:
 
     # Skip the write for rapid successive requests: a page load can fire several
     # at once and there is no point in an UPDATE per asset.
-    if charged < 1 and session.last_seen_at is not None:
+    if gap is not None and 0 <= gap < 1:
         return session
 
     session.task_elapsed_s = int(session.task_elapsed_s or 0) + charged

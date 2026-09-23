@@ -13,6 +13,8 @@ from tova.api.jobs.store import job_store
 from tova.api.jobs.tokens import cancellation_tokens
 from tova.api.logger import logger
 from tova.api.models.train_schemas import TrainRequest, TrainResponse
+from tova.api.models.data_schemas import DraftType
+from tova.core import corpora, drafts
 from tova.core.dispatchers import train_model_dispatch
 from tova.core.tfidf_lsi import *
 from tova.core.tfidf_lsi import _save_training_payload
@@ -24,6 +26,33 @@ router = APIRouter(tags=["Training"])
 
 # paths to temporary storage
 DRAFTS_SAVE = Path(os.getenv("DRAFTS_SAVE", "/data/drafts"))
+
+
+def _register_trained_model(model_id: str, corpus_id: Optional[str]) -> None:
+    """Make a completed model visible to its corpus owner before success."""
+    if not corpus_id:
+        return
+    corpus = corpora.get_corpus(corpus_id)
+    if corpus is None:
+        raise ValueError("Training corpus no longer exists.")
+    model_draft = drafts.get_draft(model_id, DraftType.model)
+    if model_draft is None:
+        raise ValueError("Trained model metadata was not saved.")
+
+    if not model_draft.metadata.get("owner_id"):
+        owner_id = corpus.owner_id or (corpus.metadata or {}).get("owner_id")
+        result = drafts.modify_draft_metadata(
+            model_id, DraftType.model, {"owner_id": owner_id})
+        if result.status_code != 202:
+            raise RuntimeError("Could not save the trained model owner.")
+
+    model_ids = list(corpus.models or [])
+    if model_id not in model_ids:
+        model_ids.append(model_id)
+        result = drafts.modify_draft_metadata(
+            corpus_id, DraftType.corpus, {"models": model_ids})
+        if result.status_code != 202:
+            raise RuntimeError("Could not associate the trained model with its corpus.")
 
 
 async def _run_training_job(
@@ -74,6 +103,8 @@ async def _run_training_job(
             ),
         )
 
+        _register_trained_model(id, corpus_id)
+
         result: dict = {"duration": duration}
         if train_warnings:
             result["warnings"] = train_warnings
@@ -102,12 +133,16 @@ async def _enqueue_training_job(
     training_params: Optional[Dict],
     bg: BackgroundTasks,
 ) -> TrainResponse:
+    corpus = corpora.get_corpus(corpus_id) if corpus_id else None
+    if corpus_id and corpus is None:
+        raise ValueError("Training corpus not found.")
+    owner_id = (corpus.owner_id or (corpus.metadata or {}).get("owner_id")) if corpus else None
     model_id = get_unique_id(prefix="m_")
 
     job = await job_store.create(
         type=JobType.train_model,
         model_id=model_id,
-        # TODO: add user_id
+        owner_id=owner_id,
     )
 
     token = CancellationToken()
