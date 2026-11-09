@@ -1,0 +1,77 @@
+# Movie-snippet corpus. Documents are short pieces about two original films.
+# Plot points are the topics. Questions ask how documents and topics connect.
+#
+# Questions are planned before any snippets. The run writes them to
+# data/question_plans/<corpus_id>.json, then generates documents that carry
+# one evidence fact each.
+#
+#   uv run python -m corpus_agent.main --config config/corpus_config.movies.yaml --extract-questions
+
+corpus_id: glass-orchard-v2
+
+source_story:
+  path: data/raw/source-story/
+
+content_style: |
+  Write each document as a short piece about the fictional films The Glass Orchard
+  and Night Window. The body is one of: a dailies note, an interview answer, a
+  composer's memo, a festival programmer's note, a producer's email, or a critic's
+  paragraph. It must be readable on its own. Touch one topic, and do not explain
+  how that topic connects to the others. Do not mention real movies, real studios,
+  or real people. Keep the email envelope (from, to, subject), but the subject is
+  the snippet title and the body is the snippet.
+
+story_mapping:
+  synthetic_setting:
+    name: "Halden Pictures post-production"
+    organization: "Halden Pictures"
+    domain: "feature film editing and festival delivery"
+
+  plot_outline:
+    mode: manual
+    points:
+      - id: borrowed_melody
+        description: "The feature score reuses the lullaby from the short Night Window, but the memo never names the short."
+      - id: missing_reel
+        description: "The festival print is missing the fire reel. The editor still has the dailies."
+      - id: public_denial
+        description: "The lead actor tells a magazine the fire scene was never shot."
+      - id: restored_ending
+        description: "The festival programmer finds the missing reel and the festival cut puts the fire back."
+      - id: inheritance_theme
+        description: "Both films turn on a will that leaves the orchard to the younger sister. The producer says this is too close to the director's family."
+      - id: shared_prop
+        description: "The cracked glass pear from Night Window is on the table in The Glass Orchard dailies."
+      - id: critic_bridge
+        description: "A review argues that the lullaby, the glass pear, and the restored fire are the same idea: something kept, then denied, then returned."
+
+corpus_size:
+  num_instances: 200
+  waves_per_instance: 20
+  emails_per_wave: 4
+  emails_per_instance: 50
+
+blur_level: medium
+
+models:
+  character_mapping: qwen-corpus
+  outline_generator: qwen-corpus
+  planner: qwen-corpus
+  content_generator: qwen-corpus
+  question_extractor: qwen-corpus
+
+llm:
+  api_key_env_var: OLLAMA_API_KEY
+  base_url: http://127.0.0.1:11435/v1
+  max_tokens: 3000
+
+rate_limits:
+  max_concurrent_instances: 1
+  requests_per_minute: 120
+  retry_max_attempts: 3
+  retry_initial_delay_seconds: 2
+  wave_pause_seconds: 1
+
+output:
+  db_path: data/glass-orchard-v2.db
+  export_path: data/processed/synthetic/glass-orchard-v2/

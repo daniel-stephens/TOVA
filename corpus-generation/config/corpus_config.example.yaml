@@ -1,0 +1,88 @@
+# Corpus Generation Agent Configuration
+# Copy this file and customize for your corpus.
+
+corpus_id: jurassic-biotech-v1
+
+source_story:
+  path: data/raw/source-story/  # directory with one or more .md files
+
+# ── Story Mapping ────────────────────────────────────────────
+# Combines synthetic setting with plot outline configuration.
+# The resolved mapping is persisted in the database per corpus_id.
+# Reruns and --resume reuse the persisted mapping.
+# To regenerate, use a new corpus_id or delete the story_mappings row.
+story_mapping:
+  synthetic_setting:
+    name: "biotech startup"
+    organization: "NovaBio Inc."
+    domain: "genetic research"
+
+  plot_outline:
+    # mode: auto | manual
+    #   auto   — LLM generates plot points from source story + setting + blur level.
+    #            Corpus sizing (waves, emails_per_wave, emails_per_instance) is also
+    #            auto-derived unless you explicitly set them below.
+    #   manual — use the points listed below; corpus sizing uses your values or defaults.
+    mode: manual
+    points:
+      - id: inciting_incident
+        description: "Handler killed during specimen transfer triggers safety audit"
+      - id: espionage_initiated
+        description: "Rival company bribes employee to steal proprietary samples"
+      - id: audit_begins
+        description: "Expert team arrives and tours research facilities"
+      - id: sabotage
+        description: "Disgruntled employee executes cyberattack during crisis"
+      - id: containment_failure
+        description: "Security systems fail, specimens escape controlled environment"
+      - id: secondary_failure
+        description: "System reboot inadvertently releases most dangerous specimens"
+      - id: resolution
+        description: "Survivors restore systems and evacuate facility"
+
+# For auto mode, replace the plot_outline section above with:
+#   plot_outline:
+#     mode: auto
+# and simplify corpus_size to just:
+#   corpus_size:
+#     total_emails: 500   # derives num_instances automatically
+
+# ── Corpus Size ──────────────────────────────────────────────
+# In manual mode (above), num_instances is required.
+# In auto mode, specify total_emails as your primary sizing lever instead:
+#   corpus_size:
+#     total_emails: 500              # derives num_instances = ceil(500 / emails_per_instance)
+#
+# Any field you explicitly set always takes precedence over auto-derivation.
+# Omitted manual-mode fields use defaults: waves=10, emails_per_wave=4, cap=100.
+corpus_size:
+  num_instances: 50                  # required in manual mode
+  # total_emails: 500               # auto mode alternative (ignored in manual mode)
+  waves_per_instance: 10             # auto mode derives: 1 per plot point
+  emails_per_wave: 4                 # auto mode derives: 3/4/5 for light/medium/heavy blur
+  emails_per_instance: 100           # auto mode derives: waves * emails_per_wave * 1.5
+
+blur_level: medium  # light | medium | heavy
+
+models:
+  character_mapping: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  outline_generator: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  planner: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  content_generator: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  question_extractor: NVIDIA-Nemotron-3-Super-120B-A12B-FP8  # used with --extract-questions
+
+llm:
+  api_key_env_var: RCHAT_API_KEY
+  base_url: https://rchat.nist.gov/proxy
+  max_tokens: 3000
+
+rate_limits:
+  max_concurrent_instances: 5
+  requests_per_minute: 60
+  retry_max_attempts: 3
+  retry_initial_delay_seconds: 2
+  wave_pause_seconds: 1
+
+output:
+  db_path: data/corpus_state.db
+  export_path: data/processed/synthetic/jurassic-biotech-v1/

@@ -1,0 +1,62 @@
+# Corpus Generation Agent Configuration
+# Copy this file and customize for your corpus.
+
+corpus_id: the-wire-biotech-test
+
+source_story:
+  path: data/raw/source-story/the-wire  # directory with one or more .md files
+
+# ── Story Mapping ────────────────────────────────────────────
+# Combines synthetic setting with plot outline configuration.
+# The resolved mapping is persisted in the database per corpus_id.
+# Reruns and --resume reuse the persisted mapping.
+# To regenerate, use a new corpus_id or delete the story_mappings row.
+story_mapping:
+  synthetic_setting:
+    name: "biotech startup"
+    organization: "NovaBio Inc."
+    domain: "genetic research"
+
+  plot_outline:
+    # mode: auto | manual
+    #   auto   — LLM generates plot points from source story + setting + blur level.
+    #            Corpus sizing (waves, emails_per_wave, emails_per_instance) is also
+    #            auto-derived unless you explicitly set them below.
+    #   manual — use the points listed below; corpus sizing uses your values or defaults.
+    mode: auto
+
+# ── Corpus Size ──────────────────────────────────────────────
+# In auto mode, use total_emails as your primary sizing lever:
+#   total_emails derives num_instances = ceil(total_emails / emails_per_instance)
+# Set num_instances explicitly to override derivation.
+# Any field you explicitly set always takes precedence over auto-derivation.
+corpus_size:
+  total_emails: 15               # derives num_instances = ceil(15 / 8) = 2
+  emails_per_instance: 8         # pin so derivation is predictable (else auto ~60 → 1 instance)
+#  waves_per_instance:            # auto derives: 1 per plot point
+#  emails_per_wave:               # auto derives: 4 for medium blur
+
+blur_level: medium  # light | medium | heavy
+
+models:
+  character_mapping: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  outline_generator: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  planner: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  content_generator: NVIDIA-Nemotron-3-Super-120B-A12B-FP8
+  question_extractor: NVIDIA-Nemotron-3-Super-120B-A12B-FP8  # used with --extract-questions
+
+llm:
+  api_key_env_var: RCHAT_API_KEY
+  base_url: https://rchat.nist.gov/proxy
+  max_tokens: 3000
+
+rate_limits:
+  max_concurrent_instances: 5
+  requests_per_minute: 60
+  retry_max_attempts: 3
+  retry_initial_delay_seconds: 2
+  wave_pause_seconds: 1
+
+output:
+  db_path: data/corpus_state.db
+  export_path: data/processed/synthetic/the-wire/the-wire-biotech-test/
